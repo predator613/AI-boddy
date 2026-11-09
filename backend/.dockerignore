@@ -1,0 +1,7 @@
+coverage/
+*.out
+*.html
+.vscode/
+.idea/
+*.exe
+server

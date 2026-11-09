@@ -1,0 +1,31 @@
+### Ручная проверка API из VS Code (расширение REST Client: над запросом появится "Send Request")
+@base = http://localhost:8080
+
+### Health
+GET {{base}}/api/health
+
+### Тестовые пользователи (только DEMO_MODE=true)
+GET {{base}}/api/auth/test-users
+
+### Вход
+# @name login
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "login": "intern_anna", "password": "demo123" }
+
+### Кто я (токен берется из ответа на запрос выше)
+GET {{base}}/api/auth/me
+Authorization: Bearer {{login.response.body.token}}
+
+### Неверный пароль → 401 invalid_credentials
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "login": "intern_anna", "password": "wrong" }
+
+### Пустые поля → 400 validation_error
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "login": "", "password": "" }

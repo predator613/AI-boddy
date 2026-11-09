@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend (локально, база в Docker)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/backend/cmd/server",
+      "env": {
+        "PORT": "8080",
+        "DATABASE_URL": "postgres://buddy:buddy@localhost:5432/ai_buddy?sslmode=disable",
+        "JWT_SECRET": "dev-only-secret-change-me-0123456789",
+        "JWT_TTL": "24h",
+        "DEMO_MODE": "true",
+        "CORS_ORIGINS": "http://localhost:5173"
+      }
+    }
+  ]
+}

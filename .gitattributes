@@ -1,0 +1,6 @@
+# Все текстовые файлы в репозитории – с переводом строки LF.
+# На Windows это важно: CRLF ломает sh-скрипты и SQL внутри Linux-контейнеров.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
