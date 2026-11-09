@@ -19,12 +19,21 @@ declare module '@tanstack/react-router' {
   }
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <MantineProvider theme={theme}>
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    </MantineProvider>
-  </StrictMode>,
-)
+// VITE_USE_MOCKS=true – запросы к API перехватывает MSW (работа без backend)
+async function enableMocks() {
+  if (import.meta.env.VITE_USE_MOCKS !== 'true') return
+  const { worker } = await import('./mocks/browser')
+  await worker.start({ onUnhandledFrame: 'bypass' })
+}
+
+enableMocks().then(() => {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <MantineProvider theme={theme}>
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </MantineProvider>
+    </StrictMode>,
+  )
+})
