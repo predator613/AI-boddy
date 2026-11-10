@@ -1,11 +1,14 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
 import { server } from '../src/mocks/server'
 import { useAuthStore } from '../src/store/authStore'
 import { useSettingsStore } from '../src/store/settingsStore'
 import { resetPathMock } from '../src/mocks/pathData'
 import { resetPendingMocks } from '../src/mocks/pending'
+import { resetMentorMocks } from '../src/mocks/mentorData'
+import { resetConsoleMock } from '../src/mocks/consoleData'
+import { useToastStore } from '../src/store/toastStore'
 
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
 
@@ -16,6 +19,9 @@ afterEach(() => {
   useSettingsStore.getState().reset()
   resetPathMock()
   resetPendingMocks()
+  resetMentorMocks()
+  resetConsoleMock()
+  useToastStore.setState({ text: null })
   localStorage.clear()
 })
 
@@ -52,3 +58,6 @@ if (!('fonts' in document)) {
     value: { addEventListener: () => {}, removeEventListener: () => {}, ready: Promise.resolve() },
   })
 }
+
+// ожидание появления элементов: с запасом для медленных компьютеров
+configure({ asyncUtilTimeout: 5000 })

@@ -4,6 +4,7 @@ import { MOCK_PASSWORD, mockTestUsers, mockToken, mockUsers } from './data'
 import { mockGoals, setMockGoalProgress } from './goalsData'
 import { buildMockPath, mockInterns, setMockTaskStatus } from './pathData'
 import { KB, pendingHandlers } from './pending'
+import { consoleHandlers } from './consoleData'
 
 const apiError = (status: number, code: string, message: string) =>
   HttpResponse.json({ error: { code, message } }, { status })
@@ -154,4 +155,10 @@ export const goalsKbHandlers = [
 ]
 
 // Все обработчики: полный режим без backend и тесты.
-export const allHandlers = [...handlers, ...pathHandlers, ...goalsKbHandlers, ...pendingHandlers]
+export const allHandlers = [
+  ...handlers,
+  ...pathHandlers,
+  ...goalsKbHandlers,
+  ...consoleHandlers,
+  ...pendingHandlers,
+]
