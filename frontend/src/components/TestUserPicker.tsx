@@ -62,7 +62,10 @@ export function TestUserPicker({ onSuccess }: TestUserPickerProps) {
               aria-label={`Войти как ${user.name}`}
             >
               <Group wrap="nowrap" gap="sm">
-                <Avatar color="blue" radius="xl">
+                <Avatar
+                  radius="xl"
+                  styles={{ placeholder: { background: '#BADAFB', color: '#141414' } }}
+                >
                   {user.name.charAt(0)}
                 </Avatar>
                 <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>

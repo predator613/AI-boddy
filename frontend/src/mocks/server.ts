@@ -1,5 +1,5 @@
 import { setupServer } from 'msw/node'
-import { handlers } from './handlers'
+import { allHandlers } from './handlers'
 
 // MSW для тестов (Node.js)
-export const server = setupServer(...handlers)
+export const server = setupServer(...allHandlers)

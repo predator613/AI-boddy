@@ -10,12 +10,12 @@
     box-shadow 150ms ease;
 
   &:hover:not(:disabled) {
-    border-color: var(--mantine-color-blue-4);
+    border-color: #141414;
     box-shadow: var(--mantine-shadow-xs);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--mantine-color-blue-5);
+    outline: 2px solid #141414;
     outline-offset: 2px;
   }
 

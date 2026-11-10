@@ -12,6 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthIndexRouteImport } from './routes/_auth/index'
+import { Route as AuthChatRouteImport } from './routes/_auth/chat'
+import { Route as AuthKbRouteImport } from './routes/_auth/kb'
+import { Route as AuthProfileRouteImport } from './routes/_auth/profile'
+import { Route as AuthRequestsRouteImport } from './routes/_auth/requests'
+import { Route as AuthSupportRouteImport } from './routes/_auth/support'
+import { Route as AuthInternsInternIdRouteImport } from './routes/_auth/interns.$internId'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/_auth',
@@ -27,27 +33,101 @@ const AuthIndexRoute = AuthIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthChatRoute = AuthChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthKbRoute = AuthKbRouteImport.update({
+  id: '/kb',
+  path: '/kb',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthProfileRoute = AuthProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthRequestsRoute = AuthRequestsRouteImport.update({
+  id: '/requests',
+  path: '/requests',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthSupportRoute = AuthSupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthInternsInternIdRoute = AuthInternsInternIdRouteImport.update({
+  id: '/interns/$internId',
+  path: '/interns/$internId',
+  getParentRoute: () => AuthRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthIndexRoute
   '/login': typeof LoginRoute
+  '/chat': typeof AuthChatRoute
+  '/kb': typeof AuthKbRoute
+  '/profile': typeof AuthProfileRoute
+  '/requests': typeof AuthRequestsRoute
+  '/support': typeof AuthSupportRoute
+  '/interns/$internId': typeof AuthInternsInternIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/chat': typeof AuthChatRoute
+  '/kb': typeof AuthKbRoute
+  '/profile': typeof AuthProfileRoute
+  '/requests': typeof AuthRequestsRoute
+  '/support': typeof AuthSupportRoute
   '/': typeof AuthIndexRoute
+  '/interns/$internId': typeof AuthInternsInternIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_auth': typeof AuthRouteWithChildren
   '/login': typeof LoginRoute
+  '/_auth/chat': typeof AuthChatRoute
+  '/_auth/kb': typeof AuthKbRoute
+  '/_auth/profile': typeof AuthProfileRoute
+  '/_auth/requests': typeof AuthRequestsRoute
+  '/_auth/support': typeof AuthSupportRoute
   '/_auth/': typeof AuthIndexRoute
+  '/_auth/interns/$internId': typeof AuthInternsInternIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/chat'
+    | '/kb'
+    | '/profile'
+    | '/requests'
+    | '/support'
+    | '/interns/$internId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/'
-  id: '__root__' | '/_auth' | '/login' | '/_auth/'
+  to:
+    | '/login'
+    | '/chat'
+    | '/kb'
+    | '/profile'
+    | '/requests'
+    | '/support'
+    | '/'
+    | '/interns/$internId'
+  id:
+    | '__root__'
+    | '/_auth'
+    | '/login'
+    | '/_auth/chat'
+    | '/_auth/kb'
+    | '/_auth/profile'
+    | '/_auth/requests'
+    | '/_auth/support'
+    | '/_auth/'
+    | '/_auth/interns/$internId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -78,15 +158,69 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthIndexRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/chat': {
+      id: '/_auth/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof AuthChatRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/kb': {
+      id: '/_auth/kb'
+      path: '/kb'
+      fullPath: '/kb'
+      preLoaderRoute: typeof AuthKbRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/profile': {
+      id: '/_auth/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AuthProfileRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/requests': {
+      id: '/_auth/requests'
+      path: '/requests'
+      fullPath: '/requests'
+      preLoaderRoute: typeof AuthRequestsRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/support': {
+      id: '/_auth/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof AuthSupportRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/interns/$internId': {
+      id: '/_auth/interns/$internId'
+      path: '/interns/$internId'
+      fullPath: '/interns/$internId'
+      preLoaderRoute: typeof AuthInternsInternIdRouteImport
+      parentRoute: typeof AuthRoute
+    }
   }
 }
 
 interface AuthRouteChildren {
+  AuthChatRoute: typeof AuthChatRoute
+  AuthKbRoute: typeof AuthKbRoute
+  AuthProfileRoute: typeof AuthProfileRoute
+  AuthRequestsRoute: typeof AuthRequestsRoute
+  AuthSupportRoute: typeof AuthSupportRoute
   AuthIndexRoute: typeof AuthIndexRoute
+  AuthInternsInternIdRoute: typeof AuthInternsInternIdRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
+  AuthChatRoute: AuthChatRoute,
+  AuthKbRoute: AuthKbRoute,
+  AuthProfileRoute: AuthProfileRoute,
+  AuthRequestsRoute: AuthRequestsRoute,
+  AuthSupportRoute: AuthSupportRoute,
   AuthIndexRoute: AuthIndexRoute,
+  AuthInternsInternIdRoute: AuthInternsInternIdRoute,
 }
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)

@@ -31,7 +31,7 @@ type AuthService interface {
 }
 
 // NewRouter описывает все маршруты API.
-func NewRouter(cfg config.Config, auth AuthService, log *slog.Logger) http.Handler {
+func NewRouter(cfg config.Config, auth AuthService, path handlers.PathService, log *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
@@ -47,6 +47,7 @@ func NewRouter(cfg config.Config, auth AuthService, log *slog.Logger) http.Handl
 	r.MethodNotAllowed(httpx.MethodNotAllowed)
 
 	authH := handlers.NewAuth(auth, cfg.DemoMode, log)
+	pathH := handlers.NewPath(path, log)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", handlers.Health)
@@ -58,6 +59,35 @@ func NewRouter(cfg config.Config, auth AuthService, log *slog.Logger) http.Handl
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireAuth(auth))
 				r.Get("/me", authH.Me)
+			})
+		})
+
+		// Все остальное – только с токеном.
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAuth(auth))
+
+			// Страница «Мой путь» (стажер).
+			r.Get("/path", pathH.MyPath)
+			r.Post("/path/tasks/{taskId}/complete", pathH.CompleteTask)
+
+			// Стажеры глазами наставника и руководителя.
+			r.Get("/interns", pathH.ListInterns)
+			r.Get("/interns/{internId}/path", pathH.InternPath)
+			r.Put("/interns/{internId}/tasks/{taskId}", pathH.SetTaskStatus)
+			r.Post("/interns/{internId}/meetings", pathH.CreateMeeting)
+
+			// Консоль наставника: шаблоны адаптации.
+			r.Route("/console", func(r chi.Router) {
+				r.Get("/templates", pathH.Templates)
+				r.Get("/action-kinds", pathH.ActionKinds)
+				r.Post("/stages", pathH.CreateStage)
+				r.Put("/stages/{stageId}", pathH.UpdateStage)
+				r.Delete("/stages/{stageId}", pathH.DeleteStage)
+				r.Post("/stages/{stageId}/tasks", pathH.CreateTask)
+				r.Post("/stages/{stageId}/resources", pathH.CreateResource)
+				r.Put("/tasks/{taskId}", pathH.UpdateTask)
+				r.Delete("/tasks/{taskId}", pathH.DeleteTask)
+				r.Delete("/resources/{resourceId}", pathH.DeleteResource)
 			})
 		})
 	})
@@ -79,14 +109,16 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, ready chan<- 
 	}
 	log.Info("migrations done", "applied", applied)
 
-	authSvc := services.NewAuth(repository.NewUsers(pool), cfg.JWTSecret, cfg.JWTTTL)
+	users := repository.NewUsers(pool)
+	authSvc := services.NewAuth(users, cfg.JWTSecret, cfg.JWTTTL)
+	pathSvc := services.NewPath(repository.NewOnboarding(pool), users)
 
 	ln, err := net.Listen("tcp", ":"+cfg.Port)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
 	srv := &http.Server{
-		Handler:           NewRouter(cfg, authSvc, log),
+		Handler:           NewRouter(cfg, authSvc, pathSvc, log),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

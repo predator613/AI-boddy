@@ -1,4 +1,9 @@
 import { setupWorker } from 'msw/browser'
-import { handlers } from './handlers'
+import { allHandlers } from './handlers'
+import { pendingHandlers } from './pending'
 
-export const worker = setupWorker(...handlers)
+// Полный режим (npm run dev:mock): все запросы обрабатывает MSW, backend не нужен.
+export const fullWorker = () => setupWorker(...allHandlers)
+
+// Режим «вместе с backend»: MSW отвечает только на эндпоинты, которых в backend еще нет.
+export const pendingWorker = () => setupWorker(...pendingHandlers)

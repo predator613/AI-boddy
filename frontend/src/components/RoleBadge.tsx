@@ -1,16 +1,13 @@
-import { Badge } from '@mantine/core'
 import { roleLabels, type Role } from '../schemas/auth'
+import { StatusTag } from './StatusTag'
 
+// Цвета ролей из палитры кейса: светлая заливка и темный текст.
 const roleColors: Record<Role, string> = {
-  intern: 'blue',
-  mentor: 'teal',
-  lead: 'grape',
+  intern: '#BADAFB',
+  mentor: '#DFCDF3',
+  lead: '#C9FFBF',
 }
 
 export function RoleBadge({ role }: { role: Role }) {
-  return (
-    <Badge color={roleColors[role]} variant="light" radius="sm">
-      {roleLabels[role]}
-    </Badge>
-  )
+  return <StatusTag bg={roleColors[role]}>{roleLabels[role]}</StatusTag>
 }

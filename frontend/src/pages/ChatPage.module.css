@@ -1,0 +1,73 @@
+.chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 72px;
+  box-sizing: border-box;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  border-bottom: 1px solid #d6d6d6;
+}
+
+.scroll {
+  flex: 1;
+  padding: 32px;
+  display: flex;
+  justify-content: center;
+}
+
+.column {
+  width: 100%;
+  max-width: 760px;
+}
+
+.composer {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 32px 24px;
+  display: flex;
+  justify-content: center;
+  background: linear-gradient(to top, #f4f4f4 80%, rgba(244, 244, 244, 0));
+}
+
+.chip {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #d6d6d6;
+  border-radius: 16px;
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.form {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #d6d6d6;
+  border-radius: 16px;
+  padding: 8px 8px 8px 16px;
+}
+
+@media (max-width: 720px) {
+  .header,
+  .scroll,
+  .composer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

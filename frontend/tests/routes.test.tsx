@@ -3,12 +3,12 @@ import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { API_URL } from '../src/api/client'
 import { server } from '../src/mocks/server'
-import { mockToken, mockUsers } from '../src/mocks/data'
+import { mockUsers } from '../src/mocks/data'
 import { useAuthStore } from '../src/store/authStore'
-import { renderApp } from './test-utils'
+import { loginAs, renderApp } from './test-utils'
 
-const anna = mockUsers[0]
-const loginAsAnna = () => useAuthStore.setState({ token: mockToken(anna.login), user: anna })
+const greeting = (name: string) =>
+  screen.findByRole('heading', { name: `Привет, ${name}!` }, { timeout: 3000 })
 
 describe('маршруты', () => {
   it('без токена защищенная страница перенаправляет на /login', async () => {
@@ -17,17 +17,17 @@ describe('маршруты', () => {
     expect(router.state.location.pathname).toBe('/login')
   })
 
-  it('с токеном на / показывается приветствие', async () => {
-    loginAsAnna()
+  it('стажер на / видит «Мой путь»', async () => {
+    loginAs('intern_anna')
     renderApp('/')
-    expect(await screen.findByText('Привет, Анна!')).toBeInTheDocument()
-    expect(screen.getByText('Backend')).toBeInTheDocument()
+    expect(await greeting('Анна')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Мой путь' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('вошедшего пользователя /login отправляет на главную', async () => {
-    loginAsAnna()
+    loginAs('intern_anna')
     const router = renderApp('/login')
-    expect(await screen.findByText('Привет, Анна!')).toBeInTheDocument()
+    expect(await greeting('Анна')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/')
   })
 
@@ -37,38 +37,50 @@ describe('маршруты', () => {
     await user.type(await screen.findByLabelText('Логин'), 'intern_pavel')
     await user.type(screen.getByLabelText('Пароль'), 'demo123')
     await user.click(screen.getByRole('button', { name: 'Войти' }))
-    expect(await screen.findByText('Привет, Павел!')).toBeInTheDocument()
+    expect(await greeting('Павел')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/')
   })
 
-  it('вход через карточку тестового пользователя ведет на главную', async () => {
+  it('наставник видит своих стажеров, а не «Мой путь»', async () => {
     renderApp('/login')
     await userEvent.click(await screen.findByRole('button', { name: 'Войти как Олег' }))
-    expect(await screen.findByText('Привет, Олег!')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Мои стажеры' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Мои заявки' })).not.toBeInTheDocument()
   })
 
-  it('кнопка «Выйти» возвращает на /login', async () => {
-    loginAsAnna()
+  it('«Выйти» в меню профиля возвращает на /login', async () => {
+    loginAs('intern_anna')
     const router = renderApp('/')
-    await userEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
+    await greeting('Анна')
+    await userEvent.click(screen.getByRole('button', { name: 'Меню профиля' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Выйти' }))
     expect(await screen.findByText('Вход в AI-buddy')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/login')
     expect(useAuthStore.getState().token).toBeNull()
   })
 
   it('если /me вернул 401 (токен протух) – выход и редирект на /login', async () => {
-    useAuthStore.setState({ token: 'expired', user: anna })
+    useAuthStore.setState({ token: 'expired', user: mockUsers[0] })
     const router = renderApp('/')
-    expect(await screen.findByText('Вход в AI-buddy')).toBeInTheDocument()
+    expect(await screen.findByText('Вход в AI-buddy', {}, { timeout: 3000 })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/login')
   })
 
   it('данные пользователя обновляются ответом /me', async () => {
     server.use(
-      http.get(`${API_URL}/api/auth/me`, () => HttpResponse.json({ ...anna, name: 'Анна Н.' })),
+      http.get(`${API_URL}/api/auth/me`, () =>
+        HttpResponse.json({ ...mockUsers[0], name: 'Анна Н.' }),
+      ),
     )
-    loginAsAnna()
-    renderApp('/')
-    expect(await screen.findByText('Привет, Анна Н.!')).toBeInTheDocument()
+    loginAs('intern_anna')
+    renderApp('/profile')
+    expect(await screen.findByText('Анна Н.')).toBeInTheDocument()
+  })
+
+  it('заявки недоступны наставнику: редирект на главную', async () => {
+    loginAs('mentor_igor')
+    const router = renderApp('/requests')
+    expect(await screen.findByRole('heading', { name: 'Мои стажеры' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
   })
 })

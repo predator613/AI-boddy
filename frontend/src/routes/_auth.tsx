@@ -1,12 +1,13 @@
-import { AppShell, Button, Group, Text } from '@mantine/core'
+import { Box } from '@mantine/core'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Navigate, Outlet, createFileRoute, redirect } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { getMe } from '../api/auth'
-import { RoleBadge } from '../components/RoleBadge'
+import { AppRail } from '../components/AppRail'
 import { useAuthStore } from '../store/authStore'
+import classes from './_auth.module.css'
 
-// Layout всех страниц, доступных только после входа.
+// Layout всех страниц, доступных только после входа: левая полоса-меню и контент.
 export const Route = createFileRoute('/_auth')({
   beforeLoad: () => {
     if (!useAuthStore.getState().token) throw redirect({ to: '/login' })
@@ -27,7 +28,7 @@ function AuthLayout() {
     if (meQuery.data) setUser(meQuery.data)
   }, [meQuery.data, setUser])
 
-  if (!token) return <Navigate to="/login" />
+  if (!token || !user) return <Navigate to="/login" />
 
   const handleLogout = () => {
     logout()
@@ -35,28 +36,11 @@ function AuthLayout() {
   }
 
   return (
-    <AppShell header={{ height: 60 }} padding="md">
-      <AppShell.Header px="md">
-        <Group h="100%" justify="space-between">
-          <Text fw={700} size="lg">
-            AI-buddy
-          </Text>
-          <Group gap="sm">
-            {user && (
-              <Group gap={8} visibleFrom="xs">
-                <Text size="sm">{user.name}</Text>
-                <RoleBadge role={user.role} />
-              </Group>
-            )}
-            <Button variant="default" size="xs" onClick={handleLogout}>
-              Выйти
-            </Button>
-          </Group>
-        </Group>
-      </AppShell.Header>
-      <AppShell.Main bg="gray.0">
+    <div className={classes.shell}>
+      <AppRail user={user} onLogout={handleLogout} />
+      <Box component="main" className={classes.main}>
         <Outlet />
-      </AppShell.Main>
-    </AppShell>
+      </Box>
+    </div>
   )
 }

@@ -29,3 +29,83 @@ POST {{base}}/api/auth/login
 Content-Type: application/json
 
 { "login": "", "password": "" }
+
+###############################################################
+### Страница «Мой путь» (выполнить сначала вход выше)
+###############################################################
+
+### Мой путь (стажер)
+GET {{base}}/api/path
+Authorization: Bearer {{login.response.body.token}}
+
+### «Уже сделано» по задаче «Настроить рабочее окружение»
+POST {{base}}/api/path/tasks/b7000000-0000-4000-8000-000000000301/complete
+Authorization: Bearer {{login.response.body.token}}
+
+###############################################################
+### Наставник: вход и консоль
+###############################################################
+
+# @name mentor
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "login": "mentor_igor", "password": "demo123" }
+
+### Мои стажеры
+GET {{base}}/api/interns
+Authorization: Bearer {{mentor.response.body.token}}
+
+### Путь Анны глазами наставника
+GET {{base}}/api/interns/aaaaaaaa-0000-4000-8000-000000000001/path
+Authorization: Bearer {{mentor.response.body.token}}
+
+### Поменять статус задачи Анны (GitLab → на согласовании)
+PUT {{base}}/api/interns/aaaaaaaa-0000-4000-8000-000000000001/tasks/b7000000-0000-4000-8000-000000000204
+Authorization: Bearer {{mentor.response.body.token}}
+Content-Type: application/json
+
+{ "status": "waiting", "note": "Заявка у Олега" }
+
+### Назначить встречу
+POST {{base}}/api/interns/aaaaaaaa-0000-4000-8000-000000000001/meetings
+Authorization: Bearer {{mentor.response.body.token}}
+Content-Type: application/json
+
+{ "title": "Разбор первой недели", "startsAt": "2026-11-13T11:00:00+03:00" }
+
+### Шаблон адаптации команды
+GET {{base}}/api/console/templates
+Authorization: Bearer {{mentor.response.body.token}}
+
+### Какие действия умеет AI-buddy (для выпадающего списка)
+GET {{base}}/api/console/action-kinds
+Authorization: Bearer {{mentor.response.body.token}}
+
+### Новый этап
+# @name stage
+POST {{base}}/api/console/stages
+Authorization: Bearer {{mentor.response.body.token}}
+Content-Type: application/json
+
+{ "title": "Итоги стажировки", "color": "#FFFFFF", "tip": "Подготовь короткий рассказ о сделанном", "suggestions": ["Как готовиться к отзыву?"] }
+
+### Задача в новом этапе с действием AI-buddy
+# @name task
+POST {{base}}/api/console/stages/{{stage.response.body.id}}/tasks
+Authorization: Bearer {{mentor.response.body.token}}
+Content-Type: application/json
+
+{ "title": "Оформить отгул на день отзыва", "note": "Если нужно", "dueDay": 80,
+  "action": { "kind": "leave_request", "payload": { "type": "day_off" } } }
+
+### Карточка в боковой панели, тег считается из статуса задачи
+POST {{base}}/api/console/stages/{{stage.response.body.id}}/resources
+Authorization: Bearer {{mentor.response.body.token}}
+Content-Type: application/json
+
+{ "kind": "access", "name": "Отгул", "note": "заявка", "taskId": "{{task.response.body.id}}" }
+
+### Удалить этап (вместе с задачами и карточками)
+DELETE {{base}}/api/console/stages/{{stage.response.body.id}}
+Authorization: Bearer {{mentor.response.body.token}}

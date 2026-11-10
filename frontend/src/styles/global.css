@@ -1,0 +1,98 @@
+body {
+  margin: 0;
+  background: #f4f4f4;
+  color: #141414;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes blink {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+.ab-rise {
+  animation: rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.ab-rise-2 {
+  animation: rise 0.45s 0.08s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.ab-pop {
+  animation: pop 0.35s ease both;
+}
+.ab-float {
+  animation: float 3.2s ease-in-out infinite;
+}
+.ab-dot {
+  animation: blink 1.2s infinite;
+}
+.ab-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.ab-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+.ab-lift {
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.ab-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(20, 20, 20, 0.08);
+}
+.ab-marker {
+  padding: 0 6px;
+}
+.ab-hand {
+  font-family: Caveat, cursive;
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ab-rise,
+  .ab-rise-2,
+  .ab-pop,
+  .ab-float,
+  .ab-dot {
+    animation: none;
+  }
+  .ab-lift,
+  .ab-lift:hover {
+    transition: none;
+    transform: none;
+  }
+}

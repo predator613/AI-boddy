@@ -1,36 +1,28 @@
-import { Card, Container, Group, Stack, Text, Title } from '@mantine/core'
 import { createFileRoute } from '@tanstack/react-router'
-import { RoleBadge } from '../../components/RoleBadge'
+import { InternsPage } from '../../pages/InternsPage'
+import { MyPathPage } from '../../pages/MyPathPage'
 import { useAuthStore } from '../../store/authStore'
 
+interface HomeSearch {
+  stage?: string
+}
+
 export const Route = createFileRoute('/_auth/')({
+  validateSearch: (search: Record<string, unknown>): HomeSearch =>
+    typeof search.stage === 'string' && search.stage ? { stage: search.stage } : {},
   component: HomePage,
 })
 
+// Главная зависит от роли: стажеру – «Мой путь», наставнику и руководителю – их стажеры.
 function HomePage() {
-  const user = useAuthStore((s) => s.user)
-  if (!user) return null
-
+  const role = useAuthStore((s) => s.user?.role)
+  const { stage } = Route.useSearch()
+  const navigate = Route.useNavigate()
+  if (role !== 'intern') return <InternsPage />
   return (
-    <Container size="md" py="lg">
-      <Card withBorder radius="lg" padding="xl">
-        <Stack gap="xs">
-          <Title order={2}>Привет, {user.name}!</Title>
-          <Group gap="xs">
-            <Text c="dimmed">Роль:</Text>
-            <RoleBadge role={user.role} />
-          </Group>
-          <Text c="dimmed">
-            Команда:{' '}
-            <Text span c="dark" fw={500}>
-              {user.teamName}
-            </Text>
-          </Text>
-          <Text size="sm" c="dimmed" mt="sm">
-            Скоро здесь появятся чат с помощником, «Мой путь» и заявки.
-          </Text>
-        </Stack>
-      </Card>
-    </Container>
+    <MyPathPage
+      stage={stage ?? null}
+      onStage={(code) => navigate({ search: code ? { stage: code } : {}, replace: true })}
+    />
   )
 }
