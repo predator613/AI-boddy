@@ -58,14 +58,14 @@ describe('Справочник', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Все разделы' }))
 
     await userEvent.type(screen.getByLabelText('Поиск по справочнику'), 'ревью')
-    expect(screen.getByText('Найдено: 1')).toBeInTheDocument()
+    expect(await screen.findByText('Найдено: 1', {}, T)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /Как устроено код-ревью в команде/ }))
     expect(await screen.findByRole('dialog')).toHaveTextContent('мин чтения')
     await userEvent.click(within(screen.getByRole('dialog')).getAllByRole('button')[0])
 
     await userEvent.clear(screen.getByLabelText('Поиск по справочнику'))
     await userEvent.type(screen.getByLabelText('Поиск по справочнику'), 'абракадабра')
-    expect(screen.getByText(/Ничего не нашлось/)).toBeInTheDocument()
+    expect(await screen.findByText(/Ничего не нашлось/, {}, T)).toBeInTheDocument()
   })
 
   it('после «Моего пути» показывает статьи текущего этапа', async () => {

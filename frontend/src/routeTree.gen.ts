@@ -13,9 +13,14 @@ import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthIndexRouteImport } from './routes/_auth/index'
 import { Route as AuthChatRouteImport } from './routes/_auth/chat'
+import { Route as AuthInboxRouteImport } from './routes/_auth/inbox'
 import { Route as AuthKbRouteImport } from './routes/_auth/kb'
+import { Route as AuthMaterialsRouteImport } from './routes/_auth/materials'
+import { Route as AuthMentorRouteImport } from './routes/_auth/mentor'
+import { Route as AuthPlanRouteImport } from './routes/_auth/plan'
 import { Route as AuthProfileRouteImport } from './routes/_auth/profile'
 import { Route as AuthRequestsRouteImport } from './routes/_auth/requests'
+import { Route as AuthScheduleRouteImport } from './routes/_auth/schedule'
 import { Route as AuthSupportRouteImport } from './routes/_auth/support'
 import { Route as AuthInternsInternIdRouteImport } from './routes/_auth/interns.$internId'
 
@@ -38,9 +43,29 @@ const AuthChatRoute = AuthChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthInboxRoute = AuthInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthKbRoute = AuthKbRouteImport.update({
   id: '/kb',
   path: '/kb',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthMaterialsRoute = AuthMaterialsRouteImport.update({
+  id: '/materials',
+  path: '/materials',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthMentorRoute = AuthMentorRouteImport.update({
+  id: '/mentor',
+  path: '/mentor',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthPlanRoute = AuthPlanRouteImport.update({
+  id: '/plan',
+  path: '/plan',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthProfileRoute = AuthProfileRouteImport.update({
@@ -51,6 +76,11 @@ const AuthProfileRoute = AuthProfileRouteImport.update({
 const AuthRequestsRoute = AuthRequestsRouteImport.update({
   id: '/requests',
   path: '/requests',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthScheduleRoute = AuthScheduleRouteImport.update({
+  id: '/schedule',
+  path: '/schedule',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthSupportRoute = AuthSupportRouteImport.update({
@@ -68,18 +98,28 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthIndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AuthChatRoute
+  '/inbox': typeof AuthInboxRoute
   '/kb': typeof AuthKbRoute
+  '/materials': typeof AuthMaterialsRoute
+  '/mentor': typeof AuthMentorRoute
+  '/plan': typeof AuthPlanRoute
   '/profile': typeof AuthProfileRoute
   '/requests': typeof AuthRequestsRoute
+  '/schedule': typeof AuthScheduleRoute
   '/support': typeof AuthSupportRoute
   '/interns/$internId': typeof AuthInternsInternIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/chat': typeof AuthChatRoute
+  '/inbox': typeof AuthInboxRoute
   '/kb': typeof AuthKbRoute
+  '/materials': typeof AuthMaterialsRoute
+  '/mentor': typeof AuthMentorRoute
+  '/plan': typeof AuthPlanRoute
   '/profile': typeof AuthProfileRoute
   '/requests': typeof AuthRequestsRoute
+  '/schedule': typeof AuthScheduleRoute
   '/support': typeof AuthSupportRoute
   '/': typeof AuthIndexRoute
   '/interns/$internId': typeof AuthInternsInternIdRoute
@@ -89,9 +129,14 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteWithChildren
   '/login': typeof LoginRoute
   '/_auth/chat': typeof AuthChatRoute
+  '/_auth/inbox': typeof AuthInboxRoute
   '/_auth/kb': typeof AuthKbRoute
+  '/_auth/materials': typeof AuthMaterialsRoute
+  '/_auth/mentor': typeof AuthMentorRoute
+  '/_auth/plan': typeof AuthPlanRoute
   '/_auth/profile': typeof AuthProfileRoute
   '/_auth/requests': typeof AuthRequestsRoute
+  '/_auth/schedule': typeof AuthScheduleRoute
   '/_auth/support': typeof AuthSupportRoute
   '/_auth/': typeof AuthIndexRoute
   '/_auth/interns/$internId': typeof AuthInternsInternIdRoute
@@ -102,18 +147,28 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/chat'
+    | '/inbox'
     | '/kb'
+    | '/materials'
+    | '/mentor'
+    | '/plan'
     | '/profile'
     | '/requests'
+    | '/schedule'
     | '/support'
     | '/interns/$internId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
     | '/chat'
+    | '/inbox'
     | '/kb'
+    | '/materials'
+    | '/mentor'
+    | '/plan'
     | '/profile'
     | '/requests'
+    | '/schedule'
     | '/support'
     | '/'
     | '/interns/$internId'
@@ -122,9 +177,14 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/login'
     | '/_auth/chat'
+    | '/_auth/inbox'
     | '/_auth/kb'
+    | '/_auth/materials'
+    | '/_auth/mentor'
+    | '/_auth/plan'
     | '/_auth/profile'
     | '/_auth/requests'
+    | '/_auth/schedule'
     | '/_auth/support'
     | '/_auth/'
     | '/_auth/interns/$internId'
@@ -165,11 +225,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthChatRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/inbox': {
+      id: '/_auth/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof AuthInboxRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/kb': {
       id: '/_auth/kb'
       path: '/kb'
       fullPath: '/kb'
       preLoaderRoute: typeof AuthKbRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/materials': {
+      id: '/_auth/materials'
+      path: '/materials'
+      fullPath: '/materials'
+      preLoaderRoute: typeof AuthMaterialsRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/mentor': {
+      id: '/_auth/mentor'
+      path: '/mentor'
+      fullPath: '/mentor'
+      preLoaderRoute: typeof AuthMentorRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/plan': {
+      id: '/_auth/plan'
+      path: '/plan'
+      fullPath: '/plan'
+      preLoaderRoute: typeof AuthPlanRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/profile': {
@@ -184,6 +272,13 @@ declare module '@tanstack/react-router' {
       path: '/requests'
       fullPath: '/requests'
       preLoaderRoute: typeof AuthRequestsRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/schedule': {
+      id: '/_auth/schedule'
+      path: '/schedule'
+      fullPath: '/schedule'
+      preLoaderRoute: typeof AuthScheduleRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/support': {
@@ -205,9 +300,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthRouteChildren {
   AuthChatRoute: typeof AuthChatRoute
+  AuthInboxRoute: typeof AuthInboxRoute
   AuthKbRoute: typeof AuthKbRoute
+  AuthMaterialsRoute: typeof AuthMaterialsRoute
+  AuthMentorRoute: typeof AuthMentorRoute
+  AuthPlanRoute: typeof AuthPlanRoute
   AuthProfileRoute: typeof AuthProfileRoute
   AuthRequestsRoute: typeof AuthRequestsRoute
+  AuthScheduleRoute: typeof AuthScheduleRoute
   AuthSupportRoute: typeof AuthSupportRoute
   AuthIndexRoute: typeof AuthIndexRoute
   AuthInternsInternIdRoute: typeof AuthInternsInternIdRoute
@@ -215,9 +315,14 @@ interface AuthRouteChildren {
 
 const AuthRouteChildren: AuthRouteChildren = {
   AuthChatRoute: AuthChatRoute,
+  AuthInboxRoute: AuthInboxRoute,
   AuthKbRoute: AuthKbRoute,
+  AuthMaterialsRoute: AuthMaterialsRoute,
+  AuthMentorRoute: AuthMentorRoute,
+  AuthPlanRoute: AuthPlanRoute,
   AuthProfileRoute: AuthProfileRoute,
   AuthRequestsRoute: AuthRequestsRoute,
+  AuthScheduleRoute: AuthScheduleRoute,
   AuthSupportRoute: AuthSupportRoute,
   AuthIndexRoute: AuthIndexRoute,
   AuthInternsInternIdRoute: AuthInternsInternIdRoute,

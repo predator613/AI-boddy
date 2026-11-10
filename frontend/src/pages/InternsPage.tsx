@@ -6,6 +6,7 @@ import { ErrorBlock, LoadingBlocks } from '../components/QueryState'
 import { StatusTag } from '../components/StatusTag'
 import { useInterns } from '../hooks/usePath'
 import { useAuthStore } from '../store/authStore'
+import { MentorStatsStrip } from '../components/mentor/MentorStatsStrip'
 
 // Главная наставника и руководителя: стажеры и их прогресс.
 export function InternsPage() {
@@ -22,6 +23,7 @@ export function InternsPage() {
             </>
           }
         />
+        <MentorStatsStrip />
         {interns.isPending && <LoadingBlocks label="Загрузка стажеров" />}
         {interns.isError && <ErrorBlock error={interns.error} onRetry={() => interns.refetch()} />}
         {interns.data && interns.data.length === 0 && (

@@ -5,6 +5,7 @@ import { HttpResponse, delay, http } from 'msw'
 import { API_URL } from '../api/client'
 import type { TChatMessage, TKnowledgeBase, TRequestItem } from '../schemas/assistant'
 import { setMockTaskStatus } from './pathData'
+import { mentorHandlers } from './mentorData'
 
 type Payload = Record<string, unknown>
 interface PendingAction {
@@ -23,7 +24,7 @@ const SERVICES: Record<string, string> = {
 const ROLES: Record<string, string> = { developer: 'Developer', read: 'чтение', write: 'запись' }
 
 // В тестах ждем минимально, чтобы статус «думает» успел показаться, но тесты шли быстро.
-const wait = (ms: number) => delay(import.meta.env.MODE === 'test' ? 40 : ms)
+const wait = (ms: number) => delay(import.meta.env.MODE === 'test' ? 300 : ms)
 
 let seq = 0
 const id = (p: string) => `${p}-${++seq}`
@@ -437,5 +438,7 @@ export const pendingHandlers = [
   }),
 
   http.get(`${API_URL}/api/requests`, () => HttpResponse.json(requests)),
+  // Кабинет наставника и чат стажера с наставником (docs/api-mentor-console.md).
+  ...mentorHandlers,
   // GET /api/kb уже отдает backend: обработчик перенесен в handlers.ts (только полный режим без backend).
 ]

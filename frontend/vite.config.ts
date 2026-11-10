@@ -19,6 +19,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./tests/setup.ts'],
+    // на медленных компьютерах длинные сценарии не укладываются в 5 секунд по умолчанию
+    testTimeout: 30000,
     css: false,
     coverage: {
       provider: 'v8',

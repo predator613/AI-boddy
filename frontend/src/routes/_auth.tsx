@@ -4,6 +4,7 @@ import { Navigate, Outlet, createFileRoute, redirect } from '@tanstack/react-rou
 import { useEffect } from 'react'
 import { getMe } from '../api/auth'
 import { AppRail } from '../components/AppRail'
+import { Toast } from '../components/Toast'
 import { useAuthStore } from '../store/authStore'
 import classes from './_auth.module.css'
 
@@ -41,6 +42,7 @@ function AuthLayout() {
       <Box component="main" className={classes.main}>
         <Outlet />
       </Box>
+      <Toast />
     </div>
   )
 }
