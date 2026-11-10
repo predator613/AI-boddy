@@ -6,3 +6,4 @@ backend/coverage/
 *.exe
 .idea/
 .DS_Store
+frontend/coverage/

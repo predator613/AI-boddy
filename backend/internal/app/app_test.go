@@ -52,8 +52,10 @@ func newServer(t *testing.T, demo bool) *httptest.Server {
 	_, err = database.Migrate(ctx, pool, migrations.FS)
 	require.NoError(t, err)
 
-	svc := services.NewAuth(repository.NewUsers(pool), cfg.JWTSecret, cfg.JWTTTL)
-	srv := httptest.NewServer(NewRouter(cfg, svc, quietLog))
+	users := repository.NewUsers(pool)
+	svc := services.NewAuth(users, cfg.JWTSecret, cfg.JWTTTL)
+	pathSvc := services.NewPath(repository.NewOnboarding(pool), users)
+	srv := httptest.NewServer(NewRouter(cfg, svc, pathSvc, quietLog))
 	t.Cleanup(srv.Close)
 	return srv
 }

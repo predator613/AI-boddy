@@ -13,6 +13,10 @@ docker compose ps          # backend, postgres, redis должны быть heal
 
 Проверка: http://localhost:8080/api/health → `{"status":"ok"}`
 
+Интерфейс: **http://localhost:3000** – войти под любым тестовым пользователем (карточки на странице входа). Стажер видит «Мой путь», наставник и руководитель – своих стажеров. Подробнее про фронтенд: `frontend/README.md`.
+
+Чат, заявки и справочник backend пока не реализует: на эти запросы в браузере отвечает имитация (MSW), контракт для backend – `docs/api-frontend-pending.md`.
+
 Остановить: `docker compose down`. Удалить и базу тоже (начать с чистого листа): `docker compose down -v`.
 
 Файл `.env` не обязателен. Чтобы поменять порты или секреты: `cp .env.example .env` и отредактировать.
@@ -61,7 +65,7 @@ docker compose --profile test run --rm backend-tests
 
 | Компонент | Версия |
 |---|---|
-| Go | 1.24 (образ golang:1.24-alpine) |
+| Go | 1.25 (образ golang:1.25-alpine, GOTOOLCHAIN=auto) |
 | PostgreSQL | 16 + pgvector (образ pgvector/pgvector:pg16) |
 | Redis | 7 (redis:7-alpine) |
 | chi | v5.2.2, go-chi/cors v1.2.2 |
@@ -91,6 +95,28 @@ docker compose --profile test run --rm backend-tests
 | POST | /api/auth/login | 200 `{token, user}`; 400 validation_error; 401 invalid_credentials |
 | GET | /api/auth/me | 200 User; 401 unauthorized |
 | GET | /api/auth/test-users | 200 список; 404 not_found при DEMO_MODE=false |
+
+## API (этап 2 – страница «Мой путь» и консоль наставника)
+
+Подробный контракт с примерами: `docs/api-my-path.md`. Все запросы с заголовком `Authorization: Bearer <token>`.
+
+| Метод | Путь | Кто | Что делает |
+|---|---|---|---|
+| GET | /api/path | стажер | весь экран «Мой путь» |
+| POST | /api/path/tasks/{taskId}/complete | стажер | «Уже сделано» |
+| GET | /api/interns | наставник, руководитель | стажеры с прогрессом |
+| GET | /api/interns/{internId}/path | наставник, руководитель | путь стажера |
+| PUT | /api/interns/{internId}/tasks/{taskId} | наставник, руководитель | статус задачи стажера |
+| POST | /api/interns/{internId}/meetings | наставник, руководитель | назначить встречу |
+| GET | /api/console/templates | наставник, руководитель | шаблон адаптации команды |
+| GET | /api/console/action-kinds | все | какие действия умеет AI-buddy |
+| POST/PUT/DELETE | /api/console/stages[/{id}] | наставник, руководитель | этапы |
+| POST | /api/console/stages/{id}/tasks | наставник, руководитель | задача в этапе |
+| PUT/DELETE | /api/console/tasks/{id} | наставник, руководитель | задача |
+| POST | /api/console/stages/{id}/resources | наставник, руководитель | карточка боковой панели |
+| DELETE | /api/console/resources/{id} | наставник, руководитель | карточка |
+
+Права: стажер видит только себя; наставник – своих подопечных; руководитель – всех стажеров своей команды. Чужие данные отвечают 404 (не раскрываем, что они есть), запрещенные для роли действия – 403.
 
 ## Структура backend
 

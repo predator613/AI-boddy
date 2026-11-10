@@ -12,6 +12,7 @@ const (
 	CodeInvalidCredentials = "invalid_credentials"
 	CodeUnauthorized       = "unauthorized"
 	CodeNotFound           = "not_found"
+	CodeForbidden          = "forbidden"
 	CodeMethodNotAllowed   = "method_not_allowed"
 	CodeInternal           = "internal_error"
 )

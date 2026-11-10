@@ -69,7 +69,32 @@ services:
       postgres:
         condition: service_healthy
 
-  # Сюда позже добавятся frontend, agent и mock-services.
+  # Веб-интерфейс: сборка React-приложения и раздача статики через nginx.
+  # Открыть: http://localhost:3000
+  frontend:
+    build:
+      context: ./frontend
+      target: runtime
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Тесты frontend + отчет о покрытии в frontend/coverage/.
+  # Запуск: docker compose --profile test run --rm frontend-tests
+  frontend-tests:
+    profiles: ["test"]
+    build:
+      context: ./frontend
+      target: test
+    volumes:
+      - ./frontend/coverage:/coverage
+
+  # Сюда позже добавятся agent и mock-services.
 
 volumes:
   pgdata:
