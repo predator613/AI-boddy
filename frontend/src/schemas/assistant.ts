@@ -1,5 +1,5 @@
-// Схемы чата, заявок и справочника. Backend этих эндпоинтов еще нет:
-// пока на них отвечает MSW (src/mocks/pending.ts), контракт описан в docs/api-frontend-pending.md.
+// Схемы чата, заявок и справочника. Справочник уже отдает backend (docs/api-goals-kb.md),
+// чат и заявки пока имитирует MSW (src/mocks/pending.ts), контракт – docs/api-frontend-pending.md.
 import { z } from 'zod'
 import { Action } from './path'
 
@@ -65,6 +65,26 @@ export const KbArticle = z.object({
   stageCode: z.string().nullable(),
 })
 export const KbTerm = z.object({ term: z.string(), def: z.string() })
+// GET /api/kb/articles/{id} – статья целиком. Абзацы в body разделены пустой строкой.
+export const KbArticleDetail = KbArticle.extend({
+  body: z.string(),
+  source: z.enum(['seed', 'upload', 'link', 'mentor_answer']),
+  url: z.string().nullable(),
+  authorName: z.string().nullable(),
+  useInAi: z.boolean(),
+  updatedAt: z.string(),
+})
+// GET /api/kb/search?q= – поиск с учетом русской морфологии, лучший фрагмент каждой статьи.
+export const KbSearchMatch = z.object({
+  articleId: z.string(),
+  sectionId: z.string(),
+  title: z.string(),
+  summary: z.string(),
+  snippet: z.string(),
+  stageCode: z.string().nullable(),
+  score: z.number(),
+})
+export const KbSearch = z.object({ query: z.string(), results: z.array(KbSearchMatch) })
 export const KnowledgeBase = z.object({
   sections: z.array(KbSection),
   articles: z.array(KbArticle),
@@ -77,3 +97,5 @@ export type TChatMessage = z.infer<typeof ChatMessage>
 export type TSendMessageInput = z.input<typeof SendMessageInput>
 export type TKnowledgeBase = z.infer<typeof KnowledgeBase>
 export type TKbArticle = z.infer<typeof KbArticle>
+export type TKbArticleDetail = z.infer<typeof KbArticleDetail>
+export type TKbSearch = z.infer<typeof KbSearch>

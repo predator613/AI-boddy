@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { apiRequest } from './client'
 import {
   ChatReply,
+  KbArticleDetail,
+  KbSearch,
   KnowledgeBase,
   RequestItem,
   SendMessageInput,
@@ -38,4 +40,16 @@ export function getRequests() {
 /** GET /api/kb – разделы, статьи и словарик справочника. */
 export function getKnowledgeBase() {
   return apiRequest('/api/kb', KnowledgeBase)
+}
+
+/** GET /api/kb/articles/{id} – статья с текстом. Чужой команды – 404. */
+export function getKbArticle(articleId: string, signal?: AbortSignal) {
+  return apiRequest(`/api/kb/articles/${encodeURIComponent(articleId)}`, KbArticleDetail, {
+    signal,
+  })
+}
+
+/** GET /api/kb/search?q= – поиск по справочнику (до 20 результатов). */
+export function searchKb(q: string, signal?: AbortSignal) {
+  return apiRequest(`/api/kb/search?q=${encodeURIComponent(q)}`, KbSearch, { signal })
 }

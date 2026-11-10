@@ -12,10 +12,9 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { IconChevronRight, IconSearch } from '@tabler/icons-react'
-import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
-import { getKnowledgeBase } from '../api/assistant'
+import { useKbArticle, useKbSearch, useKnowledgeBase } from '../hooks/useKb'
 import { Mascot } from '../components/Mascot'
 import { Marker, PageHeader } from '../components/PageHeader'
 import { Page } from '../components/Page'
@@ -32,8 +31,10 @@ interface KnowledgePageProps {
 }
 
 export function KnowledgePage({ articleId, onArticle, stageCode }: KnowledgePageProps) {
-  const kb = useQuery({ queryKey: ['kb'], queryFn: getKnowledgeBase, staleTime: 5 * 60_000 })
+  const kb = useKnowledgeBase()
   const [search, setSearch] = useState('')
+  const found = useKbSearch(search)
+  const detail = useKbArticle(articleId)
   const [section, setSection] = useState<string | null>(null)
 
   return (
@@ -64,11 +65,19 @@ export function KnowledgePage({ articleId, onArticle, stageCode }: KnowledgePage
         {kb.data &&
           (() => {
             const q = search.trim().toLowerCase()
-            const filtered = kb.data.articles.filter(
-              (a) =>
-                (!section || a.sectionId === section) &&
-                (!q || `${a.title} ${a.summary}`.toLowerCase().includes(q)),
-            )
+            // Поиск на сервере (морфология, порядок по релевантности); пока ответа нет – фильтр по названию.
+            const byId = new Map(kb.data.articles.map((a) => [a.id, a]))
+            const serverHits = found.data?.results
+              .map((r) => byId.get(r.articleId))
+              .filter((a): a is TKbArticle => Boolean(a))
+            const filtered =
+              q && serverHits
+                ? serverHits.filter((a) => !section || a.sectionId === section)
+                : kb.data.articles.filter(
+                    (a) =>
+                      (!section || a.sectionId === section) &&
+                      (!q || `${a.title} ${a.summary}`.toLowerCase().includes(q)),
+                  )
             const forStage = stageCode
               ? kb.data.articles.filter((a) => a.stageCode === stageCode)
               : []
@@ -158,9 +167,17 @@ export function KnowledgePage({ articleId, onArticle, stageCode }: KnowledgePage
                 >
                   {open && (
                     <Stack>
-                      <Text>{open.summary}</Text>
+                      <Text fw={500}>{open.summary}</Text>
+                      {detail.data?.body
+                        .split(/\n{2,}/)
+                        .filter(Boolean)
+                        .map((p, i) => (
+                          <Text key={i}>{p}</Text>
+                        ))}
+                      {detail.isPending && <Text c="ink.5">Загружаем текст…</Text>}
                       <Text size="sm" c="ink.5">
                         {open.minutes} мин чтения
+                        {detail.data?.authorName ? ` · ${detail.data.authorName}` : ''}
                       </Text>
                       <Button
                         renderRoot={(p) => (

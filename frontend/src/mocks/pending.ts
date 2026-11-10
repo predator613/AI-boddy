@@ -437,6 +437,5 @@ export const pendingHandlers = [
   }),
 
   http.get(`${API_URL}/api/requests`, () => HttpResponse.json(requests)),
-
-  http.get(`${API_URL}/api/kb`, () => HttpResponse.json(KB)),
+  // GET /api/kb уже отдает backend: обработчик перенесен в handlers.ts (только полный режим без backend).
 ]

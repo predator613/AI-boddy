@@ -1,4 +1,4 @@
-# API, которого фронт ждет от backend (чат, заявки, справочник)
+# API, которого фронт ждет от backend (чат, заявки)
 
 Эти эндпоинты фронт уже вызывает. Пока их нет в backend, на них отвечает MSW прямо в браузере (`frontend/src/mocks/pending.ts`), остальные запросы идут в настоящий backend. Когда эндпоинт появится в backend – удалите его обработчик из `pendingHandlers`, фронт менять не нужно. Схемы ответов: `frontend/src/schemas/assistant.ts`.
 
@@ -7,7 +7,7 @@
 ## Чат с помощником
 
 ### POST /api/chat/messages
-Запрос: `{ "text": "Как получить доступ к GitLab?", "action": null }`. `action` – действие задачи из «Моего пути» (`task.action`), например `{ "kind": "access_request", "payload": { "service": "gitlab", "group": "backend", "role": "developer" } }`.
+Запрос: `{ "text": "Как получить доступ к GitLab?", "action": null }`. `action` – действие задачи из «Моего пути» (`task.action`), например `{ "kind": "access_request", "payload": { "service": "gitlab", "role": "developer", "project": "backend/auth-service" } }`.
 
 Ответ 200: `{ "messages": ChatMessage[] }` – новые сообщения помощника.
 
@@ -18,7 +18,7 @@
   "kind": "text | confirm | result | error",
   "text": "Доступ выдает руководитель команды…",
   "source": { "title": "Памятка стажера → Доступы", "articleId": "a-access" },
-  "confirm": { "actionId": "act-1", "title": "Создать заявку на доступ?", "fields": [{ "label": "Сервис", "value": "GitLab" }], "state": "pending" },
+  "confirm": { "actionId": "act-1", "title": "Создать заявку на доступ?", "fields": [{ "label": "Ресурс", "value": "GitLab" }, { "label": "Проект", "value": "backend / auth-service" }, { "label": "Уровень прав", "value": "редактирование (Developer)" }, { "label": "Обоснование", "value": "Нужен для первой задачи" }, { "label": "Согласует", "value": "Олег, владелец проекта" }], "state": "pending" },
   "result": { "requestId": "req-1042", "number": "1042", "title": "Доступ к GitLab", "status": "waiting" },
   "mood": "calm | happy | think | mentor | sad"
 }
@@ -54,17 +54,7 @@
 
 ## Справочник
 
-### GET /api/kb
-
-```json
-{
-  "sections": [{ "id": "s-access", "title": "Доступы и сервисы", "hand": "доступы", "color": "#BADAFB", "count": 3 }],
-  "articles": [{ "id": "a-access", "sectionId": "s-access", "title": "Как запросить доступ", "summary": "…", "minutes": 3, "stageCode": "02" }],
-  "terms": [{ "term": "Код-ревью", "def": "…" }]
-}
-```
-
-`stageCode` связывает статью с этапом пути: на странице справочника стажер видит «Нужно на твоем этапе».
+Реализован в backend: `GET /api/kb`, `GET /api/kb/articles/{id}`, `GET /api/kb/search?q=`. Контракт – `docs/api-goals-kb.md`, MSW-обработчик убран из `pendingHandlers`.
 
 ## Права
 - Заявки и чат-действия – только свои. Наставник и руководитель раздела «Заявки» не видят (фронт его не показывает).

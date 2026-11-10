@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Marker, PageHeader } from '../../components/PageHeader'
 import { Page } from '../../components/Page'
 import { ErrorBlock, LoadingBlocks } from '../../components/QueryState'
+import { GoalsCard } from '../../components/path/GoalsCard'
 import { PathScreen } from '../../components/path/PathScreen'
 import { useInternPath, useSetInternTaskStatus } from '../../hooks/usePath'
 
@@ -37,6 +38,7 @@ function InternPathPage() {
         path={path}
         openCode={stage}
         onOpen={setStage}
+        goals={<GoalsCard internId={internId} />}
         busyTaskId={setStatus.isPending ? setStatus.variables?.taskId : null}
         onSetStatus={(taskId, status) => setStatus.mutate({ taskId, status })}
         header={

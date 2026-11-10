@@ -18,8 +18,6 @@ import (
 	"ai-buddy/backend/internal/config"
 	"ai-buddy/backend/internal/database"
 	"ai-buddy/backend/internal/models"
-	"ai-buddy/backend/internal/repository"
-	"ai-buddy/backend/internal/services"
 	"ai-buddy/backend/migrations"
 )
 
@@ -52,10 +50,7 @@ func newServer(t *testing.T, demo bool) *httptest.Server {
 	_, err = database.Migrate(ctx, pool, migrations.FS)
 	require.NoError(t, err)
 
-	users := repository.NewUsers(pool)
-	svc := services.NewAuth(users, cfg.JWTSecret, cfg.JWTTTL)
-	pathSvc := services.NewPath(repository.NewOnboarding(pool), users)
-	srv := httptest.NewServer(NewRouter(cfg, svc, pathSvc, quietLog))
+	srv := httptest.NewServer(NewRouter(cfg, NewServices(cfg, pool), quietLog))
 	t.Cleanup(srv.Close)
 	return srv
 }

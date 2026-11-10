@@ -45,6 +45,10 @@ func TestGetByLogin(t *testing.T) {
 
 	_, err = repo.GetByLogin(context.Background(), "nobody")
 	assert.ErrorIs(t, err, ErrNotFound)
+
+	// Согласующий DevOps (роль staff) в приложение не входит.
+	_, err = repo.GetByLogin(context.Background(), "devops_kirill")
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestGetByID(t *testing.T) {
@@ -73,6 +77,10 @@ func TestListTestUsers(t *testing.T) {
 	assert.Equal(t, "Backend", logins["mentor_igor"])
 	assert.Equal(t, "Backend", logins["lead_oleg"])
 	assert.Equal(t, "Frontend", logins["intern_pavel"])
+	assert.NotContains(t, logins, "devops_kirill", "роль staff не показывается в демо-входе")
+	for _, u := range list {
+		assert.Contains(t, []string{"intern", "mentor", "lead"}, u.Role)
+	}
 }
 
 func TestQueryErrorsWhenPoolClosed(t *testing.T) {

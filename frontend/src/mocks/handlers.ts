@@ -1,8 +1,9 @@
 import { HttpResponse, delay, http } from 'msw'
 import { API_URL } from '../api/client'
 import { MOCK_PASSWORD, mockTestUsers, mockToken, mockUsers } from './data'
+import { mockGoals, setMockGoalProgress } from './goalsData'
 import { buildMockPath, mockInterns, setMockTaskStatus } from './pathData'
-import { pendingHandlers } from './pending'
+import { KB, pendingHandlers } from './pending'
 
 const apiError = (status: number, code: string, message: string) =>
   HttpResponse.json({ error: { code, message } }, { status })
@@ -84,5 +85,73 @@ export const pathHandlers = [
   }),
 ]
 
+// Цели стажировки и справочник – по контракту docs/api-goals-kb.md.
+export const goalsKbHandlers = [
+  http.get(`${API_URL}/api/goals`, ({ request }) => {
+    const user = userFrom(request)
+    if (!user) return apiError(401, 'unauthorized', 'invalid or expired token')
+    if (user.role !== 'intern') return apiError(404, 'not_found', 'not found')
+    return HttpResponse.json(mockGoals(user.id, 'intern'))
+  }),
+
+  http.get(`${API_URL}/api/interns/:internId/goals`, ({ request, params }) => {
+    const user = userFrom(request)
+    if (!user || user.role === 'intern') return apiError(404, 'not_found', 'not found')
+    return HttpResponse.json(mockGoals(String(params.internId), user.role))
+  }),
+
+  http.post(`${API_URL}/api/goals/:goalId/progress`, async ({ request, params }) => {
+    const user = userFrom(request)
+    if (!user) return apiError(401, 'unauthorized', 'invalid or expired token')
+    const body = (await request.json().catch(() => null)) as { progressPct?: number } | null
+    const pct = body?.progressPct
+    if (typeof pct !== 'number' || pct < 0 || pct > 100)
+      return apiError(400, 'validation_error', 'progressPct must be between 0 and 100')
+    const goal = setMockGoalProgress(String(params.goalId), pct)
+    return goal ? HttpResponse.json(goal) : apiError(404, 'not_found', 'not found')
+  }),
+
+  http.get(`${API_URL}/api/kb`, () => HttpResponse.json(KB)),
+
+  http.get(`${API_URL}/api/kb/articles/:articleId`, ({ params }) => {
+    const a = KB.articles.find((x) => x.id === params.articleId)
+    if (!a) return apiError(404, 'not_found', 'not found')
+    return HttpResponse.json({
+      ...a,
+      body: `${a.summary}\n\nДемо-текст статьи: в режиме без backend показывается только аннотация.`,
+      source: 'seed',
+      url: null,
+      authorName: null,
+      useInAi: true,
+      updatedAt: new Date().toISOString(),
+    })
+  }),
+
+  http.get(`${API_URL}/api/kb/search`, ({ request }) => {
+    const q = new URL(request.url).searchParams.get('q')?.trim().toLowerCase() ?? ''
+    if (!q) return apiError(400, 'validation_error', 'q is required')
+    const words = q.split(/\s+/).filter((w) => w.length > 2)
+    const results = KB.articles
+      .map((a) => {
+        const text = `${a.title} ${a.summary}`.toLowerCase()
+        const score = words.filter((w) => text.includes(w.slice(0, 5))).length
+        return { a, score }
+      })
+      .filter((x) => x.score > 0)
+      .sort((x, y) => y.score - x.score)
+      .slice(0, 10)
+      .map(({ a, score }) => ({
+        articleId: a.id,
+        sectionId: a.sectionId,
+        title: a.title,
+        summary: a.summary,
+        snippet: a.summary,
+        stageCode: a.stageCode,
+        score,
+      }))
+    return HttpResponse.json({ query: q, results })
+  }),
+]
+
 // Все обработчики: полный режим без backend и тесты.
-export const allHandlers = [...handlers, ...pathHandlers, ...pendingHandlers]
+export const allHandlers = [...handlers, ...pathHandlers, ...goalsKbHandlers, ...pendingHandlers]

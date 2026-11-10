@@ -174,9 +174,9 @@ func TestCleanStage(t *testing.T) {
 }
 
 func TestCleanTask(t *testing.T) {
-	task, err := cleanTask(TaskInput{Title: "GitLab", Action: &models.Action{Kind: "access_request"}})
+	task, err := cleanTask(TaskInput{Title: "Вики", Action: &models.Action{Kind: "ask_buddy", Payload: json.RawMessage(`{"question":"Где вики?"}`)}})
 	require.NoError(t, err)
-	assert.JSONEq(t, `{}`, string(task.Action.Payload))
+	assert.JSONEq(t, `{"question":"Где вики?"}`, string(task.Action.Payload))
 
 	for name, in := range map[string]TaskInput{
 		"empty title":    {Title: ""},
@@ -184,6 +184,8 @@ func TestCleanTask(t *testing.T) {
 		"bad due day":    {Title: "x", DueDay: ptr(0)},
 		"unknown action": {Title: "x", Action: &models.Action{Kind: "drop_db"}},
 		"payload array":  {Title: "x", Action: &models.Action{Kind: "ask_buddy", Payload: json.RawMessage(`[1]`)}},
+		"no service":     {Title: "x", Action: &models.Action{Kind: "access_request"}},
+		"empty question": {Title: "x", Action: &models.Action{Kind: "ask_buddy", Payload: json.RawMessage(`{"question":" "}`)}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := cleanTask(in)

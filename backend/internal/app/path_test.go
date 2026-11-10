@@ -35,7 +35,7 @@ type env struct {
 func newEnv(t *testing.T) *env {
 	srv := newServer(t, true)
 	e := &env{t: t, base: srv.URL, tok: map[string]string{}}
-	for _, u := range []string{"intern_anna", "intern_pavel", "mentor_igor", "lead_oleg"} {
+	for _, u := range []string{"intern_anna", "intern_pavel", "intern_dima", "intern_liza", "mentor_igor", "lead_oleg", "lead_nina"} {
 		code, token, _ := login(t, srv.URL, u, "demo123")
 		require.Equal(t, http.StatusOK, code)
 		e.tok[u] = token
@@ -98,11 +98,17 @@ func TestPathPermissions(t *testing.T) {
 	assert.Equal(t, "Frontend", pv.Intern.TeamName)
 	assert.Nil(t, pv.Intern.Mentor)
 
-	// Игорь видит только Анну, Павла – нет.
+	// Игорь видит своих стажеров (Анна, Дмитрий, Лиза), Павла – нет.
 	require.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodGet, "/api/interns", nil, &list))
-	require.Len(t, list, 1)
-	assert.Equal(t, "intern_anna", list[0].Login)
-	assert.Equal(t, "02", list[0].StageCode)
+	require.Len(t, list, 3)
+	byLogin := map[string]models.InternSummary{}
+	for _, it := range list {
+		byLogin[it.Login] = it
+	}
+	assert.Equal(t, "02", byLogin["intern_anna"].StageCode)
+	assert.Equal(t, "04", byLogin["intern_dima"].StageCode)
+	assert.Equal(t, 6, byLogin["intern_dima"].Week)
+	assert.Equal(t, "01", byLogin["intern_liza"].StageCode)
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodGet, "/api/interns/"+pavelID+"/path", nil, nil))
 	assert.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodGet, "/api/interns/"+annaID+"/path", nil, nil))
 
@@ -113,7 +119,7 @@ func TestPathPermissions(t *testing.T) {
 
 	// Олег видит стажеров своей команды.
 	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodGet, "/api/interns", nil, &list))
-	assert.Len(t, list, 1)
+	assert.Len(t, list, 3)
 
 	// Без токена – 401.
 	assert.Equal(t, http.StatusUnauthorized, e.call("nobody", http.MethodGet, "/api/path", nil, nil))
@@ -231,11 +237,47 @@ func TestConsoleTemplatesLifecycle(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, "/api/console/stages/"+st.ID+"/tasks",
 		map[string]any{"title": "x", "action": map[string]any{"kind": "rm"}}, nil))
 
+	// Заявка на доступ с проектом; старое поле group превращается в проект.
+	var gl models.TaskTemplate
+	require.Equal(t, http.StatusCreated, e.call("mentor_igor", http.MethodPost, "/api/console/stages/"+st.ID+"/tasks",
+		map[string]any{"title": "GitLab", "action": map[string]any{"kind": "access_request",
+			"payload": map[string]string{"service": "gitlab", "role": "developer", "group": "backend"}}}, &gl))
+	assert.JSONEq(t, `{"service":"gitlab","role":"developer","project":"backend/auth-service"}`, string(gl.Action.Payload))
+	require.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodPut, "/api/console/tasks/"+gl.ID,
+		map[string]any{"title": "Стенд", "position": 2, "action": map[string]any{"kind": "access_request",
+			"payload": map[string]string{"service": "test_stand", "role": "read", "project": "auth-staging"}}}, &gl))
+	assert.JSONEq(t, `{"service":"test_stand","role":"read","project":"auth-staging"}`, string(gl.Action.Payload))
+	for name, payload := range map[string]map[string]string{
+		"unknown service":       {"service": "jira", "role": "read"},
+		"role of other service": {"service": "wiki", "role": "developer"},
+		"project of other srv":  {"service": "gitlab", "role": "developer", "project": "auth-staging"},
+	} {
+		assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPut, "/api/console/tasks/"+gl.ID,
+			map[string]any{"title": "x", "position": 2, "action": map[string]any{"kind": "access_request", "payload": payload}}, nil), name)
+	}
+	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, "/api/console/stages/"+st.ID+"/tasks",
+		map[string]any{"title": "x", "action": map[string]any{"kind": "open_article", "payload": map[string]string{"articleId": "not-a-uuid"}}}, nil))
+	assert.Equal(t, http.StatusNoContent, e.call("mentor_igor", http.MethodDelete, "/api/console/tasks/"+gl.ID, nil, nil))
+
+	// Подсказки этапа хранятся отдельной таблицей и возвращаются по порядку.
+	var st2 models.StageTemplate
+	require.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodPut, "/api/console/stages/"+st.ID,
+		map[string]any{"title": "Итоги стажировки", "color": "#F7C1C5", "position": st.Position, "suggestions": []string{"Б", "А"}}, &st2))
+	assert.Equal(t, []string{"Б", "А"}, st2.Suggestions)
+
 	// Карточка, связанная с задачей: тег у стажера считается сам.
 	var res models.ResourceTemplate
 	require.Equal(t, http.StatusCreated, e.call("mentor_igor", http.MethodPost, "/api/console/stages/"+st.ID+"/resources",
 		map[string]any{"kind": "access", "name": "Отгул", "taskId": task.ID}, &res))
 	assert.Equal(t, "none", res.TagKind)
+	// Карточка «человек» ссылается на сотрудника команды по имени; чужого имени нет – 400.
+	var person models.ResourceTemplate
+	require.Equal(t, http.StatusCreated, e.call("mentor_igor", http.MethodPost, "/api/console/stages/"+st.ID+"/resources",
+		map[string]any{"kind": "person", "name": "Олег", "note": "руководитель"}, &person))
+	assert.Equal(t, "Олег", person.Name)
+	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, "/api/console/stages/"+st.ID+"/resources",
+		map[string]any{"kind": "person", "name": "Нина"}, nil), "Нина из другой команды")
+	assert.Equal(t, http.StatusNoContent, e.call("mentor_igor", http.MethodDelete, "/api/console/resources/"+person.ID, nil, nil))
 	var plain models.ResourceTemplate
 	require.Equal(t, http.StatusCreated, e.call("mentor_igor", http.MethodPost, "/api/console/stages/"+st.ID+"/resources",
 		map[string]any{"kind": "article", "name": "Памятка", "tag": "читать", "tagKind": "none"}, &plain))

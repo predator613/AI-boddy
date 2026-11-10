@@ -15,7 +15,7 @@ docker compose ps          # backend, postgres, redis должны быть heal
 
 Интерфейс: **http://localhost:3000** – войти под любым тестовым пользователем (карточки на странице входа). Стажер видит «Мой путь», наставник и руководитель – своих стажеров. Подробнее про фронтенд: `frontend/README.md`.
 
-Чат, заявки и справочник backend пока не реализует: на эти запросы в браузере отвечает имитация (MSW), контракт для backend – `docs/api-frontend-pending.md`.
+Чат и заявки backend пока не реализует: на эти запросы в браузере отвечает имитация (MSW), контракт для backend – `docs/api-frontend-pending.md`. Справочник и цели стажировки отдает backend.
 
 Остановить: `docker compose down`. Удалить и базу тоже (начать с чистого листа): `docker compose down -v`.
 
@@ -27,10 +27,15 @@ docker compose ps          # backend, postgres, redis должны быть heal
 
 | Логин | Имя | Роль | Команда |
 |---|---|---|---|
-| intern_anna | Анна | стажер (intern), наставник – Игорь | Backend |
-| mentor_igor | Игорь | наставник (mentor) | Backend |
-| lead_oleg | Олег | руководитель (lead) | Backend |
-| intern_pavel | Павел | стажер (intern) | Frontend |
+| intern_anna | Анна | стажер, 2-я неделя, этап «Доступы», цели согласованы | Backend |
+| intern_dima | Дмитрий | стажер, 6-я неделя, этап «Первые задачи», есть просрочка | Backend |
+| intern_liza | Лиза | стажер, 1-я неделя, цели еще не согласованы | Backend |
+| mentor_igor | Игорь | наставник Анны, Дмитрия и Лизы | Backend |
+| lead_oleg | Олег | руководитель, согласует цели и GitLab backend/auth-service | Backend |
+| intern_pavel | Павел | стажер без наставника | Frontend |
+| lead_nina | Нина | руководитель | Frontend |
+
+Кирилл (DevOps, роль staff) – согласующий тестового стенда и логов, в приложение не входит.
 
 ## Порядок проверки (backend)
 
@@ -43,6 +48,14 @@ curl -X POST http://localhost:8080/api/auth/login -H "Content-Type: application/
 
 # 3. текущий пользователь (подставить token из ответа)
 curl http://localhost:8080/api/auth/me -H "Authorization: Bearer <token>"
+
+# 4. цели Анны и отметка прогресса
+curl http://localhost:8080/api/goals -H "Authorization: Bearer <token>"
+curl -X POST http://localhost:8080/api/goals/f3000000-0000-4000-8000-000000000002/progress -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d "{\"progressPct\":35}"
+
+# 5. справочник и поиск
+curl http://localhost:8080/api/kb -H "Authorization: Bearer <token>"
+curl -G http://localhost:8080/api/kb/search --data-urlencode "q=как взять отгул" -H "Authorization: Bearer <token>"
 ```
 
 Или в VS Code: файл `backend/api.http` (расширение REST Client).
@@ -57,7 +70,7 @@ docker compose --profile test run --rm backend-tests
 - `backend/coverage/coverage.out` – профиль покрытия,
 - `backend/coverage/coverage.html` – отчет для браузера.
 
-Покрытие считается по всему прикладному коду backend (`-coverpkg=./...`), тесты и зависимости не учитываются. Текущее значение – около 89%.
+Покрытие считается по всему прикладному коду backend (`-coverpkg=./...`), тесты и зависимости не учитываются. Текущее значение – около 88%.
 
 Локально без Docker (нужен Go и запущенный postgres из compose): `cd backend && go test -p 1 -cover -coverpkg=./... ./...` с переменной `TEST_DATABASE_URL=postgres://buddy:buddy@localhost:5432/ai_buddy_test?sslmode=disable`. Без этой переменной интеграционные тесты пропускаются.
 
@@ -118,6 +131,26 @@ docker compose --profile test run --rm backend-tests
 
 Права: стажер видит только себя; наставник – своих подопечных; руководитель – всех стажеров своей команды. Чужие данные отвечают 404 (не раскрываем, что они есть), запрещенные для роли действия – 403.
 
+## API (этап 3 – справочник и цели стажировки)
+
+Контракт с примерами: `docs/api-goals-kb.md`, спецификации: `specs/001-knowledge-search`, `specs/002-intern-goals`.
+
+| Метод | Путь | Кто | Что делает |
+|---|---|---|---|
+| GET | /api/kb | все | разделы, статьи своей команды и общие, словарик |
+| GET | /api/kb/articles/{id} | все | статья с текстом |
+| GET | /api/kb/search?q= | все | поиск с русской морфологией |
+| GET | /api/goals | стажер | свои цели |
+| GET | /api/interns/{id}/goals | наставник, руководитель | цели стажера |
+| POST | /api/goals/{id}/progress | стажер, наставник, руководитель | отметить прогресс |
+| POST | /api/interns/{id}/goals | наставник, руководитель; стажер до согласования | добавить цель |
+| PATCH/DELETE | /api/goals/{id} | так же | изменить, удалить |
+| POST | /api/interns/{id}/goals/agree | руководитель | согласовать цели |
+
+## База данных
+
+Миграции 005–011 приводят схему к 3НФ и заполняют демо-данные: справочники (роли, сервисы, уровни прав read/edit/admin, проекты с владельцами), справочник знаний с полнотекстовым поиском, цели и OKR, заявки, чат, уведомления, события для метрик, feature flags. Всего 54 таблицы. Даты в демо-данных считаются от дня применения миграций. Чтобы пересоздать демо-данные на сегодня: `docker compose down -v` и `docker compose up --build`.
+
 ## Структура backend
 
 ```
@@ -129,9 +162,9 @@ backend/
 ├── internal/handlers         HTTP-обработчики
 ├── internal/httpx            единый формат JSON-ответов и ошибок
 ├── internal/middleware       проверка JWT
-├── internal/models           структуры (User, TestUser)
+├── internal/models           структуры ответов API
 ├── internal/repository       SQL-запросы
-├── internal/services         логика входа, bcrypt, JWT
+├── internal/services         бизнес-логика и права доступа
 ├── migrations/               SQL-миграции (встраиваются в бинарник, применяются при старте)
 └── Dockerfile
 ```

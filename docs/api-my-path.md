@@ -17,14 +17,14 @@
   "intern": { "id": "aaaa…0001", "name": "Анна", "teamName": "Backend", "mentor": { "id": "aaaa…0002", "name": "Игорь" } },
   "week": { "current": 2, "total": 24, "day": 10, "startDate": "2026-11-01",
             "milestones": [{ "week": 1, "title": "Старт" }, { "week": 4, "title": "Первые задачи" }, { "week": 12, "title": "Отзыв" }, { "week": 24, "title": "Итоги" }] },
-  "progress": { "done": 5, "inProgress": 2, "todo": 8, "total": 15, "percent": 33 },
+  "progress": { "done": 6, "inProgress": 2, "todo": 9, "total": 17, "percent": 35 },
   "stages": [
     { "id": "b500…0002", "code": "02", "title": "Доступы", "color": "#BADAFB", "status": "current",
-      "doneCount": 2, "totalCount": 4, "tip": "Доступы выдает руководитель команды…",
+      "doneCount": 2, "totalCount": 5, "tip": "Согласует владелец ресурса: руководитель, владелец проекта или DevOps…",
       "suggestions": ["Запросить GitLab", "Сколько ждать согласования?", "Кто выдает доступы?"],
       "tasks": [
-        { "id": "b700…0203", "title": "Доступ к тестовому стенду", "note": "Ждет подтверждения Олега", "status": "waiting", "isNext": false, "dueDate": "2026-11-05", "action": { "kind": "access_request", "payload": { "service": "test_stand", "role": "read" } } },
-        { "id": "b700…0204", "title": "Получить доступ к GitLab", "note": "Нужен для первой задачи…", "status": "in_progress", "isNext": true, "dueDate": "2026-11-10", "action": { "kind": "access_request", "payload": { "service": "gitlab", "group": "backend", "role": "developer" } } }
+        { "id": "b700…0203", "title": "Доступ к тестовому стенду", "note": "Ждет DevOps (Кирилл), AI-buddy напомнил", "status": "waiting", "isNext": false, "dueDate": "2026-11-05", "action": { "kind": "access_request", "payload": { "service": "test_stand", "role": "read", "project": "auth-staging" } } },
+        { "id": "b700…0204", "title": "Получить доступ к GitLab", "note": "Нужен для первой задачи…", "status": "in_progress", "isNext": true, "dueDate": "2026-11-10", "action": { "kind": "access_request", "payload": { "service": "gitlab", "role": "developer", "project": "backend/auth-service" } } }
       ],
       "resources": [
         { "id": "…", "kind": "access", "name": "Тестовый стенд", "note": "роль: чтение", "tag": "на согласовании", "tagKind": "wait" },
@@ -34,7 +34,7 @@
   "nextStep": { "taskId": "b700…0204", "stageId": "b500…0002", "stageCode": "02", "title": "Получить доступ к GitLab",
                 "status": "in_progress", "dueDate": "2026-11-10", "dueInDays": 0, "action": { "kind": "access_request", "payload": { … } } },
   "nextMeeting": { "id": "…", "title": "Встреча 1:1", "startsAt": "2026-11-12T15:00:00+03:00", "hostId": "aaaa…0002", "hostName": "Игорь" },
-  "buddy": { "text": "Анна, ты на этапе «Доступы». Осталось 2 из 4. Следующий шаг – «Получить доступ к GitLab». Могу помочь сделать его прямо сейчас.",
+  "buddy": { "text": "Анна, ты на этапе «Доступы». Осталось 3 из 5. Следующий шаг – «Получить доступ к GitLab». Могу помочь сделать его прямо сейчас.",
              "suggestions": ["Запросить GitLab", "Сколько ждать согласования?", "Кто выдает доступы?"] }
 }
 ```
@@ -45,7 +45,7 @@
 |---|---|
 | «Привет, Анна!», «наставник Игорь», «Стажер · Backend» | `intern` |
 | «Неделя 2 из 24», шкала из 24 недель, подписи вех | `week` |
-| Кольцо 33 %, плашки 5 / 2 / 8 | `progress`; деления кольца – `ringSegments(stages)` |
+| Кольцо 35 %, плашки 6 / 2 / 9 | `progress`; деления кольца – `ringSegments(stages)` |
 | Карточки этапов 01–04 | `stages[]`: `code`, `title`, `status`, `doneCount/totalCount`, `color`; оформление – `stageCard()` |
 | Раскрытый этап: задачи | `stages[i].tasks[]`; бейдж – `taskBadge()`, кружок – `taskDot()` |
 | Раскрытый этап: боковая панель | `stages[i].resources[]`; тег – `resourceTag(tagKind)` |
@@ -63,6 +63,7 @@
 ## 2. Наставник и руководитель
 
 - `GET /api/interns` → `[{ id, login, name, teamName, mentor, week, progress, currentStageCode, currentStage }]`.
+- Цели стажера в его карточке: `GET /api/interns/{internId}/goals`, контракт – `docs/api-goals-kb.md`.
 - `GET /api/interns/{internId}/path` → тот же формат, что `/api/path`.
 - `PUT /api/interns/{internId}/tasks/{taskId}` с `{ "status": "waiting", "note": "Заявка у Олега" }` → обновленный путь стажера. Пустая `note` возвращает текст из шаблона.
 - `POST /api/interns/{internId}/meetings` с `{ "title": "Разбор недели", "startsAt": "2026-11-13T11:00:00+03:00" }` → встреча (201). Без `title` будет «Встреча 1:1».
@@ -84,7 +85,7 @@
 | POST /api/console/stages/{id}/resources | `{ kind, name, note?, tag?, tagKind?, taskId? }` | карточка (201) |
 | DELETE /api/console/resources/{id} | – | 204 |
 
-Ограничения (те же проверки есть в Zod-схемах форм): `title` этапа до 80 символов, задачи до 120; `color` вида `#RRGGBB`; до 6 подсказок по 80 символов; `dueDay` – день стажировки 1–730; `action.kind` – одно из `access_request`, `leave_request`, `ask_buddy`, `open_article`, `payload` – JSON-объект; `kind` карточки – `person`, `access`, `tool`, `article`, `link`; `tagKind` – `ok`, `wait`, `none`, `mentor`. Если у карточки указан `taskId`, ее тег у стажера считается сам: «активен», «на согласовании» или «не запрошен».
+Ограничения (те же проверки есть в Zod-схемах форм): `title` этапа до 80 символов, задачи до 120; `color` вида `#RRGGBB`; до 6 подсказок по 80 символов; `dueDay` – день стажировки 1–730; `action.kind` – одно из `access_request`, `leave_request`, `ask_buddy`, `open_article`, `payload` – JSON-объект с обязательными полями по виду: `access_request` – `service`, `role` и необязательный `project` (старое поле `group` понимается: backend → backend/auth-service, frontend → frontend/web-app), `leave_request` – `type`, `ask_buddy` – `question`, `open_article` – `articleId`. Несуществующий сервис, роль, проект или статья – 400; `kind` карточки – `person`, `access`, `tool`, `article`, `link`; `tagKind` – `ok`, `wait`, `none`, `mentor`. Карточка `person` ссылается на сотрудника команды по имени (`name`), человека не из команды – 400. Если у карточки указан `taskId`, ее тег у стажера считается сам: «активен», «на согласовании» или «не запрошен».
 
 ## 4. Права
 

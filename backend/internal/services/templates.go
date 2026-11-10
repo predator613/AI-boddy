@@ -17,7 +17,7 @@ import (
 // ActionKinds – какие действия умеет AI-buddy по кнопке «Сделать с AI-buddy».
 // Новые виды добавляются сюда и в agent/mock-services.
 var ActionKinds = map[string]string{
-	"access_request": "заявка на доступ (payload: service, group, role)",
+	"access_request": "заявка на доступ (payload: service, role, project)",
 	"leave_request":  "заявка на отгул (payload: type)",
 	"ask_buddy":      "открыть чат с готовым вопросом (payload: question)",
 	"open_article":   "открыть статью справочника (payload: articleId)",
@@ -80,7 +80,7 @@ func (s *Path) CreateStage(ctx context.Context, viewerID string, in StageInput) 
 		return nil, err
 	}
 	st.TeamID = viewer.TeamID
-	return s.store.CreateStage(ctx, st)
+	return storeResult(s.store.CreateStage(ctx, st))
 }
 
 // UpdateStage меняет этап (в том числе порядок через position).
@@ -96,7 +96,7 @@ func (s *Path) UpdateStage(ctx context.Context, viewerID, stageID string, in Sta
 		return nil, invalid("position must be >= 1")
 	}
 	st.ID, st.Position = stageID, in.Position
-	return s.store.UpdateStage(ctx, st)
+	return storeResult(s.store.UpdateStage(ctx, st))
 }
 
 // DeleteStage удаляет этап с задачами.
@@ -117,7 +117,7 @@ func (s *Path) CreateTask(ctx context.Context, viewerID, stageID string, in Task
 		return nil, err
 	}
 	t.StageID = stageID
-	return s.store.CreateTask(ctx, t)
+	return storeResult(s.store.CreateTask(ctx, t))
 }
 
 // UpdateTask меняет задачу.
@@ -134,7 +134,7 @@ func (s *Path) UpdateTask(ctx context.Context, viewerID, taskID string, in TaskI
 		return nil, invalid("position must be >= 1")
 	}
 	t.ID, t.StageID, t.Position = taskID, cur.StageID, in.Position
-	return s.store.UpdateTask(ctx, t)
+	return storeResult(s.store.UpdateTask(ctx, t))
 }
 
 // DeleteTask удаляет задачу.
@@ -178,7 +178,7 @@ func (s *Path) CreateResource(ctx context.Context, viewerID, stageID string, in 
 		}
 		x.TaskID = in.TaskID
 	}
-	return s.store.CreateResource(ctx, x)
+	return storeResult(s.store.CreateResource(ctx, x))
 }
 
 // DeleteResource удаляет карточку.
@@ -328,14 +328,38 @@ func cleanTask(in TaskInput) (models.TaskTemplate, error) {
 		if err := json.Unmarshal(payload, &obj); err != nil {
 			return t, invalid("action.payload must be a JSON object")
 		}
+		for _, key := range requiredPayload[in.Action.Kind] {
+			if v, ok := obj[key].(string); !ok || strings.TrimSpace(v) == "" {
+				return t, invalid("action.payload." + key + " is required for " + in.Action.Kind)
+			}
+		}
 		t.Action = &models.Action{Kind: in.Action.Kind, Payload: payload}
 	}
 	return t, nil
 }
 
+// requiredPayload – обязательные поля payload по виду действия (как CHECK в task_actions).
+var requiredPayload = map[string][]string{
+	"access_request": {"service", "role"},
+	"leave_request":  {"type"},
+	"ask_buddy":      {"question"},
+	"open_article":   {"articleId"},
+}
+
 func mapNotFound(err error) error {
-	if errors.Is(err, repository.ErrNotFound) {
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
 		return ErrNotFound
+	case errors.Is(err, repository.ErrInvalidReference):
+		return invalid("unknown reference: check service, role, project, article or person name")
 	}
 	return err
+}
+
+// storeResult переводит ошибки хранилища в ошибки сервиса.
+func storeResult[T any](v *T, err error) (*T, error) {
+	if err != nil {
+		return nil, mapNotFound(err)
+	}
+	return v, nil
 }

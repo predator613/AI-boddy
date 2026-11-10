@@ -4,6 +4,7 @@ import { Marker, PageHeader } from '../components/PageHeader'
 import { Page } from '../components/Page'
 import { ErrorBlock, LoadingBlocks } from '../components/QueryState'
 import { StatusTag } from '../components/StatusTag'
+import { GoalsCard } from '../components/path/GoalsCard'
 import { PathScreen } from '../components/path/PathScreen'
 import { useCompleteTask, useMyPath } from '../hooks/usePath'
 import { Group } from '@mantine/core'
@@ -44,6 +45,7 @@ export function MyPathPage({ stage, onStage, now }: MyPathPageProps) {
         openCode={stage}
         onOpen={onStage}
         now={now}
+        goals={<GoalsCard />}
         busyTaskId={complete.isPending ? complete.variables : null}
         onComplete={(taskId) => complete.mutate(taskId)}
         onAsk={(task) =>

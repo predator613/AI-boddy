@@ -21,6 +21,8 @@ interface PathScreenProps {
   onSetStatus?: (taskId: string, status: TaskStatus) => void
   busyTaskId?: string | null
   now?: Date
+  /** Карточка целей стажировки под обзором (GoalsCard). */
+  goals?: ReactNode
 }
 
 // «Мой путь»: в обзоре кольцо прогресса крупно, при открытии этапа оно сжимается в строку,
@@ -35,6 +37,7 @@ export function PathScreen({
   onSetStatus,
   busyTaskId,
   now,
+  goals,
 }: PathScreenProps) {
   const stage = openCode ? (path.stages.find((s) => s.code === openCode) ?? null) : null
   const expanded = Boolean(stage)
@@ -167,6 +170,7 @@ export function PathScreen({
               </Paper>
             )}
             <MeetingCard mentor={path.intern.mentor} meeting={path.nextMeeting} now={now} />
+            {goals}
           </SimpleGrid>
         </>
       )}

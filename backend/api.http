@@ -109,3 +109,60 @@ Content-Type: application/json
 ### Удалить этап (вместе с задачами и карточками)
 DELETE {{base}}/api/console/stages/{{stage.response.body.id}}
 Authorization: Bearer {{mentor.response.body.token}}
+
+### ===================== Цели стажировки =====================
+
+### Руководитель Олег
+# @name oleg
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "login": "lead_oleg", "password": "demo123" }
+
+### Стажер Лиза (цели еще не согласованы)
+# @name liza
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "login": "intern_liza", "password": "demo123" }
+
+### Мои цели (Анна): согласованы Олегом, две от OKR команды
+GET {{base}}/api/goals
+Authorization: Bearer {{login.response.body.token}}
+
+### Анна отмечает прогресс по цели «Разобраться в сервисе авторизации»
+POST {{base}}/api/goals/f3000000-0000-4000-8000-000000000002/progress
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{ "progressPct": 35, "note": "Разобрала схему токенов" }
+
+### Цели Дмитрия глазами наставника (100/40/20)
+GET {{base}}/api/interns/aaaaaaaa-0000-4000-8000-000000000005/goals
+Authorization: Bearer {{mentor.response.body.token}}
+
+### Лиза вносит цель после встречи с Олегом
+# @name lizaGoal
+POST {{base}}/api/interns/aaaaaaaa-0000-4000-8000-000000000006/goals
+Authorization: Bearer {{liza.response.body.token}}
+Content-Type: application/json
+
+{ "title": "Пройти путь задачи до релиза", "criterion": "первый merge в main до 4 недели", "dueWeek": 4 }
+
+### Олег согласует цели Лизы
+POST {{base}}/api/interns/aaaaaaaa-0000-4000-8000-000000000006/goals/agree
+Authorization: Bearer {{oleg.response.body.token}}
+
+### ===================== Справочник =====================
+
+### Разделы, статьи и словарик
+GET {{base}}/api/kb
+Authorization: Bearer {{login.response.body.token}}
+
+### Статья целиком
+GET {{base}}/api/kb/articles/c2000000-0000-4000-8000-000000000004
+Authorization: Bearer {{login.response.body.token}}
+
+### Поиск
+GET {{base}}/api/kb/search?q=как взять отгул
+Authorization: Bearer {{login.response.body.token}}

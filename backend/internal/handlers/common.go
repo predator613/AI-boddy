@@ -47,3 +47,21 @@ func serviceError(w http.ResponseWriter, log *slog.Logger, err error) {
 		httpx.Error(w, http.StatusInternalServerError, httpx.CodeInternal, "internal server error")
 	}
 }
+
+// reply пишет JSON-ответ или ошибку сервиса.
+func reply(w http.ResponseWriter, log *slog.Logger, status int, body any, err error) {
+	if err != nil {
+		serviceError(w, log, err)
+		return
+	}
+	httpx.JSON(w, status, body)
+}
+
+// replyEmpty – 204 без тела или ошибка сервиса.
+func replyEmpty(w http.ResponseWriter, log *slog.Logger, err error) {
+	if err != nil {
+		serviceError(w, log, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

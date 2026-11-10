@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"ai-buddy/backend/internal/config"
 	"ai-buddy/backend/internal/database"
@@ -30,8 +31,28 @@ type AuthService interface {
 	middleware.TokenParser
 }
 
+// Services – все сервисы, которые нужны роутеру.
+type Services struct {
+	Auth  AuthService
+	Path  handlers.PathService
+	KB    handlers.KBService
+	Goals handlers.GoalsService
+}
+
+// NewServices собирает сервисы поверх базы.
+func NewServices(cfg config.Config, pool *pgxpool.Pool) Services {
+	users := repository.NewUsers(pool)
+	return Services{
+		Auth:  services.NewAuth(users, cfg.JWTSecret, cfg.JWTTTL),
+		Path:  services.NewPath(repository.NewOnboarding(pool), users),
+		KB:    services.NewKB(repository.NewKB(pool), users),
+		Goals: services.NewGoals(repository.NewGoals(pool), users),
+	}
+}
+
 // NewRouter описывает все маршруты API.
-func NewRouter(cfg config.Config, auth AuthService, path handlers.PathService, log *slog.Logger) http.Handler {
+func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
+	auth := svc.Auth
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
@@ -47,7 +68,9 @@ func NewRouter(cfg config.Config, auth AuthService, path handlers.PathService, l
 	r.MethodNotAllowed(httpx.MethodNotAllowed)
 
 	authH := handlers.NewAuth(auth, cfg.DemoMode, log)
-	pathH := handlers.NewPath(path, log)
+	pathH := handlers.NewPath(svc.Path, log)
+	kbH := handlers.NewKB(svc.KB, log)
+	goalsH := handlers.NewGoals(svc.Goals, log)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", handlers.Health)
@@ -75,6 +98,20 @@ func NewRouter(cfg config.Config, auth AuthService, path handlers.PathService, l
 			r.Get("/interns/{internId}/path", pathH.InternPath)
 			r.Put("/interns/{internId}/tasks/{taskId}", pathH.SetTaskStatus)
 			r.Post("/interns/{internId}/meetings", pathH.CreateMeeting)
+
+			// Цели стажировки.
+			r.Get("/goals", goalsH.Mine)
+			r.Patch("/goals/{goalId}", goalsH.Update)
+			r.Delete("/goals/{goalId}", goalsH.Delete)
+			r.Post("/goals/{goalId}/progress", goalsH.Progress)
+			r.Get("/interns/{internId}/goals", goalsH.OfIntern)
+			r.Post("/interns/{internId}/goals", goalsH.Create)
+			r.Post("/interns/{internId}/goals/agree", goalsH.Agree)
+
+			// Справочник.
+			r.Get("/kb", kbH.Get)
+			r.Get("/kb/search", kbH.Search)
+			r.Get("/kb/articles/{articleId}", kbH.Article)
 
 			// Консоль наставника: шаблоны адаптации.
 			r.Route("/console", func(r chi.Router) {
@@ -109,16 +146,12 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, ready chan<- 
 	}
 	log.Info("migrations done", "applied", applied)
 
-	users := repository.NewUsers(pool)
-	authSvc := services.NewAuth(users, cfg.JWTSecret, cfg.JWTTTL)
-	pathSvc := services.NewPath(repository.NewOnboarding(pool), users)
-
 	ln, err := net.Listen("tcp", ":"+cfg.Port)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
 	srv := &http.Server{
-		Handler:           NewRouter(cfg, authSvc, pathSvc, log),
+		Handler:           NewRouter(cfg, NewServices(cfg, pool), log),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
