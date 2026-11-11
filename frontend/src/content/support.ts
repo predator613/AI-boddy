@@ -18,44 +18,30 @@ export const FAQ = [
   },
   {
     q: 'Можно ли оформить отпуск через помощника?',
-    a: 'Отгул можно, AI-buddy подготовит заявку. Отпуск оформляется через HR-поддержку.',
+    a: 'Да. Отгул AI-buddy отправит руководителю, а отпуск – заявкой в HR-поддержку. Наставник получит уведомление.',
   },
 ]
 
-export const CONTACTS = [
-  {
-    id: 'mentor',
-    initials: 'И',
-    name: 'Игорь',
+// Оформление карточек «Кому написать». Имена людей приходят из backend (/api/me/contacts).
+export const PERSON_CARDS = {
+  mentor: {
     role: 'наставник',
     when: 'Вопросы по задачам, коду и тому, как принято в команде.',
     bg: '#DFCDF3',
   },
-  {
-    id: 'lead',
-    initials: 'О',
-    name: 'Олег',
+  lead: {
     role: 'руководитель команды',
     when: 'Доступы, согласования, цели стажировки.',
     bg: '#BADAFB',
   },
-  {
-    id: 'hr',
-    initials: 'HR',
-    name: 'HR-поддержка',
-    role: 'для стажеров',
-    when: 'Отпуск, документы, оформление. Отвечают в течение дня.',
-    bg: '#C9FFBF',
-  },
-  {
-    id: 'it',
-    initials: 'IT',
-    name: 'Техподдержка',
-    role: 'ноутбук и сервисы',
-    when: 'Не работает техника, VPN или вход в сервисы.',
-    bg: '#FFFFFF',
-  },
-] as const
+} as const
+
+export const DEPARTMENT_STYLE: Record<string, { initials: string; bg: string }> = {
+  equipment: { initials: 'ОБ', bg: '#F9EEDA' },
+  it_support: { initials: 'IT', bg: '#FFFFFF' },
+  hr: { initials: 'HR', bg: '#C9FFBF' },
+  accounting: { initials: 'Б', bg: '#E7F1FB' },
+}
 
 export const PROBLEM_TYPES = [
   'Неверный ответ помощника',

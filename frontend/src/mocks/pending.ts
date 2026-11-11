@@ -113,7 +113,11 @@ let requests = initialRequests()
 let actions = new Map<string, PendingAction>()
 let nextNumber = 1042
 
+// Переписка, как ее хранит backend: GET /api/chat/messages возвращает ее после перезагрузки.
+let chatLog: TChatMessage[] = []
+
 export function resetPendingMocks() {
+  chatLog = []
   requests = initialRequests()
   actions = new Map()
   nextNumber = 1042
@@ -374,7 +378,15 @@ export const KB: TKnowledgeBase = {
   ],
 }
 
-const reply = (messages: TChatMessage[]) => HttpResponse.json({ messages })
+const reply = (messages: TChatMessage[]) => {
+  chatLog.push(...messages)
+  return HttpResponse.json({ messages })
+}
+const markCard = (actionId: string, state: 'confirmed' | 'cancelled') => {
+  chatLog = chatLog.map((m) =>
+    m.confirm?.actionId === actionId ? { ...m, confirm: { ...m.confirm, state } } : m,
+  )
+}
 const notFound = () =>
   HttpResponse.json({ error: { code: 'not_found', message: 'not found' } }, { status: 404 })
 
@@ -391,6 +403,7 @@ export const assistantHandlers = [
         { status: 400 },
       )
     }
+    chatLog.push(msg({ role: 'user', text: body.text.trim() }))
     await wait(900)
     const taskId =
       body.action?.kind === 'access_request' && body.action.payload.service === 'gitlab'
@@ -403,6 +416,7 @@ export const assistantHandlers = [
     const a = actions.get(String(params.actionId))
     if (!a) return notFound()
     actions.delete(String(params.actionId))
+    markCard(String(params.actionId), 'confirmed')
     await wait(600)
     const number = String(nextNumber++)
     const item: TRequestItem = {
@@ -434,10 +448,19 @@ export const assistantHandlers = [
 
   http.post(`${API_URL}/api/chat/actions/:actionId/cancel`, ({ params }) => {
     if (!actions.delete(String(params.actionId))) return notFound()
+    markCard(String(params.actionId), 'cancelled')
     return reply([msg({ text: 'Хорошо, не создаю. Если передумаешь – просто напиши.' })])
   }),
 
   http.get(`${API_URL}/api/requests`, () => HttpResponse.json(requests)),
+
+  http.get(`${API_URL}/api/chat/messages`, () => HttpResponse.json({ messages: chatLog })),
+
+  http.post(`${API_URL}/api/chat/reset`, () => {
+    chatLog = []
+    actions = new Map()
+    return HttpResponse.json({ messages: [] })
+  }),
   // GET /api/kb уже отдает backend: обработчик перенесен в handlers.ts (только полный режим без backend).
 ]
 

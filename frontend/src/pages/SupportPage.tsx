@@ -18,7 +18,9 @@ import { z } from 'zod'
 import { Mascot } from '../components/Mascot'
 import { Marker, PageHeader } from '../components/PageHeader'
 import { Page } from '../components/Page'
-import { CONTACTS, FAQ, PROBLEM_TYPES } from '../content/support'
+import { DEPARTMENT_STYLE, FAQ, PERSON_CARDS, PROBLEM_TYPES } from '../content/support'
+import { getContacts } from '../api/people'
+import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../store/authStore'
 
 const ProblemSchema = z.object({
@@ -37,9 +39,31 @@ export function SupportPage() {
     initialValues: { type: PROBLEM_TYPES[0], details: '', attachDialog: true },
     validate: zod4Resolver(ProblemSchema),
   })
-  // Стажеру показываем наставника и руководителя, наставнику – общие службы.
-  const contacts =
-    role === 'intern' ? CONTACTS : CONTACTS.filter((c) => c.id === 'hr' || c.id === 'it')
+  // Имена – из связей пользователя в backend. Стажеру показываем наставника и руководителя,
+  // всем – отделы компании.
+  const query = useQuery({ queryKey: ['contacts'], queryFn: getContacts })
+  const data = query.data
+  const people =
+    role === 'intern' && data
+      ? [
+          {
+            id: 'mentor',
+            name: data.mentor?.name ?? 'Наставник',
+            ...PERSON_CARDS.mentor,
+            role: data.mentor ? PERSON_CARDS.mentor.role : 'пока не назначен',
+          },
+          ...(data.lead ? [{ id: 'lead', name: data.lead.name, ...PERSON_CARDS.lead }] : []),
+        ].map((c) => ({ ...c, initials: c.name.slice(0, 1) }))
+      : []
+  const departments = (data?.departments ?? []).map((d) => ({
+    id: d.code,
+    name: d.title,
+    role: `ответ до ${d.slaHours} ч`,
+    when: d.about,
+    initials: DEPARTMENT_STYLE[d.code]?.initials ?? d.title.slice(0, 2),
+    bg: DEPARTMENT_STYLE[d.code]?.bg ?? '#FFFFFF',
+  }))
+  const contacts = [...people, ...departments]
 
   return (
     <Page maxWidth={1240}>
@@ -68,7 +92,7 @@ export function SupportPage() {
 
         <Stack gap="sm">
           <Title order={2}>Кому написать</Title>
-          <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }} spacing="md">
+          <SimpleGrid cols={{ base: 1, xs: 2, md: 3 }} spacing="md">
             {contacts.map((c) => (
               <div
                 key={c.id}

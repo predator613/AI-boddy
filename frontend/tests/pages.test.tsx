@@ -86,7 +86,9 @@ describe('Поддержка', () => {
     loginAs('intern_anna')
     renderApp('/support')
     expect(await screen.findByText('Кому написать', {}, T)).toBeInTheDocument()
-    expect(screen.getByText('Игорь')).toBeInTheDocument()
+    expect(await screen.findByText('Игорь', {}, T)).toBeInTheDocument()
+    expect(screen.getByText('Олег')).toBeInTheDocument()
+    expect(screen.getByText('Отдел оборудования')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Какие данные видит AI-buddy?' }))
     expect(await screen.findByText(/Чужие заявки и личные данные/)).toBeInTheDocument()
 
@@ -97,6 +99,13 @@ describe('Поддержка', () => {
     expect(await screen.findByText(/Сообщение отправлено/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Написать еще' }))
     expect(screen.getByLabelText('Подробности')).toBeInTheDocument()
+  })
+
+  it('стажер без наставника видит, что наставник пока не назначен', async () => {
+    loginAs('intern_pavel')
+    renderApp('/support')
+    expect(await screen.findByText('пока не назначен', {}, T)).toBeInTheDocument()
+    expect(screen.queryByText('Игорь')).not.toBeInTheDocument()
   })
 
   it('наставнику показываются только общие службы', async () => {

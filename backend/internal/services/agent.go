@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ type ChatStore interface {
 	BuddyConversation(ctx context.Context, internID string) (string, error)
 	AddMessage(ctx context.Context, m repository.NewMessage) (string, time.Time, error)
 	Messages(ctx context.Context, conversationID string, limit int) ([]repository.StoredMessage, error)
+	Clear(ctx context.Context, conversationID string) error
 	Handoff(ctx context.Context, questionID, internID, mentorID, text string) error
 	LogToolCall(ctx context.Context, c repository.ToolCall) error
 }
@@ -37,6 +39,7 @@ type ChatStore interface {
 type KBSearcher interface {
 	Search(ctx context.Context, teamID, viewerID, query string, limit int, onlyAI bool) ([]models.KBSearchMatch, error)
 	ArticleRef(ctx context.Context, articleID string) (string, error)
+	Article(ctx context.Context, teamID, viewerID, id string) (*models.KBArticleDetail, error)
 }
 
 // minCoverage – минимальная доля слов вопроса в статье, чтобы отвечать по ней.
@@ -58,6 +61,7 @@ type Agent struct {
 	reqs     RequestStore
 	kb       KBSearcher
 	users    UserLookup
+	people   PeopleStore
 	corp     integrations.Corporate
 	model    llm.Provider
 	timeout  time.Duration
@@ -67,9 +71,9 @@ type Agent struct {
 }
 
 // NewAgent создает агента. timeout – сколько ждать модель, потом ответ собирается офлайн.
-func NewAgent(chat ChatStore, reqs RequestStore, kb KBSearcher, users UserLookup, corp integrations.Corporate,
-	model llm.Provider, timeout time.Duration, log *slog.Logger) *Agent {
-	return &Agent{chat: chat, reqs: reqs, kb: kb, users: users, corp: corp, model: model,
+func NewAgent(chat ChatStore, reqs RequestStore, kb KBSearcher, users UserLookup, people PeopleStore,
+	corp integrations.Corporate, model llm.Provider, timeout time.Duration, log *slog.Logger) *Agent {
+	return &Agent{chat: chat, reqs: reqs, kb: kb, users: users, people: people, corp: corp, model: model,
 		timeout: timeout, log: log, now: time.Now, fallback: llm.Mock{}}
 }
 
@@ -80,6 +84,10 @@ type turn struct {
 	questionID string
 	question   string
 	out        []models.ChatMessage
+	// Контекст переписки: последние сообщения до текущего вопроса и неподтвержденная карточка.
+	history []llm.Message
+	draft   *models.Request
+	circle  *models.Circle // наставник, руководитель, команда – для подстановки в статьи и промпт
 }
 
 // ---------- публичные методы ----------
@@ -101,6 +109,9 @@ func (a *Agent) Send(ctx context.Context, viewerID string, in SendInput) (*model
 		return nil, err
 	}
 	t.questionID, t.question = qid, text
+	if err := a.loadContext(ctx, t); err != nil {
+		return nil, err
+	}
 
 	if in.Action != nil {
 		err = a.runAction(ctx, t, *in.Action, in.TaskID)
@@ -131,6 +142,9 @@ func (a *Agent) Confirm(ctx context.Context, viewerID, actionID string) (*models
 		order.LeaveDate = q.LeaveDate.Format(time.DateOnly)
 		order.LeaveType = q.LeaveTypeTitle
 	}
+	if q.Type == "other" {
+		order.Department, order.Item, order.Comment, order.Approver = q.DepartmentTitle, q.ItemCode, q.ItemComment, q.DepartmentTitle
+	}
 	started := a.now()
 	ticket, err := a.corp.Submit(ctx, order)
 	a.logCall(ctx, t.conv, "mock-services", q.Type+".submit", order, ticket, err, started)
@@ -150,12 +164,17 @@ func (a *Agent) Confirm(ctx context.Context, viewerID, actionID string) (*models
 		return nil, mapNotFound(err)
 	}
 	q.Status = status
+	mentorNote := a.notifyMentor(ctx, t, q)
 
 	var text, mood string
 	switch status {
 	case "waiting":
 		text = fmt.Sprintf("Заявка №%d создана и отправлена: %s. Обычно решение до %d ч, я сообщу сюда же.",
 			q.Number, approverText(q), q.SLAHours)
+		if q.Type == "other" {
+			text = fmt.Sprintf("Заявка №%d отправлена: %s, обычно до %d ч. Ответ придет сюда же.", q.Number, q.DepartmentTitle, q.SLAHours)
+		}
+		text += mentorNote
 		mood = "happy"
 	default:
 		text = fmt.Sprintf("Готово: %s выдан сразу, согласование не нужно.", lowerFirst(RequestTitle(q)))
@@ -164,7 +183,7 @@ func (a *Agent) Confirm(ctx context.Context, viewerID, actionID string) (*models
 		}
 		mood = "happy"
 	}
-	if err := a.say(ctx, t, "result", text, mood, &sayOpts{request: q}); err != nil {
+	if err := a.say(ctx, t, "result", a.phrase(ctx, t, text), mood, &sayOpts{request: q}); err != nil {
 		return nil, err
 	}
 	return &models.ChatReply{Messages: t.out}, nil
@@ -183,6 +202,18 @@ func (a *Agent) Cancel(ctx context.Context, viewerID, actionID string) (*models.
 		return nil, err
 	}
 	return &models.ChatReply{Messages: t.out}, nil
+}
+
+// Reset – «Новый диалог»: переписка остается в базе, но чат и модель начинают с чистого листа.
+func (a *Agent) Reset(ctx context.Context, viewerID string) (*models.ChatReply, error) {
+	t, err := a.begin(ctx, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.chat.Clear(ctx, t.conv); err != nil {
+		return nil, err
+	}
+	return &models.ChatReply{Messages: []models.ChatMessage{}}, nil
 }
 
 // History – последние сообщения переписки (для восстановления чата после перезагрузки).
@@ -229,6 +260,8 @@ var agentTools = []llm.Tool{
 		Parameters: json.RawMessage(`{"type":"object","properties":{"resource":{"type":"string","description":"сервис: GitLab, тестовый стенд, вики, трекер задач, трекер прогресса, логи"},"access_level":{"type":"string","enum":["read","edit","admin"]},"project":{"type":"string"},"justification":{"type":"string"}},"required":["resource"]}`)},
 	{Name: "prepare_leave_request", Description: "Подготовить заявку на отгул. Создается только после подтверждения.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{"date":{"type":"string","description":"дата словами или ДД.ММ"},"type":{"type":"string","enum":["day_off","day_off_unpaid","study"]}},"required":["date"]}`)},
+	{Name: "prepare_service_request", Description: "Подготовить заявку в отдел компании: оборудование (ноутбук, монитор, гарнитура, клавиатура и мышь, пропуск), ИТ-поддержка (VPN, почта, сброс пароля, двухфакторная аутентификация), HR (отпуск, справка с места работы, документы для вуза, изменение личных данных), бухгалтерия (справка 2-НДФЛ, вопрос по выплате). Создается только после подтверждения.",
+		Parameters: json.RawMessage(`{"type":"object","properties":{"item":{"type":"string","description":"что нужно: ноутбук, VPN, справка 2-НДФЛ и т. п."},"comment":{"type":"string","description":"подробности со слов стажера, если есть"}},"required":["item"]}`)},
 	{Name: "list_requests", Description: "Показать статус заявок стажера.",
 		Parameters: json.RawMessage(`{"type":"object","properties":{"number":{"type":"string"}}}`)},
 	{Name: "handoff_to_mentor", Description: "Передать вопрос наставнику, если в справочнике нет ответа или стажер просит человека.",
@@ -236,21 +269,97 @@ var agentTools = []llm.Tool{
 }
 
 func (a *Agent) systemPrompt(t *turn) string {
-	return fmt.Sprintf(`Ты AI-buddy, помощник стажера (демо-прототип, данные синтетические, не регламенты Авито).
-Отвечай по-русски, коротко, на «ты». Факты бери только из результатов search_kb, ничего не придумывай.
-Для действий (доступ, отгул) вызывай prepare_*: заявка создается только после подтверждения стажера.
-Если ответа нет, предложи передать вопрос наставнику. Стажер: %s, команда %s.`, t.viewer.Name, t.viewer.TeamName)
+	return fmt.Sprintf(`Ты AI-buddy – дружелюбный помощник стажера в IT-компании (демо-прототип: данные синтетические, это не регламенты Авито).
+Сегодня %s. Стажер: %s, команда %s. %s
+
+Как отвечать:
+– по-русски, на «ты», живо и по делу, как опытный коллега, а не как справочное окно;
+– сначала прямой ответ на вопрос, затем, если нужно, шаги списком «1.», «2.» или пункты «–»; обычно 2–6 предложений;
+– факты о компании (сроки, кто согласует, правила) бери только из результатов search_kb и данных ниже, ничего не выдумывай;
+– если в справочнике ничего не нашлось, можно дать общий совет, но прямо скажи, что в справочнике этого нет, и предложи передать вопрос наставнику;
+– называй людей по именам из данных ниже, не придумывай других людей;
+– в конце предложи один конкретный следующий шаг, если он есть;
+– без markdown: не используй звездочки, решетки и таблицы.
+
+Инструменты: search_kb – вопросы о работе и процессах; prepare_access_request – доступ к сервисам (GitLab, стенд, вики, трекер); prepare_service_request – заявка в отдел (техника, VPN, пароли, справки, отпуск, выплаты); prepare_leave_request – отгул; list_requests – статус заявок; handoff_to_mentor – передать вопрос наставнику.
+Заявка создается только после того, как стажер нажмет «Подтвердить» в карточке.`,
+		dayMonth(a.now().In(moscow))+", "+weekday(a.now().In(moscow)), t.viewer.Name, t.viewer.TeamName, a.peopleNote(t)) +
+		draftNote(t.draft)
+}
+
+// peopleNote – кто вокруг стажера: имена только из связей в базе.
+func (a *Agent) peopleNote(t *turn) string {
+	mentor, lead := "пока не назначен", "не указан"
+	if c := t.circle; c != nil {
+		if c.Mentor != nil {
+			mentor = c.Mentor.Name
+		}
+		if c.Lead != nil {
+			lead = c.Lead.Name
+		}
+	}
+	return fmt.Sprintf("Наставник стажера: %s. Руководитель команды: %s (согласует доступы к GitLab, отгулы, цели). "+
+		"Отделы: оборудование, ИТ-поддержка, HR-поддержка, бухгалтерия – заявки в них оформляешь ты.", mentor, lead)
+}
+
+// draftNote – что модель должна знать о неподтвержденной карточке в чате.
+func draftNote(q *models.Request) string {
+	if q == nil {
+		return ""
+	}
+	var parts []string
+	for _, f := range RequestFields(q) {
+		parts = append(parts, f.Label+": "+f.Value)
+	}
+	return fmt.Sprintf(`
+Сейчас в чате есть неподтвержденная карточка «%s» (%s). Заявка уйдет, только когда стажер нажмет
+«Подтвердить» в карточке; «Отмена» – передумал. Если стажер спрашивает, что делать дальше, объясни это.
+Не готовь вторую такую же заявку.`, RequestTitle(q), strings.Join(parts, "; "))
+}
+
+// historySize – сколько последних сообщений переписки видит модель.
+const historySize = 8
+
+// loadContext – история переписки до текущего вопроса и последняя карточка, которая ждет «Подтвердить».
+func (a *Agent) loadContext(ctx context.Context, t *turn) error {
+	stored, err := a.chat.Messages(ctx, t.conv, historySize+1)
+	if err != nil {
+		return err
+	}
+	for _, m := range stored {
+		if m.ID == t.questionID {
+			continue
+		}
+		if m.Kind == "confirm" && m.RequestID != nil {
+			if q, err := a.reqs.Get(ctx, *m.RequestID); err == nil && q.Status == "draft" && q.RequesterID == t.viewer.ID {
+				t.draft = q
+			} else {
+				t.draft = nil
+			}
+		}
+		if m.AuthorKind == "user" {
+			t.history = append(t.history, llm.Message{Role: "user", Content: m.Text})
+			continue
+		}
+		text := m.Text
+		if m.Kind == "confirm" {
+			text = "[карточка подтверждения] " + text
+		}
+		t.history = append(t.history, llm.Message{Role: "assistant", Content: text})
+	}
+	return nil
 }
 
 // runModel – вопрос текстом: модель выбирает инструмент.
 func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
-	msgs := []llm.Message{{Role: "system", Content: a.systemPrompt(t)}, {Role: "user", Content: text}}
+	msgs := append([]llm.Message{{Role: "system", Content: a.systemPrompt(t)}}, t.history...)
+	msgs = append(msgs, llm.Message{Role: "user", Content: text})
 	resp := a.ask(ctx, t, llm.Request{Messages: msgs, Tools: agentTools})
 	if len(resp.ToolCalls) == 0 {
 		if resp.Content == "" {
 			return a.noAnswer(ctx, t)
 		}
-		return a.say(ctx, t, "text", resp.Content, "calm", nil)
+		return a.say(ctx, t, "text", cleanText(resp.Content), "calm", nil)
 	}
 	call := resp.ToolCalls[0]
 	var args map[string]string
@@ -269,6 +378,8 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 		return a.prepareAccess(ctx, t, code, "", args["access_level"], args["project"], args["justification"], nil)
 	case "prepare_leave_request":
 		return a.prepareLeave(ctx, t, first(args["date"], text), args["type"], nil)
+	case "prepare_service_request":
+		return a.prepareService(ctx, t, first(args["item"], text), args["comment"])
 	case "list_requests":
 		return a.listRequests(ctx, t, args["number"])
 	case "handoff_to_mentor":
@@ -315,26 +426,47 @@ func (a *Agent) searchAnswer(ctx context.Context, t *turn, msgs []llm.Message, c
 			found = append(found, f)
 		}
 	}
-	if len(found) == 0 {
-		return a.noAnswer(ctx, t)
-	}
+	// Модели отдаем не только фрагмент, но и текст двух лучших статей: из одного абзаца
+	// содержательного ответа не собрать.
 	type hit struct {
 		Title   string `json:"title"`
 		Snippet string `json:"snippet"`
+		Text    string `json:"text,omitempty"`
 	}
 	hits := make([]hit, len(found))
 	for i, f := range found {
-		hits[i] = hit{Title: f.Title, Snippet: f.Snippet}
+		hits[i] = hit{Title: a.personal(t, f.Title), Snippet: a.personal(t, f.Snippet)}
+		if i < 2 {
+			if art, err := a.kb.Article(ctx, t.viewer.TeamID, t.viewer.ID, f.ArticleID); err == nil {
+				hits[i].Text = clip(a.personal(t, art.Body), 2500)
+			}
+		}
 	}
-	raw, _ := json.Marshal(map[string]any{"results": hits})
+	if len(found) == 0 {
+		if a.isMock() {
+			return a.noAnswer(ctx, t)
+		}
+		hits = nil
+	}
+	res := map[string]any{"results": hits}
+	if len(found) == 0 {
+		res["note"] = "В справочнике ничего не нашлось."
+	}
+	raw, _ := json.Marshal(res)
 	msgs = append(msgs,
 		llm.Message{Role: "assistant", ToolCalls: []llm.ToolCall{call}},
 		llm.Message{Role: "tool", ToolCallID: call.ID, Content: string(raw)},
 	)
 	resp := a.ask(ctx, t, llm.Request{Messages: msgs})
-	text := resp.Content
+	text := cleanText(resp.Content)
+	if len(found) == 0 {
+		if text == "" {
+			return a.noAnswer(ctx, t)
+		}
+		return a.say(ctx, t, "text", text, "think", nil)
+	}
 	if text == "" {
-		text = found[0].Snippet
+		text = hits[0].Snippet
 	}
 	id := found[0].ArticleID
 	return a.say(ctx, t, "text", text, "calm", &sayOpts{article: &id})
@@ -365,9 +497,13 @@ func (a *Agent) prepareAccess(ctx context.Context, t *turn, service, role, level
 		} else {
 			reason += " Если он все же нужен для задачи, передам вопрос наставнику."
 		}
-		return a.say(ctx, t, "error", reason, "sad", nil)
+		return a.say(ctx, t, "error", a.phrase(ctx, t, reason), "sad", nil)
 	}
 
+	// Карточка на этот сервис уже ждет подтверждения – вторую не создаем.
+	if t.draft != nil && t.draft.Type == "access" && t.draft.ServiceCode == svc.Code {
+		return a.say(ctx, t, "text", "Карточка на этот доступ уже выше: проверь поля и нажми «Подтвердить».", "mentor", nil)
+	}
 	// Уже есть доступ или заявка на согласовании – не создаем дубль.
 	if open, err := a.reqs.OpenRequest(ctx, t.viewer.ID, svc.Code); err == nil {
 		text := fmt.Sprintf("%s уже выдан (заявка №%d).", svc.RequestTitle, open.Number)
@@ -375,7 +511,7 @@ func (a *Agent) prepareAccess(ctx context.Context, t *turn, service, role, level
 			text = fmt.Sprintf("Заявка №%d уже на согласовании: %s. Обычно решение до %d ч, я напомню, если затянется.",
 				open.Number, approverText(open), open.SLAHours)
 		}
-		return a.say(ctx, t, "text", text, "calm", nil)
+		return a.say(ctx, t, "text", a.phrase(ctx, t, text), "calm", nil)
 	} else if !errors.Is(err, repository.ErrNotFound) {
 		return err
 	}
@@ -423,7 +559,7 @@ func (a *Agent) prepareAccess(ctx context.Context, t *turn, service, role, level
 		intro = fmt.Sprintf("%s выдается автоматически, сразу после подтверждения.", svc.Title)
 	}
 	source := a.articleFor(ctx, t, "как запросить доступ к сервису")
-	if err := a.say(ctx, t, "text", intro, "calm", &sayOpts{article: source}); err != nil {
+	if err := a.say(ctx, t, "text", a.phrase(ctx, t, intro), "calm", &sayOpts{article: source}); err != nil {
 		return err
 	}
 	return a.say(ctx, t, "confirm", "Создать заявку на доступ?", "mentor", &sayOpts{request: q})
@@ -517,12 +653,19 @@ func (a *Agent) prepareLeave(ctx context.Context, t *turn, dateText, kind string
 	if err != nil {
 		return mapNotFound(err)
 	}
-	intro := "Отгул оформляется заявкой руководителю минимум за два рабочих дня. Наставника я предупрежу сам."
+	who := "руководителю"
+	if lead != nil {
+		who = "руководителю (" + lead.Name + ")"
+	}
+	intro := "Отгул оформляется заявкой " + who + " минимум за два рабочих дня."
 	if WorkdaysBetween(time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, moscow), day) < 2 {
-		intro = "До этой даты меньше двух рабочих дней: заявку создать можно, но лучше предупредить руководителя лично."
+		intro = "До этой даты меньше двух рабочих дней: заявку создать можно, но лучше предупредить " + who + " лично."
+	}
+	if t.circle != nil && t.circle.Mentor != nil {
+		intro += " Наставника (" + t.circle.Mentor.Name + ") я предупрежу, когда подтвердишь."
 	}
 	source := a.articleFor(ctx, t, "как взять отгул")
-	if err := a.say(ctx, t, "text", intro, "calm", &sayOpts{article: source}); err != nil {
+	if err := a.say(ctx, t, "text", a.phrase(ctx, t, intro), "calm", &sayOpts{article: source}); err != nil {
 		return err
 	}
 	return a.say(ctx, t, "confirm", "Создать заявку на отгул?", "mentor", &sayOpts{request: q})
@@ -556,7 +699,7 @@ func (a *Agent) listRequests(ctx context.Context, t *turn, number string) error 
 		return a.say(ctx, t, "text", "Заявок пока нет. Могу оформить доступ или отгул.", "calm", nil)
 	}
 	label := "Заявки"
-	return a.say(ctx, t, "text", "Вот твои заявки:\n"+strings.Join(lines, "\n"), "calm", &sayOpts{label: &label})
+	return a.say(ctx, t, "text", a.phrase(ctx, t, "Вот твои заявки:\n"+strings.Join(lines, "\n")), "calm", &sayOpts{label: &label})
 }
 
 // handoff – передать вопрос наставнику (нет наставника – руководителю).
@@ -577,12 +720,43 @@ func (a *Agent) handoff(ctx context.Context, t *turn) error {
 		return err
 	}
 	a.logCall(ctx, t.conv, "buddy", "handoff", map[string]string{"to": *to}, "ok", nil, a.now())
-	return a.say(ctx, t, "text", fmt.Sprintf("Передал вопрос: %s ответит здесь же, обычно в течение дня.", name), "mentor", nil)
+	return a.say(ctx, t, "text", a.phrase(ctx, t, fmt.Sprintf("Передал вопрос: %s ответит здесь же, обычно в течение дня.", name)), "mentor", nil)
 }
 
+// reNextStep – вопрос «что делать дальше?» без подробностей: ответ зависит от состояния чата.
+var reNextStep = regexp.MustCompile(`(?i)что (мне )?(теперь |сейчас |дальше )?(делать|дальше|теперь|нажать|сейчас)|а дальше|и дальше|что потом|следующий шаг|куда нажать|как подтвердить`)
+
 func (a *Agent) noAnswer(ctx context.Context, t *turn) error {
+	if reNextStep.MatchString(t.question) {
+		return a.nextStep(ctx, t)
+	}
 	return a.say(ctx, t, "text",
 		"Точного ответа в справочнике нет. Напиши «передай наставнику», и я передам вопрос.", "mentor", nil)
+}
+
+// nextStep – подсказка по состоянию: карточка ждет подтверждения, заявка на согласовании или «Мой путь».
+func (a *Agent) nextStep(ctx context.Context, t *turn) error {
+	if q := t.draft; q != nil {
+		text := fmt.Sprintf("Нажми «Подтвердить» в карточке выше: заявка «%s» уйдет, согласует %s. Если что-то не так, нажми «Отмена» и напиши, что поменять.",
+			RequestTitle(q), approverText(q))
+		if q.ApproverKind == "auto" || q.Approver == nil {
+			text = fmt.Sprintf("Нажми «Подтвердить» в карточке выше: %s выдается автоматически, сразу после подтверждения.", lowerFirst(RequestTitle(q)))
+		}
+		return a.say(ctx, t, "text", a.phrase(ctx, t, text), "mentor", nil)
+	}
+	list, err := a.reqs.ListByRequester(ctx, t.viewer.ID)
+	if err != nil {
+		return err
+	}
+	for _, q := range list {
+		if q.Status == "waiting" {
+			return a.say(ctx, t, "text", a.phrase(ctx, t, fmt.Sprintf(
+				"Заявка №%d «%s» ждет решения: %s, обычно до %d ч. Я напишу сюда, когда придет ответ. Пока можно взять следующий пункт на «Моем пути».",
+				q.Number, RequestTitle(q), approverText(q), q.SLAHours)), "calm", nil)
+		}
+	}
+	return a.say(ctx, t, "text",
+		"Открой «Мой путь»: в карточке «Следующий шаг» – ближайшая задача. Если с ней нужна помощь, спроси меня, например «как получить доступ к GitLab».", "calm", nil)
 }
 
 // articleFor – статья-источник для пояснения к заявке.
@@ -611,7 +785,11 @@ func (a *Agent) begin(ctx context.Context, viewerID string) (*turn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &turn{viewer: u, conv: conv}, nil
+	c, err := a.people.Circle(ctx, u.ID)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return nil, err
+	}
+	return &turn{viewer: u, conv: conv, circle: c}, nil
 }
 
 // draft – черновик заявки текущего стажера. Чужой, выполненный или отмененный – 404.
@@ -643,6 +821,39 @@ func (a *Agent) ask(ctx context.Context, t *turn, req llm.Request) llm.Response 
 	}
 	return resp
 }
+
+// phrase – пояснение к карточке словами модели. Факты (кто согласует, сроки) собирает backend,
+// модель только формулирует. Ответ без любого из чисел или имен исходного текста отбрасывается,
+// как и пустой или слишком длинный: тогда остается текст backend. В режиме mock – сразу он.
+func (a *Agent) phrase(ctx context.Context, t *turn, facts string) string {
+	if a.isMock() {
+		return facts
+	}
+	ask := "Факты: " + facts
+	if t.question != "" {
+		ask = "Сообщение стажера: " + t.question + "\n" + ask
+	}
+	resp := a.ask(ctx, t, llm.Request{Messages: []llm.Message{
+		{Role: "system", Content: `Ты AI-buddy, помощник стажера. Перескажи факты живым коротким ответом стажеру, на «ты», по-русски,
+как коллега в мессенджере: 1–3 предложения, список – если в фактах список.
+Сохрани все номера, имена, сроки и названия кнопок в кавычках. Не добавляй новых фактов, людей, сроков и обещаний.
+Без markdown и приветствий. Ответь только текстом сообщения.`},
+		{Role: "user", Content: ask},
+	}})
+	out := cleanText(resp.Content)
+	if out == "" || len([]rune(out)) > 2*len([]rune(facts))+80 || len(resp.ToolCalls) > 0 {
+		return facts
+	}
+	for _, w := range reFact.FindAllString(facts, -1) {
+		if !strings.Contains(out, strings.TrimLeft(w, " (")) {
+			return facts
+		}
+	}
+	return out
+}
+
+// reFact – числа и слова с заглавной буквы (имена, сервисы) в середине фразы: они должны остаться в пересказе.
+var reFact = regexp.MustCompile(`\d+|[ (]\p{Lu}[\p{L}-]+`)
 
 // sayOpts – необязательные части сообщения: заявка (карточка), статья-источник или подпись.
 type sayOpts struct {
@@ -700,8 +911,11 @@ func attachCard(msg *models.ChatMessage, q *models.Request) {
 			state = "cancelled"
 		}
 		title := "Создать заявку на доступ?"
-		if q.Type == "leave" {
+		switch q.Type {
+		case "leave":
 			title = "Создать заявку на отгул?"
+		case "other":
+			title = "Отправить заявку: " + q.DepartmentTitle + "?"
 		}
 		msg.Confirm = &models.ConfirmCard{ActionID: q.ID, Title: title, Fields: RequestFields(q), State: state}
 	case "result":

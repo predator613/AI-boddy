@@ -18,6 +18,16 @@ export function sendMessage(input: TSendMessageInput) {
   })
 }
 
+/** GET /api/chat/messages – переписка текущего диалога (восстановить чат после перезагрузки). */
+export function getChatHistory() {
+  return apiRequest('/api/chat/messages', ChatReply)
+}
+
+/** POST /api/chat/reset – «Новый диалог»: старая переписка остается в базе, но не показывается. */
+export function resetChat() {
+  return apiRequest('/api/chat/reset', ChatReply, { method: 'POST' })
+}
+
 /** POST /api/chat/actions/{id}/confirm – подтвердить действие (например, создать заявку). */
 export function confirmAction(actionId: string) {
   return apiRequest(`/api/chat/actions/${encodeURIComponent(actionId)}/confirm`, ChatReply, {

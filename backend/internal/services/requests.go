@@ -26,6 +26,11 @@ type RequestStore interface {
 	OpenRequest(ctx context.Context, requesterID, service string) (*models.Request, error)
 	CreateAccessDraft(ctx context.Context, d models.AccessDraft) (*models.Request, error)
 	CreateLeaveDraft(ctx context.Context, d models.LeaveDraft) (*models.Request, error)
+	ResolveItem(ctx context.Context, text string) (string, error)
+	CatalogItem(ctx context.Context, code string) (*models.CatalogItem, error)
+	OpenServiceRequest(ctx context.Context, requesterID, item string) (*models.Request, error)
+	CreateServiceDraft(ctx context.Context, d models.ServiceDraft) (*models.Request, error)
+	Notify(ctx context.Context, userID, kind, text, link string, requestID *string) error
 	Submit(ctx context.Context, id, actorID, status, externalRef, taskNote string) error
 	Cancel(ctx context.Context, id, actorID string) error
 	ApplyDecision(ctx context.Context, id, status string, reason *string, taskNote, notice string) (bool, error)
@@ -165,6 +170,9 @@ func decisionNotice(q *models.Request, status, reason string) string {
 	title := RequestTitle(q)
 	switch status {
 	case "done":
+		if q.Type == "other" {
+			return fmt.Sprintf("Готово: %s выполнил заявку №%d «%s».", q.DepartmentTitle, q.Number, title)
+		}
 		return fmt.Sprintf("Готово: %s выдан. Заявка №%d закрыта.", lowerFirst(title), q.Number)
 	case "approved":
 		return fmt.Sprintf("%s согласован. Заявка №%d.", title, q.Number)
@@ -184,6 +192,9 @@ func taskNote(q *models.Request, status, reason string) string {
 
 // approverText – «Олег, владелец проекта», «Кирилл, DevOps».
 func approverText(q *models.Request) string {
+	if q.ApproverKind == "department" {
+		return q.DepartmentTitle
+	}
 	if q.ApproverKind == "auto" || q.Approver == nil {
 		return "выдается автоматически"
 	}
@@ -219,6 +230,9 @@ func RequestFields(q *models.Request) []models.Field {
 		}
 		add("Тип", q.LeaveTypeTitle)
 		add("Комментарий", q.LeaveComment)
+	} else if q.Type == "other" {
+		add("Что нужно", q.ItemTitle)
+		add("Комментарий", q.ItemComment)
 	} else {
 		add("Ресурс", q.ServiceTitle)
 		if q.ProjectTitle != nil {
@@ -236,6 +250,12 @@ func RequestFields(q *models.Request) []models.Field {
 	}
 	if q.ApproverKind == "auto" && q.Type == "access" {
 		label = "Согласование"
+	}
+	if q.Type == "other" {
+		label = "Исполняет"
+		if q.Status == "done" {
+			label = "Выполнил"
+		}
 	}
 	add(label, approverText(q))
 	return f
@@ -257,7 +277,7 @@ func RequestItem(q *models.Request, events []models.RequestEvent, now time.Time)
 			h.Title = "Одобрена"
 		case "done":
 			h.Title = "Доступ выдан"
-			if q.Type == "leave" {
+			if q.Type != "access" {
 				h.Title = "Выполнена"
 			}
 		case "rejected":

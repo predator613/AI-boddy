@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { API_URL } from '../src/api/client'
@@ -93,6 +93,24 @@ describe('Чат', () => {
     renderApp('/chat?q=Кто мой наставник?')
     expect(await screen.findByText(/Твой наставник – Игорь/, {}, T)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Новый диалог' }))
+    expect(await screen.findByText('Привет, Анна! С чего начнем?', {}, T)).toBeInTheDocument()
     expect(screen.queryByText(/Твой наставник – Игорь/)).not.toBeInTheDocument()
+  })
+
+  it('переписка восстанавливается после перезагрузки страницы', async () => {
+    renderApp('/chat')
+    await send('Как оформить отгул?')
+    const card = await screen.findByRole('button', { name: 'Отмена' }, T)
+    await userEvent.click(card)
+    expect(await screen.findByText(/заявку не создаю|не создаю/i, {}, T)).toBeInTheDocument()
+
+    // «Перезагрузка»: новое приложение с пустым кешем берет переписку из backend.
+    cleanup()
+    renderApp('/chat')
+    expect(await screen.findByText(/не создаю/i, {}, T)).toBeInTheDocument()
+    // вопрос из истории плюс такая же подсказка-чип
+    expect(screen.getAllByText('Как оформить отгул?')).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: 'Подтвердить' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Новый диалог' })).toBeEnabled()
   })
 })

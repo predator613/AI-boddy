@@ -45,10 +45,7 @@ func (s *Store) Submit(_ context.Context, o integrations.Order) (integrations.Ti
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.seq++
-	prefix := "ACC"
-	if o.Kind == "leave" {
-		prefix = "HR"
-	}
+	prefix := map[string]string{"access": "ACC", "leave": "HR", "other": "SD"}[o.Kind]
 	t := &ticket{order: o}
 	t.Ref = fmt.Sprintf("%s-%d", prefix, s.seq)
 	t.Status = integrations.TicketWaiting
@@ -126,8 +123,8 @@ func Handler(s *Store) http.Handler {
 	})
 	mux.HandleFunc("POST /v1/tickets", func(w http.ResponseWriter, r *http.Request) {
 		var o integrations.Order
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&o); err != nil || (o.Kind != "access" && o.Kind != "leave") {
-			write(w, http.StatusBadRequest, map[string]string{"error": "kind must be access or leave"})
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&o); err != nil || (o.Kind != "access" && o.Kind != "leave" && o.Kind != "other") {
+			write(w, http.StatusBadRequest, map[string]string{"error": "kind must be access, leave or other"})
 			return
 		}
 		t, _ := s.Submit(r.Context(), o)

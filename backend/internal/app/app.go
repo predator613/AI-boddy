@@ -41,6 +41,7 @@ type Services struct {
 	KB       handlers.KBService
 	Goals    handlers.GoalsService
 	Chat     handlers.ChatService
+	People   handlers.PeopleService
 	Requests *services.Requests // и страница «Заявки», и синхронизация статусов
 }
 
@@ -57,13 +58,15 @@ func NewServices(cfg config.Config, pool *pgxpool.Pool, log *slog.Logger) (Servi
 	}
 	reqStore := repository.NewRequests(pool)
 	kb := repository.NewKB(pool)
+	people := repository.NewPeople(pool)
 	reqs := services.NewRequests(reqStore, users, corp, log)
 	return Services{
 		Auth:     services.NewAuth(users, cfg.JWTSecret, cfg.JWTTTL),
 		Path:     services.NewPath(repository.NewOnboarding(pool), users),
-		KB:       services.NewKB(kb, users),
+		KB:       services.NewKB(kb, users, people),
 		Goals:    services.NewGoals(repository.NewGoals(pool), users),
-		Chat:     services.NewAgent(repository.NewChat(pool), reqStore, kb, users, corp, model, cfg.LLMTimeout, log),
+		Chat:     services.NewAgent(repository.NewChat(pool), reqStore, kb, users, people, corp, model, cfg.LLMTimeout, log),
+		People:   services.NewPeople(people),
 		Requests: reqs,
 	}, nil
 }
@@ -90,6 +93,7 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 	kbH := handlers.NewKB(svc.KB, log)
 	goalsH := handlers.NewGoals(svc.Goals, log)
 	chatH := handlers.NewChat(svc.Chat, svc.Requests, log)
+	peopleH := handlers.NewPeople(svc.People, log)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", handlers.Health)
@@ -130,9 +134,13 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 			// Чат с помощником и заявки.
 			r.Get("/chat/messages", chatH.History)
 			r.Post("/chat/messages", chatH.Send)
+			r.Post("/chat/reset", chatH.Reset)
 			r.Post("/chat/actions/{actionId}/confirm", chatH.Confirm)
 			r.Post("/chat/actions/{actionId}/cancel", chatH.Cancel)
 			r.Get("/requests", chatH.Requests)
+
+			// Свои люди (наставник, руководитель) и отделы – для «Поддержки».
+			r.Get("/me/contacts", peopleH.Contacts)
 
 			// Справочник.
 			r.Get("/kb", kbH.Get)

@@ -24,7 +24,7 @@ const (
 
 // Order – заявка, которую помощник отправляет во внешнюю систему.
 type Order struct {
-	Kind          string `json:"kind"` // access | leave
+	Kind          string `json:"kind"` // access | leave | other (заявка в отдел)
 	RequestNumber int64  `json:"requestNumber"`
 	Requester     string `json:"requester"`
 	Approver      string `json:"approver,omitempty"` // пусто – выдается автоматически
@@ -35,6 +35,9 @@ type Order struct {
 	Justification string `json:"justification,omitempty"`
 	LeaveDate     string `json:"leaveDate,omitempty"`
 	LeaveType     string `json:"leaveType,omitempty"`
+	Department    string `json:"department,omitempty"` // заявка в отдел
+	Item          string `json:"item,omitempty"`
+	Comment       string `json:"comment,omitempty"`
 	Auto          bool   `json:"auto"`
 }
 

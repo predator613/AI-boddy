@@ -86,9 +86,10 @@ func (r *Chat) Messages(ctx context.Context, conversationID string, limit int) (
 			SELECT m.id::text, m.author_kind, m.kind, m.text, m.mood, m.request_id::text,
 			       s.article_id::text, s.label, a.title, m.created_at
 			FROM messages m
+			JOIN conversations c ON c.id = m.conversation_id
 			LEFT JOIN message_sources s ON s.message_id = m.id AND s.position = 1
 			LEFT JOIN kb_articles a ON a.id = s.article_id
-			WHERE m.conversation_id::text = $1
+			WHERE m.conversation_id::text = $1 AND m.created_at > COALESCE(c.cleared_at, '-infinity')
 			ORDER BY m.created_at DESC, m.id DESC LIMIT $2
 		) x ORDER BY created_at, id`, conversationID, limit)
 	if err != nil {
@@ -99,6 +100,26 @@ func (r *Chat) Messages(ctx context.Context, conversationID string, limit int) (
 		err := row.Scan(&m.ID, &m.AuthorKind, &m.Kind, &m.Text, &m.Mood, &m.RequestID,
 			&m.ArticleID, &m.SourceLabel, &m.SourceTitle, &m.CreatedAt)
 		return m, err
+	})
+}
+
+// Clear начинает новый диалог: старые сообщения остаются в базе, но больше не показываются.
+// Неподтвержденные карточки старого диалога отменяются, чтобы не висели черновиками.
+func (r *Chat) Clear(ctx context.Context, conversationID string) error {
+	return pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE conversations SET cleared_at = clock_timestamp() WHERE id::text = $1`, conversationID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `
+			WITH c AS (
+				UPDATE requests SET status = 'cancelled'
+				WHERE status = 'draft' AND id IN (
+					SELECT request_id FROM messages WHERE conversation_id::text = $1 AND kind = 'confirm' AND request_id IS NOT NULL)
+				RETURNING id, requester_id
+			)
+			INSERT INTO request_events (request_id, status, actor_kind, actor_id, note)
+			SELECT id, 'cancelled', 'user', requester_id, 'Новый диалог: черновик отменен' FROM c`, conversationID)
+		return err
 	})
 }
 

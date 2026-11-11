@@ -17,6 +17,7 @@ type ChatService interface {
 	Confirm(ctx context.Context, viewerID, actionID string) (*models.ChatReply, error)
 	Cancel(ctx context.Context, viewerID, actionID string) (*models.ChatReply, error)
 	History(ctx context.Context, viewerID string) (*models.ChatReply, error)
+	Reset(ctx context.Context, viewerID string) (*models.ChatReply, error)
 }
 
 // RequestsService – страница «Заявки».
@@ -47,6 +48,16 @@ func (h *Chat) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v, err := h.svc.Send(r.Context(), id, in)
+	reply(w, h.log, http.StatusOK, v, err)
+}
+
+// Reset – POST /api/chat/reset: «Новый диалог».
+func (h *Chat) Reset(w http.ResponseWriter, r *http.Request) {
+	id, ok := viewerID(w, r)
+	if !ok {
+		return
+	}
+	v, err := h.svc.Reset(r.Context(), id)
 	reply(w, h.log, http.StatusOK, v, err)
 }
 

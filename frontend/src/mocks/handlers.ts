@@ -1,6 +1,6 @@
 import { HttpResponse, delay, http } from 'msw'
 import { API_URL } from '../api/client'
-import { MOCK_PASSWORD, mockTestUsers, mockToken, mockUsers } from './data'
+import { MOCK_DEPARTMENTS, MOCK_PASSWORD, mockTestUsers, mockToken, mockUsers } from './data'
 import { mockGoals, setMockGoalProgress } from './goalsData'
 import { buildMockPath, mockInterns, setMockTaskStatus } from './pathData'
 import { KB, assistantHandlers, pendingHandlers } from './pending'
@@ -41,6 +41,19 @@ export const handlers = [
   }),
 
   http.get(`${API_URL}/api/auth/test-users`, () => HttpResponse.json(mockTestUsers)),
+
+  // Наставник и руководитель – из связей пользователя, как в backend.
+  http.get(`${API_URL}/api/me/contacts`, ({ request }) => {
+    const user = userFrom(request)
+    if (!user) return apiError(401, 'unauthorized', 'invalid or expired token')
+    const ref = (u?: (typeof mockUsers)[number]) => (u ? { id: u.id, name: u.name } : null)
+    return HttpResponse.json({
+      team: user.teamName,
+      mentor: ref(mockUsers.find((u) => u.id === user.mentorId)),
+      lead: ref(mockUsers.find((u) => u.teamId === user.teamId && u.role === 'lead')),
+      departments: MOCK_DEPARTMENTS,
+    })
+  }),
 ]
 
 // «Мой путь» и стажеры наставника – по контракту docs/api-my-path.md.

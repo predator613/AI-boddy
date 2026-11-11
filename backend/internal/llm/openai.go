@@ -58,7 +58,7 @@ type oaMessage struct {
 
 // Chat отправляет диалог модели.
 func (o *OpenAI) Chat(ctx context.Context, req Request) (Response, error) {
-	body := map[string]any{"model": o.model, "messages": toOA(req.Messages), "temperature": 0.2}
+	body := map[string]any{"model": o.model, "messages": toOA(req.Messages), "temperature": 0.5} // 0.5 – ответы живее, факты держит промпт и проверка в агенте
 	if len(req.Tools) > 0 {
 		tools := make([]oaTool, len(req.Tools))
 		for i, t := range req.Tools {

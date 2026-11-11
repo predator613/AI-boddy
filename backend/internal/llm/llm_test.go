@@ -27,7 +27,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestMockIntents(t *testing.T) {
-	tools := []Tool{{Name: "prepare_access_request"}}
+	tools := []Tool{{Name: "prepare_access_request"}, {Name: "prepare_service_request"}}
 	ask := func(text string) ToolCall {
 		r, err := Mock{}.Chat(context.Background(), Request{Messages: []Message{{Role: "user", Content: text}}, Tools: tools})
 		require.NoError(t, err)
@@ -40,6 +40,15 @@ func TestMockIntents(t *testing.T) {
 	assert.JSONEq(t, `{"number":"1038"}`, string(ask("что с заявкой №1038").Arguments))
 	assert.Equal(t, "handoff_to_mentor", ask("передай наставнику вопрос").Name)
 	assert.Equal(t, "search_kb", ask("что такое код-ревью").Name)
+	assert.Equal(t, "prepare_service_request", ask("нужен ноутбук").Name)
+	assert.Equal(t, "prepare_service_request", ask("хочу оформить отпуск").Name)
+	assert.Equal(t, "prepare_service_request", ask("нужен доступ к VPN").Name)
+	assert.Equal(t, "search_kb", ask("сколько стоит компьютер").Name, "без намерения – вопрос, а не заявка")
+
+	// «Что делать сейчас?» – без инструмента: ответ по состоянию чата собирает агент.
+	r0, _ := Mock{}.Chat(context.Background(), Request{Messages: []Message{{Role: "user", Content: "что делать сейчас?"}}, Tools: tools})
+	assert.Empty(t, r0.ToolCalls)
+	assert.Empty(t, r0.Content)
 
 	// Без инструмента заявки вопрос идет в поиск.
 	r, _ := Mock{}.Chat(context.Background(), Request{Messages: []Message{{Role: "user", Content: "дай доступ"}}})

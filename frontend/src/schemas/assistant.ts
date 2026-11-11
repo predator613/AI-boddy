@@ -95,6 +95,7 @@ export const KnowledgeBase = z.object({
 export type TRequestItem = z.infer<typeof RequestItem>
 export type TRequestStatus = z.infer<typeof RequestStatus>
 export type TChatMessage = z.infer<typeof ChatMessage>
+export type TChatReply = z.infer<typeof ChatReply>
 export type TSendMessageInput = z.input<typeof SendMessageInput>
 export type TKnowledgeBase = z.infer<typeof KnowledgeBase>
 export type TKbArticle = z.infer<typeof KbArticle>

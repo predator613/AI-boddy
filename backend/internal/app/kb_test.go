@@ -3,6 +3,7 @@ package app
 import (
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,7 +25,7 @@ func TestKnowledgeBaseForAnna(t *testing.T) {
 	var kb models.KnowledgeBase
 	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/kb", nil, &kb))
 
-	require.Len(t, kb.Sections, 6)
+	require.Len(t, kb.Sections, 8)
 	assert.Equal(t, "s-start", kb.Sections[0].ID)
 	assert.NotEmpty(t, kb.Terms)
 
@@ -78,6 +79,53 @@ func TestKnowledgeArticle(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, e.call("nobody", http.MethodGet, "/api/kb", nil, nil))
 }
 
+// В статьях нет имен: наставник и руководитель подставляются из связей читателя.
+func TestKnowledgePersonalized(t *testing.T) {
+	e := newEnv(t)
+	article := func(user, id string) models.KBArticleDetail {
+		t.Helper()
+		var a models.KBArticleDetail
+		require.Equal(t, http.StatusOK, e.call(user, http.MethodGet, "/api/kb/articles/"+id, nil, &a))
+		assert.NotContains(t, a.Body, "{{")
+		return a
+	}
+	anna := article("intern_anna", backendOnlyArticle)
+	assert.Contains(t, anna.Body, "Наставник (Игорь)")
+	assert.Contains(t, anna.Body, "Руководитель команды (Олег)")
+
+	pavel := article("intern_pavel", frontendOnlyArticle)
+	assert.Contains(t, pavel.Body, "(Нина)")
+	assert.Contains(t, pavel.Body, "Наставник: пока не назначен")
+
+	igor := article("mentor_igor", "c2000000-0000-4000-8000-000000000002")
+	assert.Contains(t, igor.Body, "наставником (Игорь)")
+
+	// Поиск отдает фрагменты тоже с именами читателя.
+	var res models.KBSearch
+	require.Equal(t, http.StatusOK, e.call("intern_pavel", http.MethodGet, "/api/kb/search?q="+url.QueryEscape("кто согласует отгул"), nil, &res))
+	for _, m := range res.Results {
+		assert.NotContains(t, m.Snippet, "{{")
+		assert.NotContains(t, m.Snippet, "Олег")
+	}
+
+	// Контакты для «Поддержки»: свои люди и отделы.
+	var c models.Contacts
+	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/me/contacts", nil, &c))
+	require.NotNil(t, c.Mentor)
+	assert.Equal(t, "Игорь", c.Mentor.Name)
+	require.NotNil(t, c.Lead)
+	assert.Equal(t, "Олег", c.Lead.Name)
+	assert.Equal(t, "Backend", c.Team)
+	require.Len(t, c.Departments, 4)
+	assert.Equal(t, "Отдел оборудования", c.Departments[0].Title)
+	assert.Contains(t, c.Departments[0].Items, "Ноутбук")
+
+	require.Equal(t, http.StatusOK, e.call("intern_pavel", http.MethodGet, "/api/me/contacts", nil, &c))
+	assert.Nil(t, c.Mentor)
+	assert.Equal(t, "Нина", c.Lead.Name)
+	assert.Equal(t, http.StatusUnauthorized, e.call("nobody", http.MethodGet, "/api/me/contacts", nil, nil))
+}
+
 func TestKnowledgeSearch(t *testing.T) {
 	e := newEnv(t)
 	search := func(user, q string) models.KBSearch {
@@ -95,7 +143,7 @@ func TestKnowledgeSearch(t *testing.T) {
 		assert.NotEmpty(t, m.Snippet)
 	}
 	assert.Contains(t, top, accessArticle, "статья про доступы в первой тройке")
-	assert.Equal(t, "s-access", res.Results[0].SectionID)
+	assert.Contains(t, strings.ToLower(res.Results[0].Title), "стенд")
 
 	res = search("intern_anna", "как взять отгул")
 	require.NotEmpty(t, res.Results)

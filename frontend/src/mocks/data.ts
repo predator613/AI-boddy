@@ -50,3 +50,39 @@ export const mockTestUsers: TestUser[] = mockUsers.map(({ login, name, role, tea
 }))
 
 export const mockToken = (login: string) => `mock-token-${login}`
+
+// Отделы компании – как в миграции 013 backend.
+export const MOCK_DEPARTMENTS = [
+  {
+    code: 'equipment',
+    title: 'Отдел оборудования',
+    slaHours: 48,
+    hours: 'пн–пт 10:00–19:00',
+    about: 'Ноутбук, монитор, гарнитура, клавиатура и мышь, пропуск в офис.',
+    items: 'Ноутбук, Монитор',
+  },
+  {
+    code: 'it_support',
+    title: 'ИТ-поддержка',
+    slaHours: 8,
+    hours: 'круглосуточно',
+    about: 'VPN, корпоративная почта, пароли, двухфакторная аутентификация.',
+    items: 'VPN, Сброс пароля',
+  },
+  {
+    code: 'hr',
+    title: 'HR-поддержка',
+    slaHours: 24,
+    hours: 'пн–пт 10:00–19:00',
+    about: 'Отпуск, справка с места работы, документы для вуза.',
+    items: 'Отпуск, Справка с места работы',
+  },
+  {
+    code: 'accounting',
+    title: 'Бухгалтерия',
+    slaHours: 72,
+    hours: 'пн–пт 10:00–18:00',
+    about: 'Справка 2-НДФЛ, вопросы по выплатам.',
+    items: 'Справка 2-НДФЛ',
+  },
+]

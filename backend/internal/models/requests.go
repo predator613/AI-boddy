@@ -60,6 +60,48 @@ type LeaveDraft struct {
 	TaskID      *string
 }
 
+// CatalogItem – то, что можно заказать в отдел (ноутбук, VPN, справка).
+type CatalogItem struct {
+	Code            string
+	Title           string // Ноутбук
+	RequestTitle    string // Выдача ноутбука
+	Hint            string
+	DepartmentCode  string
+	DepartmentTitle string
+	SLAHours        int
+}
+
+// ServiceDraft – черновик заявки в отдел.
+type ServiceDraft struct {
+	RequesterID string
+	Item        string
+	Comment     string
+}
+
+// Department – отдел компании и что у него можно заказать.
+type Department struct {
+	Code     string `json:"code"`
+	Title    string `json:"title"`
+	SLAHours int    `json:"slaHours"`
+	Hours    string `json:"hours"`
+	About    string `json:"about"`
+	Items    string `json:"items"`
+}
+
+// Circle – люди вокруг пользователя: команда, наставник (у стажера) и руководитель.
+type Circle struct {
+	Team   string     `json:"team"`
+	Role   string     `json:"-"`
+	Mentor *PersonRef `json:"mentor"`
+	Lead   *PersonRef `json:"lead"`
+}
+
+// Contacts – страница «Поддержка»: свои люди и отделы.
+type Contacts struct {
+	Circle
+	Departments []Department `json:"departments"`
+}
+
 // Request – заявка со всеми полями для карточки.
 type Request struct {
 	ID           string
@@ -89,6 +131,11 @@ type Request struct {
 	LeaveDate      *time.Time
 	LeaveTypeTitle string
 	LeaveComment   string
+
+	ItemCode        string // заявка в отдел
+	ItemTitle       string
+	DepartmentTitle string
+	ItemComment     string
 }
 
 // RequestEvent – шаг истории заявки.

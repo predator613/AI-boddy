@@ -464,3 +464,227 @@ func externalRef(t *testing.T, e *chatEnv, requestID string) string {
 	_ = e
 	return ref
 }
+
+// «Что делать сейчас?» после карточки: помощник помнит переписку и подсказывает по ее состоянию.
+func TestNextStepUsesChatState(t *testing.T) {
+	e := newChatEnv(t, "")
+
+	msgs := e.say("intern_anna", map[string]any{"text": "как получить доступ к GitLab"})
+	card := confirmOf(t, msgs)
+
+	next := e.say("intern_anna", map[string]any{"text": "что делать сейчас?"})
+	require.Len(t, next, 1)
+	assert.Contains(t, next[0].Text, "Подтвердить")
+	assert.Contains(t, next[0].Text, "Олег")
+	assert.Nil(t, next[0].Confirm)
+
+	// Повторная просьба, пока карточка не подтверждена, вторую карточку не создает.
+	again := e.say("intern_anna", map[string]any{"text": "дай доступ к гитлабу"})
+	require.Len(t, again, 1)
+	assert.Nil(t, again[0].Confirm)
+	assert.Contains(t, again[0].Text, "уже выше")
+
+	// После подтверждения подсказка – про ожидание решения.
+	var r models.ChatReply
+	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/chat/actions/"+card.ActionID+"/confirm", nil, &r))
+	after := e.say("intern_anna", map[string]any{"text": "а дальше?"})
+	assert.Contains(t, after[0].Text, "ждет решения")
+
+	// Незнакомый вопрос по-прежнему честно отвечает «не знаю».
+	unknown := e.say("intern_anna", map[string]any{"text": "сколько стоит компьютер"})
+	assert.Contains(t, unknown[0].Text, "Точного ответа")
+
+	// Стажер без заявок получает подсказку про «Мой путь» или про свою заявку.
+	pavel := e.say("intern_pavel", map[string]any{"text": "что мне делать дальше"})
+	assert.Regexp(t, "Мой путь|ждет решения", pavel[0].Text)
+}
+
+// С настоящей моделью: в запрос уходят история и неподтвержденная карточка, пояснение к карточке
+// формулирует модель, но без фактов backend ее текст отбрасывается.
+func TestModelGetsHistoryAndDraft(t *testing.T) {
+	var bodies []string
+	paraphrase := "Доступ к GitLab согласует Олег, обычно до 24 ч."
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body := string(raw)
+		bodies = append(bodies, body)
+		w.Header().Set("Content-Type", "application/json")
+		answer := func(content string) {
+			out, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": content}}}})
+			_, _ = w.Write(out)
+		}
+		switch {
+		case strings.Contains(body, "Перескажи") && strings.Contains(body, "выдумай"):
+			answer("Доступ выдаст Петр за час.")
+		case strings.Contains(body, "Перескажи"):
+			answer(paraphrase)
+		case strings.Contains(body, "что делать") && !strings.Contains(body, "выдумай"):
+			answer("Нажми «Подтвердить» в карточке выше.")
+		default:
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"prepare_access_request","arguments":"{\"resource\":\"GitLab\"}"}}]}}]}`))
+		}
+	}))
+	defer fake.Close()
+	e := newChatEnv(t, fake.URL)
+
+	msgs := e.say("intern_anna", map[string]any{"text": "как получить доступ к GitLab"})
+	assert.Equal(t, paraphrase, msgs[0].Text)
+	confirmOf(t, msgs)
+
+	next := e.say("intern_anna", map[string]any{"text": "что делать сейчас?"})
+	assert.Equal(t, "Нажми «Подтвердить» в карточке выше.", next[0].Text)
+	last := bodies[len(bodies)-1]
+	assert.Contains(t, last, "как получить доступ к GitLab", "история переписки")
+	assert.Contains(t, last, "неподтвержденная карточка", "состояние чата")
+
+	// Пересказ с чужими фактами не проходит: остается текст backend.
+	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/chat/actions/"+confirmOf(t, msgs).ActionID+"/cancel", nil, nil))
+	msgs = e.say("intern_anna", map[string]any{"text": "выдумай и оформи доступ к GitLab"})
+	assert.Contains(t, msgs[0].Text, "Олег")
+	assert.NotContains(t, msgs[0].Text, "Петр")
+}
+
+// Заявка в отдел: ноутбук уходит в отдел оборудования, наставник получает уведомление,
+// решение отдела приходит автоматически из mock-services.
+func TestServiceRequestToDepartment(t *testing.T) {
+	e := newChatEnv(t, "")
+
+	msgs := e.say("intern_anna", map[string]any{"text": "мне не выдали ноутбук, нужен"})
+	require.Len(t, msgs, 2)
+	assert.Contains(t, msgs[0].Text, "Отдел оборудования")
+	assert.Contains(t, msgs[0].Text, "Игорь")
+	card := confirmOf(t, msgs)
+	assert.Equal(t, "Отправить заявку: Отдел оборудования?", card.Title)
+	assert.Equal(t, map[string]string{"Что нужно": "Ноутбук", "Исполняет": "Отдел оборудования"}, fieldsMap(card.Fields))
+
+	// Вторая просьба, пока карточка не подтверждена, дубль не создает.
+	again := e.say("intern_anna", map[string]any{"text": "нужен ноутбук"})
+	assert.Contains(t, again[0].Text, "уже выше")
+
+	var r models.ChatReply
+	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/chat/actions/"+card.ActionID+"/confirm", nil, &r))
+	res := r.Messages[0].Result
+	require.NotNil(t, res)
+	assert.Equal(t, "waiting", res.Status)
+	assert.Equal(t, "Выдача ноутбука", res.Title)
+	assert.Contains(t, r.Messages[0].Text, "Наставник (Игорь) получил уведомление")
+
+	var note string
+	require.NoError(t, testPool(t).QueryRow(context.Background(), `
+		SELECT text FROM notifications WHERE user_id = 'aaaaaaaa-0000-4000-8000-000000000002' AND request_id = $1`, res.RequestID).Scan(&note))
+	assert.Contains(t, note, "Анна: заявка №"+res.Number)
+	ref := externalRef(t, e, res.RequestID)
+	assert.True(t, strings.HasPrefix(ref, "SD-"), ref)
+
+	// Пока заявка в работе, повторная просьба сообщает ее номер.
+	assert.Contains(t, e.say("intern_anna", map[string]any{"text": "нужен ноутбук"})[0].Text, "№"+res.Number)
+
+	// Отдел выполнил заявку.
+	_, err := e.store.Decide(ref, true, "")
+	require.NoError(t, err)
+	_, err = e.svc.Requests.SyncOnce(context.Background())
+	require.NoError(t, err)
+	var list []models.RequestItem
+	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/requests", nil, &list))
+	assert.Equal(t, "done", list[0].Status)
+	assert.Equal(t, "other", list[0].Kind)
+	assert.Equal(t, "Выполнена", list[0].History[len(list[0].History)-1].Title)
+	assert.Equal(t, "Отдел оборудования", fieldsMap(list[0].Fields)["Выполнил"])
+
+	// Отпуск – в HR, справка 2-НДФЛ – в бухгалтерию.
+	assert.Equal(t, "Отправить заявку: HR-поддержка?", confirmOf(t, e.say("intern_anna", map[string]any{"text": "хочу оформить отпуск с 20 декабря"})).Title)
+	assert.Equal(t, "Отправить заявку: Бухгалтерия?", confirmOf(t, e.say("intern_anna", map[string]any{"text": "нужна справка 2-НДФЛ за 2026"})).Title)
+
+	// Непонятный предмет – подсказка, что можно заказать.
+	help := e.say("intern_anna", map[string]any{"text": "нужна справка о погоде"})
+	assert.Contains(t, help[0].Text, "Отдел оборудования:")
+	assert.Nil(t, help[0].Confirm)
+
+	// Вопрос без намерения не превращается в заявку.
+	assert.Contains(t, e.say("intern_anna", map[string]any{"text": "сколько стоит компьютер"})[0].Text, "Точного ответа")
+}
+
+// С моделью: в ответ на поиск уходят полные тексты статей, markdown из ответа убирается,
+// а когда справочник молчит, модель может ответить сама (без ссылки на источник).
+func TestModelGetsArticleTextAndCleansMarkdown(t *testing.T) {
+	var toolBodies []string
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body := string(raw)
+		w.Header().Set("Content-Type", "application/json")
+		answer := func(content string) {
+			out, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": content}}}})
+			_, _ = w.Write(out)
+		}
+		switch {
+		case strings.Contains(body, `"role":"tool"`):
+			toolBodies = append(toolBodies, body)
+			if strings.Contains(body, "В справочнике ничего не нашлось.") {
+				answer("В справочнике этого нет, но обычно помогает перезагрузка. Передать вопрос наставнику?")
+				return
+			}
+			answer("**Ревью** делает наставник.\n* сначала тесты\n* потом MR")
+		default:
+			q := "код-ревью"
+			if strings.Contains(body, "хромодинамик") {
+				q = "квантовая хромодинамика"
+			}
+			out, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{
+				"role": "assistant", "content": "",
+				"tool_calls": []any{map[string]any{"id": "c1", "type": "function", "function": map[string]any{"name": "search_kb", "arguments": `{"query":"` + q + `"}`}}},
+			}}}})
+			_, _ = w.Write(out)
+		}
+	}))
+	defer fake.Close()
+	e := newChatEnv(t, fake.URL)
+
+	msgs := e.say("intern_anna", map[string]any{"text": "как устроено код-ревью?"})
+	assert.Equal(t, "Ревью делает наставник.\n– сначала тесты\n– потом MR", msgs[0].Text)
+	require.NotNil(t, msgs[0].Source)
+	require.NotEmpty(t, toolBodies)
+	assert.Contains(t, toolBodies[0], "Как подготовить MR", "модель получила текст статьи")
+	assert.Contains(t, toolBodies[0], "Игорь", "в тексте статьи – наставник стажера")
+	assert.Contains(t, toolBodies[0], "Наставник стажера: Игорь", "в промпте – люди стажера")
+
+	msgs = e.say("intern_anna", map[string]any{"text": "что такое квантовая хромодинамика"})
+	assert.Contains(t, msgs[0].Text, "В справочнике этого нет")
+	assert.Nil(t, msgs[0].Source)
+}
+
+// Переписка сохраняется: после перезагрузки страницы чат восстанавливается, «Новый диалог»
+// прячет старые сообщения (в базе они остаются) и отменяет неподтвержденные карточки.
+func TestChatHistoryAndNewDialog(t *testing.T) {
+	e := newChatEnv(t, "")
+	history := func() []models.ChatMessage {
+		t.Helper()
+		var r models.ChatReply
+		require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/chat/messages", nil, &r))
+		return r.Messages
+	}
+
+	msgs := e.say("intern_anna", map[string]any{"text": "как получить доступ к GitLab"})
+	card := confirmOf(t, msgs)
+	h := history()
+	require.GreaterOrEqual(t, len(h), 3)
+	last := h[len(h)-3:]
+	assert.Equal(t, "user", last[0].Role)
+	assert.Equal(t, "как получить доступ к GitLab", last[0].Text)
+	require.NotNil(t, last[2].Confirm, "карточка восстанавливается вместе с состоянием")
+	assert.Equal(t, "pending", last[2].Confirm.State)
+	require.NotNil(t, last[1].Source)
+
+	// Новый диалог: история пустая, карточка старого диалога отменена.
+	var r models.ChatReply
+	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/chat/reset", nil, &r))
+	assert.Empty(t, r.Messages)
+	assert.Empty(t, history())
+	assert.Equal(t, http.StatusNotFound, e.call("intern_anna", http.MethodPost, "/api/chat/actions/"+card.ActionID+"/confirm", nil, nil))
+
+	// В новом диалоге помощник не видит старую карточку и готовит новую.
+	assert.NotNil(t, confirmOf(t, e.say("intern_anna", map[string]any{"text": "как получить доступ к GitLab"})))
+	assert.Len(t, history(), 3)
+
+	// Наставнику чат с помощником недоступен.
+	assert.Equal(t, http.StatusForbidden, e.call("mentor_igor", http.MethodPost, "/api/chat/reset", nil, nil))
+}

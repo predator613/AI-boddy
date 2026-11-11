@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"ai-buddy/backend/internal/models"
@@ -115,6 +116,13 @@ func buildPath(in pathInput) models.PathView {
 
 		for _, x := range st.Resources {
 			rv := models.ResourceView{ID: x.ID, Kind: x.Kind, Name: x.Name, Note: x.Note, Tag: x.Tag, TagKind: x.TagKind}
+			// Карточка наставника в шаблоне команды общая, а наставник у каждого стажера свой.
+			if x.Kind == "person" && strings.Contains(strings.ToLower(x.Note), "наставник") {
+				rv.Name = "пока не назначен"
+				if in.Mentor != nil {
+					rv.Name = in.Mentor.Name
+				}
+			}
 			if x.TaskID != nil {
 				status := models.TaskTodo
 				if p, ok := in.Progress[*x.TaskID]; ok {

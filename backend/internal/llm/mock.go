@@ -17,10 +17,15 @@ func (Mock) Name() string { return "mock" }
 
 var (
 	reHandoff = regexp.MustCompile(`передай|позови|спроси наставник|напиши наставник|наставнику|человек`)
-	reLeave   = regexp.MustCompile(`отгул|отпуск|выходн|учебн\S* день|не выйду`)
-	reStatus  = regexp.MustCompile(`статус|мои заявк|моя заявк|моей заявк|что с заявк|заявка №|заявку №`)
-	reAccess  = regexp.MustCompile(`доступ|запрос|выда|получить|оформ|подключ|права|нужен|нужна|дай|открой`)
-	reNumber  = regexp.MustCompile(`\d{4}`)
+	reLeave   = regexp.MustCompile(`отгул|выходн|учебн\S* день|не выйду`)
+	// Заявки в отделы: предмет (ноутбук, VPN, справка) и намерение его получить.
+	reItem   = regexp.MustCompile(`ноут|макбук|компьютер|монитор|гарнитур|наушник|клавиатур|мыш|пропуск|бейдж|vpn|впн|почт|парол|двухфактор|2fa|отпуск|справк|ндфл|практик|характеристик|выплат|стипенди|зарплат|личные данные`)
+	reWant   = regexp.MustCompile(`нуж|выда|получ|оформ|закаж|заказ|хочу|дай|сломал|не работа|не выдал|сброс|восстанов|подключ|забыл|потерял|не приш|запрос`)
+	reStatus = regexp.MustCompile(`статус|мои заявк|моя заявк|моей заявк|что с заявк|заявка №|заявку №`)
+	reAccess = regexp.MustCompile(`доступ|запрос|выда|получить|оформ|подключ|права|нужен|нужна|дай|открой`)
+	reNumber = regexp.MustCompile(`\d{4}`)
+	// «что делать дальше?» без предмета: ответ зависит от состояния чата, его собирает агент.
+	reNext = regexp.MustCompile(`что (мне )?(теперь |сейчас |дальше )?(делать|дальше|теперь|нажать|сейчас)|а дальше|и дальше|что потом|следующий шаг|куда нажать|как подтвердить`)
 )
 
 // Chat имитирует модель с function calling.
@@ -40,6 +45,10 @@ func (Mock) Chat(_ context.Context, req Request) (Response, error) {
 		return call("list_requests", map[string]string{"number": reNumber.FindString(text)})
 	case reLeave.MatchString(text):
 		return call("prepare_leave_request", map[string]string{"date": text})
+	case reNext.MatchString(text):
+		return Response{}, nil
+	case reItem.MatchString(text) && reWant.MatchString(text) && hasTool(req.Tools, "prepare_service_request"):
+		return call("prepare_service_request", map[string]string{"item": text})
 	case reAccess.MatchString(text) && hasTool(req.Tools, "prepare_access_request"):
 		return call("prepare_access_request", map[string]string{"resource": text})
 	}

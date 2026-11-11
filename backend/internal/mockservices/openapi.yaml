@@ -46,7 +46,7 @@ components:
       type: object
       required: [kind, requester]
       properties:
-        kind: { type: string, enum: [access, leave] }
+        kind: { type: string, enum: [access, leave, other], description: "other – заявка в отдел (оборудование, ИТ-поддержка, HR, бухгалтерия)" }
         requestNumber: { type: integer, description: Номер заявки в AI-buddy }
         requester: { type: string }
         approver: { type: string, description: Пусто – выдается автоматически }
@@ -57,6 +57,9 @@ components:
         justification: { type: string }
         leaveDate: { type: string, format: date }
         leaveType: { type: string, example: day_off }
+        department: { type: string, example: Отдел оборудования }
+        item: { type: string, example: laptop }
+        comment: { type: string }
         auto: { type: boolean, description: Выдать без согласования }
     Ticket:
       type: object

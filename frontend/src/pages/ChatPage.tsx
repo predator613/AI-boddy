@@ -9,14 +9,20 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { IconArrowRight, IconPlus } from '@tabler/icons-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { cancelAction, confirmAction, sendMessage } from '../api/assistant'
+import {
+  cancelAction,
+  confirmAction,
+  getChatHistory,
+  resetChat,
+  sendMessage,
+} from '../api/assistant'
 import { Mascot } from '../components/Mascot'
 import { ChatMessageView, ThinkingBubble } from '../components/chat/ChatMessageView'
 import { errorText } from '../lib/errors'
 import { pathKeys } from '../hooks/usePath'
-import type { TChatMessage } from '../schemas/assistant'
+import type { TChatMessage, TChatReply } from '../schemas/assistant'
 import type { TPathView } from '../schemas/path'
 import { useAuthStore } from '../store/authStore'
 import classes from './ChatPage.module.css'
@@ -40,6 +46,10 @@ const userMessage = (text: string): TChatMessage => ({
   mood: 'calm',
 })
 
+// Переписка живет в backend (GET /api/chat/messages) и в кеше запросов: после перехода на другую
+// страницу или перезагрузки чат восстанавливается вместе с состоянием карточек.
+export const chatKey = ['chat', 'history'] as const
+
 interface ChatPageProps {
   initialQuestion?: string
   taskId?: string
@@ -49,7 +59,6 @@ interface ChatPageProps {
 export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
   const user = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
-  const [messages, setMessages] = useState<TChatMessage[]>([])
   const [text, setText] = useState('')
   const [lastFailed, setLastFailed] = useState<{
     text: string
@@ -57,6 +66,13 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
   } | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const autoSent = useRef(false)
+
+  const history = useQuery({ queryKey: chatKey, queryFn: getChatHistory })
+  const messages = history.data?.messages ?? []
+  const setMessages = (update: (prev: TChatMessage[]) => TChatMessage[]) =>
+    queryClient.setQueryData<TChatReply>(chatKey, (old) => ({
+      messages: update(old?.messages ?? []),
+    }))
 
   const send = useMutation({
     mutationFn: sendMessage,
@@ -84,6 +100,24 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
     },
   })
 
+  const reset = useMutation({
+    mutationFn: resetChat,
+    onSuccess: (reply) => {
+      queryClient.setQueryData<TChatReply>(chatKey, reply)
+      setLastFailed(null)
+    },
+  })
+
+  // Пока заявка из чата ждет решения, переписка обновляется сама: ответ отдела или
+  // согласующего приходит в чат сообщением, а карточка меняет статус.
+  const waiting = messages.some((m) => m.result?.status === 'waiting')
+  const busy = send.isPending || act.isPending
+  useEffect(() => {
+    if (!waiting || busy) return
+    const timer = setInterval(() => queryClient.invalidateQueries({ queryKey: chatKey }), 15_000)
+    return () => clearInterval(timer)
+  }, [waiting, busy, queryClient])
+
   const ask = (
     question: string,
     action: TPathView['stages'][number]['tasks'][number]['action'] = null,
@@ -91,6 +125,7 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
   ) => {
     const q = question.trim()
     if (!q || send.isPending) return
+    void queryClient.cancelQueries({ queryKey: chatKey })
     setLastFailed(null)
     setMessages((prev) => [...prev, userMessage(q)])
     send.mutate({ text: q, action, taskId: fromTask })
@@ -98,8 +133,9 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
 
   // Пришли из «Моего пути» или панели помощника – сразу отправляем вопрос (и действие задачи).
   // Срабатывает один раз на новый вопрос, поэтому ask и queryClient в зависимости не нужны.
+  // Вопрос отправляется после загрузки переписки, чтобы встать в конец, а не перед историей.
   useEffect(() => {
-    if (autoSent.current || !initialQuestion) return
+    if (autoSent.current || !initialQuestion || history.isPending) return
     autoSent.current = true
     const path = queryClient.getQueryData<TPathView>(pathKeys.my)
     const task = taskId
@@ -107,7 +143,7 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
       : undefined
     ask(initialQuestion, task?.action ?? null, task?.id ?? null)
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialQuestion, taskId])
+  }, [initialQuestion, taskId, history.isPending])
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' })
@@ -140,11 +176,9 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
           variant="outline"
           color="ink"
           leftSection={<IconPlus size={16} />}
-          onClick={() => {
-            setMessages([])
-            setLastFailed(null)
-          }}
-          disabled={messages.length === 0}
+          onClick={() => reset.mutate()}
+          loading={reset.isPending}
+          disabled={messages.length === 0 || busy}
         >
           Новый диалог
         </Button>
@@ -152,7 +186,17 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
 
       <div className={classes.scroll}>
         <Stack gap={20} className={classes.column} aria-live="polite">
-          {messages.length === 0 && !send.isPending && (
+          {history.isPending && (
+            <Text c="ink.5" ta="center" py={48}>
+              Загружаем переписку…
+            </Text>
+          )}
+          {history.isError && (
+            <Alert color="yellow" variant="light">
+              Не удалось загрузить прошлую переписку. Новые сообщения работают как обычно.
+            </Alert>
+          )}
+          {messages.length === 0 && !send.isPending && !history.isPending && (
             <Stack align="center" gap="sm" py={48} className="ab-pop">
               <Mascot size={140} glow float />
               <Text fz={26} fw={500} ta="center" style={{ letterSpacing: '-0.02em' }}>
@@ -189,6 +233,11 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
               >
                 Повторить
               </Button>
+            </Alert>
+          )}
+          {reset.isError && (
+            <Alert color="red" variant="light" role="alert">
+              {errorText(reset.error)}
             </Alert>
           )}
           {act.isError && (

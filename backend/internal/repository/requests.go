@@ -162,7 +162,86 @@ func (r *Requests) OpenRequest(ctx context.Context, requesterID, service string)
 	return r.Get(ctx, id)
 }
 
+// ResolveItem находит позицию каталога отделов по тексту: самый длинный синоним в тексте,
+// код или название. Не нашли – ErrNotFound.
+func (r *Requests) ResolveItem(ctx context.Context, text string) (string, error) {
+	var code string
+	err := r.db.QueryRow(ctx, `
+		SELECT code FROM (
+			SELECT code, 1000 AS w FROM catalog_items WHERE code = lower($1) OR lower(title) = lower($1)
+			UNION ALL
+			SELECT item_code, length(alias) FROM catalog_aliases WHERE lower($1) LIKE '%' || alias || '%'
+		) x ORDER BY w DESC LIMIT 1`, text).Scan(&code)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return code, err
+}
+
+// CatalogItem – позиция каталога с отделом.
+func (r *Requests) CatalogItem(ctx context.Context, code string) (*models.CatalogItem, error) {
+	var c models.CatalogItem
+	err := r.db.QueryRow(ctx, `
+		SELECT ci.code, ci.title, ci.request_title, ci.hint, d.code, d.title, d.sla_hours
+		FROM catalog_items ci JOIN departments d ON d.code = ci.department_code
+		WHERE ci.code = $1`, code,
+	).Scan(&c.Code, &c.Title, &c.RequestTitle, &c.Hint, &c.DepartmentCode, &c.DepartmentTitle, &c.SLAHours)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// OpenServiceRequest – заявка в отдел на эту позицию, которая еще в работе.
+func (r *Requests) OpenServiceRequest(ctx context.Context, requesterID, item string) (*models.Request, error) {
+	var id string
+	err := r.db.QueryRow(ctx, `
+		SELECT q.id::text FROM requests q JOIN service_request_details d ON d.request_id = q.id
+		WHERE q.requester_id::text = $1 AND d.item_code = $2 AND q.status = 'waiting'
+		ORDER BY q.created_at DESC LIMIT 1`, requesterID, item).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return r.Get(ctx, id)
+}
+
+// Notify – уведомление пользователю (колокольчик), например наставнику о заявке стажера.
+func (r *Requests) Notify(ctx context.Context, userID, kind, text, link string, requestID *string) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO notifications (user_id, kind, text, link, request_id) VALUES ($1::uuid, $2, $3, $4, $5::uuid)`,
+		userID, kind, text, link, requestID)
+	return err
+}
+
 // ---------- запись ----------
+
+// CreateServiceDraft создает черновик заявки в отдел (тип other, согласующего-человека нет).
+func (r *Requests) CreateServiceDraft(ctx context.Context, d models.ServiceDraft) (*models.Request, error) {
+	var id string
+	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO requests (type, requester_id, status, via) VALUES ('other', $1::uuid, 'draft', 'buddy')
+			RETURNING id::text`, d.RequesterID).Scan(&id); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO service_request_details (request_id, item_code, comment) VALUES ($1::uuid, $2, $3)`,
+			id, d.Item, d.Comment); err != nil {
+			return err
+		}
+		return addEvent(ctx, tx, id, "draft", "buddy", nil, "Подготовлена AI-buddy")
+	})
+	if err != nil {
+		return nil, constraintErr(err)
+	}
+	return r.Get(ctx, id)
+}
 
 // CreateAccessDraft создает черновик заявки на доступ (ждет подтверждения стажера).
 func (r *Requests) CreateAccessDraft(ctx context.Context, d models.AccessDraft) (*models.Request, error) {
@@ -334,7 +413,9 @@ const requestSelect = `
 	       COALESCE(s.code, ''), COALESCE(s.title, ''), COALESCE(s.request_title, ''), COALESCE(s.approver_kind, 'lead'),
 	       COALESCE(s.sla_hours, 24), COALESCE(sr.title, ''), COALESCE(al.code, ''), COALESCE(al.title, ''),
 	       pr.title, COALESCE(d.justification, ''),
-	       l.leave_date, COALESCE(lt.title, ''), COALESCE(l.comment, '')
+	       l.leave_date, COALESCE(lt.title, ''), COALESCE(l.comment, ''),
+	       COALESCE(ci.code, ''), COALESCE(ci.title, ''), COALESCE(ci.request_title, ''),
+	       COALESCE(dep.title, ''), COALESCE(dep.sla_hours, 24), COALESCE(sd.comment, '')
 	FROM requests q
 	LEFT JOIN users ap ON ap.id = q.approver_id
 	LEFT JOIN access_request_details d ON d.request_id = q.id
@@ -343,20 +424,29 @@ const requestSelect = `
 	LEFT JOIN access_levels al ON al.code = sr.access_level
 	LEFT JOIN projects pr ON pr.code = d.project_code
 	LEFT JOIN leave_request_details l ON l.request_id = q.id
-	LEFT JOIN leave_types lt ON lt.code = l.leave_type`
+	LEFT JOIN leave_types lt ON lt.code = l.leave_type
+	LEFT JOIN service_request_details sd ON sd.request_id = q.id
+	LEFT JOIN catalog_items ci ON ci.code = sd.item_code
+	LEFT JOIN departments dep ON dep.code = ci.department_code`
 
 func scanRequest(row pgx.Row) (*models.Request, error) {
 	var q models.Request
 	var apID, apName *string
 	var leaveDate *time.Time
+	var itemRequestTitle string
+	var depSLA int
 	err := row.Scan(&q.ID, &q.Number, &q.Type, &q.Status, &q.Via, &q.RequesterID, &q.TaskID,
 		&apID, &apName, &q.ExternalRef, &q.RejectReason, &q.CreatedAt, &q.DecidedAt,
 		&q.ServiceCode, &q.ServiceTitle, &q.RequestTitle, &q.ApproverKind,
 		&q.SLAHours, &q.RoleTitle, &q.Level, &q.LevelTitle,
 		&q.ProjectTitle, &q.Justification,
-		&leaveDate, &q.LeaveTypeTitle, &q.LeaveComment)
+		&leaveDate, &q.LeaveTypeTitle, &q.LeaveComment,
+		&q.ItemCode, &q.ItemTitle, &itemRequestTitle, &q.DepartmentTitle, &depSLA, &q.ItemComment)
 	if err != nil {
 		return nil, err
+	}
+	if q.ItemCode != "" {
+		q.RequestTitle, q.SLAHours, q.ApproverKind = itemRequestTitle, depSLA, "department"
 	}
 	if apID != nil {
 		q.Approver = &models.PersonRef{ID: *apID, Name: *apName}

@@ -172,7 +172,9 @@ export function KnowledgePage({ articleId, onArticle, stageCode }: KnowledgePage
                         .split(/\n{2,}/)
                         .filter(Boolean)
                         .map((p, i) => (
-                          <Text key={i}>{p}</Text>
+                          <Text key={i} style={{ whiteSpace: 'pre-line' }}>
+                            {p}
+                          </Text>
                         ))}
                       {detail.isPending && <Text c="ink.5">Загружаем текст…</Text>}
                       <Text size="sm" c="ink.5">

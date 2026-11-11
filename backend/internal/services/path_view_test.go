@@ -193,3 +193,13 @@ func TestCleanTask(t *testing.T) {
 		})
 	}
 }
+
+// Карточка наставника в шаблоне общая, имя – наставника этого стажера.
+func TestBuildPathMentorCardFromProfile(t *testing.T) {
+	in := sampleInput(time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC))
+	in.Stages[0].Resources = []models.ResourceTemplate{{ID: "m", Kind: "person", Name: "Игорь", Note: "наставник", TagKind: "mentor"}}
+	in.Mentor = &models.PersonRef{ID: "x", Name: "Мария"}
+	assert.Equal(t, "Мария", buildPath(in).Stages[0].Resources[0].Name)
+	in.Mentor = nil
+	assert.Equal(t, "пока не назначен", buildPath(in).Stages[0].Resources[0].Name)
+}
