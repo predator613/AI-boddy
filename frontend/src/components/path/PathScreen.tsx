@@ -1,13 +1,12 @@
-import { Button, Group, Paper, SimpleGrid, Stack, Text, Title, UnstyledButton } from '@mantine/core'
+import { Button, Group, Paper, Stack, Text } from '@mantine/core'
 import type { ReactNode } from 'react'
+import { dueText } from '../../lib/pathUi'
 import type { TPathView, TTaskView } from '../../schemas/path'
 import { StatusTag } from '../StatusTag'
-import { MeetingCard } from './MeetingCard'
-import { NextStepCard } from './NextStepCard'
-import { ProgressRing } from './ProgressRing'
-import { StageCard } from './StageCard'
+import { ProgressTicks } from './ProgressTicks'
+import { StageCarousel } from './StageCarousel'
 import { StageDetail, type TaskStatus } from './StageDetail'
-import { WeekTrack } from './WeekTrack'
+import classes from './PathScreen.module.css'
 
 interface PathScreenProps {
   path: TPathView
@@ -21,12 +20,12 @@ interface PathScreenProps {
   onSetStatus?: (taskId: string, status: TaskStatus) => void
   busyTaskId?: string | null
   now?: Date
-  /** Карточка целей стажировки под обзором (GoalsCard). */
+  /** Карточка целей стажировки (GoalsCard): видна, пока не открыт этап. */
   goals?: ReactNode
 }
 
-// «Мой путь»: в обзоре кольцо прогресса крупно, при открытии этапа оно сжимается в строку,
-// а главным становятся задачи этапа.
+// «Мой путь»: слева прогресс и следующий шаг, справа этапы-карточки, под ними цели
+// или задачи выбранного этапа.
 export function PathScreen({
   path,
   openCode,
@@ -36,144 +35,154 @@ export function PathScreen({
   onAsk,
   onSetStatus,
   busyTaskId,
-  now,
   goals,
 }: PathScreenProps) {
   const stage = openCode ? (path.stages.find((s) => s.code === openCode) ?? null) : null
-  const expanded = Boolean(stage)
+  const current = path.stages.find((s) => s.status === 'current') ?? path.stages[0]
   const mentorMode = Boolean(onSetStatus)
+  const step = path.nextStep
+  const due = step ? dueText(step.dueInDays) : null
 
   return (
-    <Stack gap="lg" style={{ flex: '999 1 560px', minWidth: 0 }}>
+    <Stack gap="lg" style={{ flex: '999 1 600px', minWidth: 0 }}>
       {header}
 
-      <Paper
-        radius="lg"
-        style={{
-          padding: expanded ? '16px 24px' : 32,
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: expanded ? 20 : 40,
-          transition: 'padding .45s cubic-bezier(.2,.8,.2,1), gap .45s cubic-bezier(.2,.8,.2,1)',
-        }}
-      >
-        <ProgressRing path={path} size={expanded ? 96 : 260} compact={expanded} />
-        {stage ? (
-          <Group
-            className="ab-pop"
-            justify="space-between"
-            gap="sm"
-            style={{ flex: '1 1 320px', minWidth: 0 }}
+      <div className={classes.grid}>
+        <Paper
+          radius={20}
+          p="lg"
+          pt={28}
+          className={`${classes.progress} ab-rise`}
+          aria-label="Прогресс адаптации"
+          component="section"
+        >
+          <Text
+            component="h2"
+            fz={22}
+            fw={500}
+            lh={1.25}
+            m={0}
+            style={{ letterSpacing: '-0.02em' }}
           >
-            <div>
-              <Text size="11px" tt="uppercase" c="ink.5" style={{ letterSpacing: '0.06em' }}>
-                Этап {stage.code} · {stage.doneCount} из {stage.totalCount} задач
-              </Text>
-              <Text fz={24} fw={500} style={{ letterSpacing: '-0.02em' }}>
-                {stage.title}
-              </Text>
-            </div>
-            <Group gap={6} role="tablist" aria-label="Этапы">
-              {path.stages.map((s) => {
-                const on = s.code === stage.code
-                return (
-                  <UnstyledButton
-                    key={s.code}
-                    role="tab"
-                    aria-selected={on}
-                    aria-label={`Этап ${s.code}: ${s.title}`}
-                    onClick={() => onOpen(s.code)}
+            {mentorMode
+              ? `Пройдено ${path.progress.percent}% пути адаптации`
+              : `Позади ${path.progress.percent}% пути адаптации!`}
+          </Text>
+          <div className={classes.ring}>
+            <ProgressTicks path={path} />
+          </div>
+          <div className={classes.legend}>
+            <span>
+              <i style={{ background: '#04E061' }} />
+              готово {path.progress.done}
+            </span>
+            <span>
+              <i style={{ background: '#00AAFF' }} />в работе {path.progress.inProgress}
+            </span>
+            <span>
+              <i style={{ background: '#E4E4E4' }} />
+              впереди {path.progress.todo}
+            </span>
+          </div>
+          <div style={{ height: 1, background: '#EDEDED' }} />
+          {step ? (
+            <>
+              <Stack gap={10} style={{ flex: 1 }}>
+                <Group gap={10}>
+                  <StatusTag
+                    bg="#04E061"
                     style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 8,
-                      border: on ? 0 : '1px solid #D6D6D6',
-                      background: on ? '#141414' : '#FFFFFF',
-                      color: on ? '#FFFFFF' : '#141414',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      fontSize: 11,
                       fontWeight: 600,
-                      fontSize: 14,
-                      textAlign: 'center',
                     }}
                   >
-                    {s.code}
-                  </UnstyledButton>
-                )
-              })}
-              <Button variant="outline" color="ink" ml={6} onClick={() => onOpen(null)}>
-                Все этапы
+                    Следующий шаг
+                  </StatusTag>
+                  <Text size="xs" c={(step.dueInDays ?? 0) < 0 ? 'red.8' : 'ink.5'}>
+                    этап {step.stageCode}
+                    {due ? ` · ${due}` : ''}
+                  </Text>
+                </Group>
+                <Text fz={26} fw={500} lh={1.12} style={{ letterSpacing: '-0.02em' }}>
+                  {step.title}
+                </Text>
+                {step.action && !mentorMode && (
+                  <Text size="sm" c="ink.5" lh={1.4}>
+                    AI-buddy подготовит все за тебя, останется только подтвердить.
+                  </Text>
+                )}
+              </Stack>
+              <Stack gap={8}>
+                {step.action && onAsk && (
+                  <Button
+                    color="ink"
+                    size="md"
+                    radius="md"
+                    onClick={() =>
+                      onAsk({ id: step.taskId, title: step.title, action: step.action })
+                    }
+                  >
+                    Сделать с AI-buddy
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  color="ink"
+                  size="md"
+                  radius="md"
+                  onClick={() => onOpen(step.stageCode)}
+                >
+                  Открыть этап
+                </Button>
+              </Stack>
+            </>
+          ) : (
+            <Stack gap={8}>
+              <StatusTag bg="#04E061" style={{ alignSelf: 'flex-start' }}>
+                все готово
+              </StatusTag>
+              <Text fz={22} fw={500}>
+                Все задачи адаптации выполнены
+              </Text>
+            </Stack>
+          )}
+        </Paper>
+
+        {path.stages.length > 0 && (
+          <StageCarousel
+            stages={path.stages}
+            selectedCode={stage?.code ?? current?.code ?? ''}
+            onOpen={onOpen}
+          />
+        )}
+
+        {stage ? (
+          <Stack gap="sm" className="ab-pop" style={{ minWidth: 0 }}>
+            <Group justify="space-between" gap={8}>
+              <Text component="h2" fz={20} fw={500} m={0}>
+                Этап {stage.code} · {stage.title}
+              </Text>
+              <Button variant="outline" color="ink" size="sm" onClick={() => onOpen(null)}>
+                К целям
               </Button>
             </Group>
-          </Group>
+            <StageDetail
+              stage={stage}
+              onComplete={onComplete}
+              onAsk={onAsk}
+              onSetStatus={onSetStatus}
+              busyTaskId={busyTaskId}
+            />
+          </Stack>
         ) : (
-          <Stack className="ab-pop" gap={20} style={{ flex: '1 1 320px', minWidth: 0 }}>
-            <div>
-              <Title order={2} fz={22}>
-                Прогресс адаптации
-              </Title>
-              <Text size="sm" c="ink.5" mt={6}>
-                Каждое деление кольца – одна задача.
-              </Text>
-            </div>
-            <Group gap={12} grow>
-              <Counter value={path.progress.done} label="выполнено" bg="#C9FFBF" />
-              <Counter value={path.progress.inProgress} label="в работе" bg="#BADAFB" />
-              <Counter value={path.progress.todo} label="впереди" bg="#F4F4F4" />
-            </Group>
-            <WeekTrack week={path.week} />
-          </Stack>
-        )}
-      </Paper>
-
-      {stage ? (
-        <StageDetail
-          stage={stage}
-          onComplete={onComplete}
-          onAsk={onAsk}
-          onSetStatus={onSetStatus}
-          busyTaskId={busyTaskId}
-        />
-      ) : (
-        <>
-          <Stack className="ab-rise" gap="sm">
-            <Group justify="space-between" align="baseline">
-              <Title order={2}>Этапы адаптации</Title>
-              <Text size="sm" c="ink.5">
-                Нажми на этап, чтобы увидеть задачи
-              </Text>
-            </Group>
-            <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }} spacing="md">
-              {path.stages.map((s) => (
-                <StageCard key={s.id} stage={s} onOpen={onOpen} />
-              ))}
-            </SimpleGrid>
-          </Stack>
-          <SimpleGrid className="ab-rise-2" cols={{ base: 1, md: 2 }} spacing="lg">
-            {path.nextStep ? (
-              <NextStepCard
-                step={path.nextStep}
-                onAsk={() =>
-                  onAsk?.({
-                    id: path.nextStep!.taskId,
-                    title: path.nextStep!.title,
-                    action: path.nextStep!.action,
-                  })
-                }
-                onOpenStage={() => onOpen(path.nextStep!.stageCode)}
-              />
-            ) : (
-              <Paper radius="lg" p="lg">
-                <StatusTag bg="#04E061">все готово</StatusTag>
-                <Text fz={24} fw={500} mt="md">
-                  Все задачи адаптации выполнены
-                </Text>
-              </Paper>
-            )}
-            <MeetingCard mentor={path.intern.mentor} meeting={path.nextMeeting} now={now} />
+          <div className="ab-rise-2" style={{ minWidth: 0 }}>
             {goals}
-          </SimpleGrid>
-        </>
-      )}
+          </div>
+        )}
+      </div>
+
       {mentorMode && (
         <Text size="xs" c="ink.5">
           Ты смотришь путь стажера как наставник: статусы задач можно менять.
@@ -183,18 +192,5 @@ export function PathScreen({
         Демо-версия: данные синтетические, инструкции не являются регламентами Авито.
       </Text>
     </Stack>
-  )
-}
-
-function Counter({ value, label, bg }: { value: number; label: string; bg: string }) {
-  return (
-    <div style={{ background: bg, padding: '12px 14px' }}>
-      <Text fz={28} fw={500} lh={1} style={{ letterSpacing: '-0.03em' }}>
-        {value}
-      </Text>
-      <Text size="xs" mt={4}>
-        {label}
-      </Text>
-    </div>
   )
 }

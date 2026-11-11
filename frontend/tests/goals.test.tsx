@@ -12,35 +12,55 @@ const T = { timeout: 3000 }
 afterEach(() => resetGoalsMock())
 
 describe('Цели стажировки', () => {
-  it('стажер видит согласованные цели и отмечает прогресс кликом', async () => {
+  it('стажер видит цели с шагами; прогресс не кликается', async () => {
     loginAs('intern_anna')
     renderApp('/')
     expect(await screen.findByText('Мои цели на стажировку', {}, T)).toBeInTheDocument()
     expect(screen.getByText(/согласованы с Олегом .* · от OKR команды/)).toBeInTheDocument()
-    const goal = screen.getByRole('button', { name: /Разобраться в сервисе авторизации: 10%/ })
+    const goal = screen.getByLabelText('Разобраться в сервисе авторизации: 25%')
     expect(
       within(goal).getByText('критерий: провести демо команде на 8 неделе'),
     ).toBeInTheDocument()
-    await userEvent.click(goal)
+    expect(within(goal).getByText('1 из 4 шагов')).toBeInTheDocument()
+    const steps = within(goal).getByRole('list', { name: /Шаги цели/ })
+    expect(within(steps).getAllByRole('listitem')).toHaveLength(4)
+    expect(within(steps).getByText('· этап 01')).toBeInTheDocument()
+    expect(within(steps).getAllByText('· наставник').length).toBeGreaterThan(0)
     expect(
-      await screen.findByRole('button', { name: /Разобраться в сервисе авторизации: 35%/ }, T),
-    ).toBeInTheDocument()
+      screen.queryByRole('button', { name: /Разобраться в сервисе авторизации/ }),
+    ).not.toBeInTheDocument()
   })
 
-  it('ошибка сохранения откатывает прогресс', async () => {
+  it('цель без шагов (старый ответ backend) показывает полоску процента', async () => {
     server.use(
-      http.post(`${API_URL}/api/goals/:goalId/progress`, () =>
-        HttpResponse.json({ error: { code: 'internal_error', message: 'x' } }, { status: 500 }),
+      http.get(`${API_URL}/api/goals`, () =>
+        HttpResponse.json({
+          internId: 'u-anna',
+          agreed: null,
+          fromOkr: false,
+          goals: [
+            {
+              id: 'g',
+              position: 1,
+              title: 'Цель без шагов',
+              criterion: 'к 4 неделе',
+              dueWeek: 4,
+              progressPct: 40,
+              okr: null,
+              lastUpdate: null,
+              updatedAt: '2026-11-10T10:00:00Z',
+              createdBy: null,
+            },
+          ],
+          okrs: [],
+          canEdit: false,
+          canAgree: false,
+        }),
       ),
     )
     loginAs('intern_anna')
     renderApp('/')
-    await userEvent.click(
-      await screen.findByRole('button', { name: /Пройти путь задачи до релиза: 0%/ }, T),
-    )
-    expect(
-      await screen.findByRole('button', { name: /Пройти путь задачи до релиза: 0%/ }, T),
-    ).toBeInTheDocument()
+    expect(await screen.findByLabelText('Цель без шагов: 40%', {}, T)).toBeInTheDocument()
   })
 
   it('у стажера без целей – подсказка про встречу с руководителем', async () => {

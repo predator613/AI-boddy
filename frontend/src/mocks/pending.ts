@@ -5,7 +5,7 @@ import { HttpResponse, delay, http } from 'msw'
 import { API_URL } from '../api/client'
 import type { TChatMessage, TKnowledgeBase, TRequestItem } from '../schemas/assistant'
 import { setMockTaskStatus } from './pathData'
-import { mentorHandlers } from './mentorData'
+import { calendarHandlers, mentorHandlers } from './mentorData'
 
 type Payload = Record<string, unknown>
 interface PendingAction {
@@ -467,4 +467,5 @@ export const assistantHandlers = [
 // Эндпоинты, которых еще нет в backend: MSW перехватывает их и при работе с настоящим backend
 // (main.tsx, VITE_PENDING_MOCKS). Сейчас это кабинет наставника и чат стажера с наставником
 // (docs/api-mentor-console.md). Когда backend реализует ручку – удалите ее из mentorHandlers.
-export const pendingHandlers = [...mentorHandlers]
+// Календарь стажера (docs/api-intern-calendar.md) – тоже пока мок.
+export const pendingHandlers = [...mentorHandlers, ...calendarHandlers]
