@@ -77,6 +77,20 @@ body {
 .ab-marker {
   padding: 0 6px;
 }
+.ab-row {
+  transition: background 0.15s ease;
+  border-radius: 12px;
+}
+.ab-row:hover {
+  background: #f4f4f4;
+}
+.ab-nudge {
+  transition: transform 0.15s ease;
+}
+.ab-nudge:hover {
+  transform: translateX(3px);
+}
+
 .ab-hand {
   font-family: Caveat, cursive;
   font-weight: 500;

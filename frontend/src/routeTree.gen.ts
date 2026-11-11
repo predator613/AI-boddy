@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthIndexRouteImport } from './routes/_auth/index'
+import { Route as AuthCalendarRouteImport } from './routes/_auth/calendar'
 import { Route as AuthChatRouteImport } from './routes/_auth/chat'
 import { Route as AuthInboxRouteImport } from './routes/_auth/inbox'
 import { Route as AuthKbRouteImport } from './routes/_auth/kb'
@@ -36,6 +37,11 @@ const LoginRoute = LoginRouteImport.update({
 const AuthIndexRoute = AuthIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthCalendarRoute = AuthCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthChatRoute = AuthChatRouteImport.update({
@@ -97,6 +103,7 @@ const AuthInternsInternIdRoute = AuthInternsInternIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AuthIndexRoute
   '/login': typeof LoginRoute
+  '/calendar': typeof AuthCalendarRoute
   '/chat': typeof AuthChatRoute
   '/inbox': typeof AuthInboxRoute
   '/kb': typeof AuthKbRoute
@@ -111,6 +118,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/calendar': typeof AuthCalendarRoute
   '/chat': typeof AuthChatRoute
   '/inbox': typeof AuthInboxRoute
   '/kb': typeof AuthKbRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_auth': typeof AuthRouteWithChildren
   '/login': typeof LoginRoute
+  '/_auth/calendar': typeof AuthCalendarRoute
   '/_auth/chat': typeof AuthChatRoute
   '/_auth/inbox': typeof AuthInboxRoute
   '/_auth/kb': typeof AuthKbRoute
@@ -146,6 +155,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/calendar'
     | '/chat'
     | '/inbox'
     | '/kb'
@@ -160,6 +170,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/calendar'
     | '/chat'
     | '/inbox'
     | '/kb'
@@ -176,6 +187,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_auth'
     | '/login'
+    | '/_auth/calendar'
     | '/_auth/chat'
     | '/_auth/inbox'
     | '/_auth/kb'
@@ -216,6 +228,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/calendar': {
+      id: '/_auth/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof AuthCalendarRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/chat': {
@@ -299,6 +318,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthRouteChildren {
+  AuthCalendarRoute: typeof AuthCalendarRoute
   AuthChatRoute: typeof AuthChatRoute
   AuthInboxRoute: typeof AuthInboxRoute
   AuthKbRoute: typeof AuthKbRoute
@@ -314,6 +334,7 @@ interface AuthRouteChildren {
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
+  AuthCalendarRoute: AuthCalendarRoute,
   AuthChatRoute: AuthChatRoute,
   AuthInboxRoute: AuthInboxRoute,
   AuthKbRoute: AuthKbRoute,

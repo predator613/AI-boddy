@@ -1,13 +1,14 @@
 .chat {
+  /* как в мессенджере: экран не растет вместе с перепиской, прокручиваются только сообщения */
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .header {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  flex: none;
   height: 72px;
   box-sizing: border-box;
   padding: 0 32px;
@@ -20,9 +21,14 @@
 
 .scroll {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 32px;
   display: flex;
   justify-content: center;
+  scrollbar-width: thin;
+  scrollbar-color: #d6d6d6 transparent;
 }
 
 .column {
@@ -31,12 +37,12 @@
 }
 
 .composer {
-  position: sticky;
-  bottom: 0;
+  flex: none;
   padding: 12px 32px 24px;
   display: flex;
   justify-content: center;
-  background: linear-gradient(to top, #f4f4f4 80%, rgba(244, 244, 244, 0));
+  background: #f4f4f4;
+  border-top: 1px solid #ededed;
 }
 
 .chip {
@@ -64,6 +70,9 @@
 }
 
 @media (max-width: 720px) {
+  .chat {
+    height: calc(100dvh - 64px);
+  }
   .header,
   .scroll,
   .composer {

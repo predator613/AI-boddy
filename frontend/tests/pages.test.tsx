@@ -53,9 +53,15 @@ describe('Справочник', () => {
     renderApp('/kb')
     expect(await screen.findByText('Популярное', {}, T)).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: /Отпуска и отгулы/ }))
+    const sections = screen.getByRole('navigation', { name: 'Разделы справочника' })
+    await userEvent.click(within(sections).getByRole('button', { name: /Отпуска и отгулы/ }))
     expect(await screen.findByText('Как взять отгул')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Все разделы' }))
+    expect(within(sections).getByRole('button', { name: /Отпуска и отгулы/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Назад' }))
+    expect(await screen.findByText('Популярное')).toBeInTheDocument()
 
     await userEvent.type(screen.getByLabelText('Поиск по справочнику'), 'ревью')
     expect(await screen.findByText('Найдено: 1', {}, T)).toBeInTheDocument()
@@ -70,9 +76,10 @@ describe('Справочник', () => {
 
   it('после «Моего пути» показывает статьи текущего этапа', async () => {
     renderApp('/')
-    await screen.findByText('Прогресс адаптации', {}, T)
+    await screen.findByText('Позади 33% пути адаптации!', {}, T)
     await userEvent.click(screen.getByRole('link', { name: 'Справочник' }))
-    expect(await screen.findByText('Нужно на твоем этапе', {}, T)).toBeInTheDocument()
+    expect(await screen.findByText('Часто задаваемые вопросы', {}, T)).toBeInTheDocument()
+    expect(screen.getByText('Этап 02')).toBeInTheDocument()
   })
 
   it('ссылка на статью открывает ее', async () => {

@@ -10,32 +10,41 @@ const T = { timeout: 3000 }
 describe('Мой путь', () => {
   beforeEach(() => loginAs('intern_anna'))
 
-  it('показывает кольцо прогресса, этапы, следующий шаг и наставника', async () => {
+  it('показывает кольцо прогресса, этапы-карточки, следующий шаг и неделю', async () => {
     renderApp('/')
     expect(
-      await screen.findByRole('img', { name: /Пройдено 33% адаптации: 5 из 15 задач/ }, T),
+      await screen.findByRole('img', { name: /Пройдено 33%: 5 из 15 задач/ }, T),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Этап 02: Доступы, 2 из 4/ })).toBeInTheDocument()
+    expect(screen.getByText('Позади 33% пути адаптации!')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Этап 02: Доступы, 2 из 4/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
     expect(screen.getByText('Следующий шаг')).toBeInTheDocument()
     expect(screen.getAllByText('Получить доступ к GitLab').length).toBeGreaterThan(0)
-    expect(screen.getByText('Игорь · твой наставник')).toBeInTheDocument()
+    expect(screen.getByLabelText(/Неделя 2 из 24/)).toBeInTheDocument()
     expect(screen.getByText(/ты на этапе «Доступы»/)).toBeInTheDocument()
+    expect(screen.getByText('2 / 4')).toBeInTheDocument()
   })
 
-  it('этап раскрывается: задачи, доступы справа, совет; «Все этапы» сворачивает', async () => {
+  it('клик по карточке этапа показывает его задачи вместо целей, «К целям» возвращает', async () => {
     const router = renderApp('/')
+    await screen.findByText('Мои цели на стажировку', {}, T)
     await userEvent.click(await screen.findByRole('button', { name: /Этап 02: Доступы/ }, T))
     const list = await screen.findByRole('list', { name: 'Задачи этапа Доступы' })
     expect(within(list).getAllByRole('listitem')).toHaveLength(4)
     expect(screen.getByText('Статус доступов')).toBeInTheDocument()
-    expect(screen.getByText('Совет')).toBeInTheDocument()
+    expect(screen.queryByText('Мои цели на стажировку')).not.toBeInTheDocument()
     expect(router.state.location.search).toEqual({ stage: '02' })
 
-    await userEvent.click(screen.getByRole('tab', { name: /Этап 01/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Этап 01: Знакомство/ }))
     expect(await screen.findByText('Твоя команда')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Все этапы' }))
-    expect(await screen.findByText('Этапы адаптации')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /Следующий этап/ }))
+    expect(await screen.findByRole('list', { name: 'Задачи этапа Доступы' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'К целям' }))
+    expect(await screen.findByText('Мои цели на стажировку', {}, T)).toBeInTheDocument()
   })
 
   it('«Уже сделано» отмечает задачу и двигает следующий шаг', async () => {
@@ -88,6 +97,6 @@ describe('Мой путь', () => {
     renderApp('/')
     expect(await screen.findByRole('alert', {}, T)).toHaveTextContent('Не удалось загрузить')
     await userEvent.click(screen.getByRole('button', { name: 'Повторить' }))
-    expect(await screen.findByText('Прогресс адаптации', {}, T)).toBeInTheDocument()
+    expect(await screen.findByText('Позади 33% пути адаптации!', {}, T)).toBeInTheDocument()
   })
 })
