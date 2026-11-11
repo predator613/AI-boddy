@@ -11,14 +11,15 @@ import (
 
 // KBStore – что нужно сервису справочника от базы.
 type KBStore interface {
-	Sections(ctx context.Context, teamID string) ([]models.KBSection, error)
-	Articles(ctx context.Context, teamID string) ([]models.KBArticle, error)
+	Sections(ctx context.Context, teamID, viewerID string) ([]models.KBSection, error)
+	Articles(ctx context.Context, teamID, viewerID string) ([]models.KBArticle, error)
 	Terms(ctx context.Context, teamID string) ([]models.KBTerm, error)
-	Article(ctx context.Context, teamID, id string) (*models.KBArticleDetail, error)
-	Search(ctx context.Context, teamID, query string, limit int, onlyAI bool) ([]models.KBSearchMatch, error)
+	Article(ctx context.Context, teamID, viewerID, id string) (*models.KBArticleDetail, error)
+	Search(ctx context.Context, teamID, viewerID, query string, limit int, onlyAI bool) ([]models.KBSearchMatch, error)
 }
 
-// KB – справочник. Пользователь видит общие материалы и материалы своей команды.
+// KB – справочник. Пользователь видит общие материалы и материалы своей команды,
+// ответы наставника – только своего.
 type KB struct {
 	store KBStore
 	users UserLookup
@@ -43,10 +44,10 @@ func (s *KB) Get(ctx context.Context, viewerID string) (*models.KnowledgeBase, e
 		return nil, err
 	}
 	out := &models.KnowledgeBase{}
-	if out.Sections, err = s.store.Sections(ctx, team); err != nil {
+	if out.Sections, err = s.store.Sections(ctx, team, viewerID); err != nil {
 		return nil, err
 	}
-	if out.Articles, err = s.store.Articles(ctx, team); err != nil {
+	if out.Articles, err = s.store.Articles(ctx, team, viewerID); err != nil {
 		return nil, err
 	}
 	if out.Terms, err = s.store.Terms(ctx, team); err != nil {
@@ -61,7 +62,7 @@ func (s *KB) Article(ctx context.Context, viewerID, id string) (*models.KBArticl
 	if err != nil {
 		return nil, err
 	}
-	a, err := s.store.Article(ctx, team, id)
+	a, err := s.store.Article(ctx, team, viewerID, id)
 	if errors.Is(err, repository.ErrNotFound) {
 		return nil, ErrNotFound
 	}
@@ -87,7 +88,7 @@ func (s *KB) Search(ctx context.Context, viewerID, query string, limit int) (*mo
 	if err != nil {
 		return nil, err
 	}
-	res, err := s.store.Search(ctx, team, q, limit, false)
+	res, err := s.store.Search(ctx, team, viewerID, q, limit, false)
 	if err != nil {
 		return nil, err
 	}

@@ -6,6 +6,8 @@ export function errorText(error: unknown): string {
     if (error.code === 'network_error') return error.message
     if (error.status === 403) return 'Этот раздел недоступен для твоей роли.'
     if (error.status === 404) return 'Ничего не нашлось или у тебя нет доступа.'
+    if (error.status === 503)
+      return 'Сервис заявок сейчас не отвечает. Попробуй еще раз через минуту.'
   }
   return 'Не удалось загрузить данные. Попробуй еще раз.'
 }

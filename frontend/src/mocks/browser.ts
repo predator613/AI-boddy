@@ -6,4 +6,5 @@ import { pendingHandlers } from './pending'
 export const fullWorker = () => setupWorker(...allHandlers)
 
 // Режим «вместе с backend»: MSW отвечает только на эндпоинты, которых в backend еще нет.
-export const pendingWorker = () => setupWorker(...pendingHandlers)
+// null – перехватывать нечего, MSW не запускается.
+export const pendingWorker = () => (pendingHandlers.length ? setupWorker(...pendingHandlers) : null)

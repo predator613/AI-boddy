@@ -15,6 +15,7 @@ const (
 	CodeForbidden          = "forbidden"
 	CodeMethodNotAllowed   = "method_not_allowed"
 	CodeInternal           = "internal_error"
+	CodeUnavailable        = "service_unavailable" // внешняя система (заявки) не ответила
 )
 
 type errorBody struct {

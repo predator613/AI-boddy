@@ -8,14 +8,30 @@
 
 ```bash
 docker compose up --build -d
-docker compose ps          # backend, postgres, redis должны быть healthy
+docker compose ps          # backend, mock-services, postgres, redis должны быть healthy
 ```
 
 Проверка: http://localhost:8080/api/health → `{"status":"ok"}`
 
 Интерфейс: **http://localhost:3000** – войти под любым тестовым пользователем (карточки на странице входа). Стажер видит «Мой путь», наставник и руководитель – своих стажеров. Подробнее про фронтенд: `frontend/README.md`.
 
-Чат и заявки backend пока не реализует: на эти запросы в браузере отвечает имитация (MSW), контракт для backend – `docs/api-frontend-pending.md`. Справочник и цели стажировки отдает backend.
+Все экраны работают с backend: «Мой путь», цели, справочник, чат с AI-buddy и заявки. Корпоративную систему заявок имитирует контейнер `mock-services` (http://localhost:8090/openapi.yaml).
+
+### AI-buddy без ключа и с моделью
+
+По умолчанию `LLM_PROVIDER=mock` – офлайн-режим без ключа и без сети: помощник определяет намерение по ключевым словам и отвечает фрагментом справочника. Весь сценарий (права, подтверждение, заявка, статус) работает так же, как с моделью.
+
+Подключить модель – любой OpenAI-совместимый API (Yandex AI Studio, Cloud.ru, Avito A-Vibe через Ollama; подробно – `docs/llm-setup.md`). В `.env`:
+
+```
+LLM_PROVIDER=openai_compat
+LLM_BASE_URL=<адрес API, оканчивается на /v1>
+LLM_API_KEY=<ключ>
+LLM_MODEL=<имя модели>
+LLM_PROJECT=<ID каталога, только для Yandex AI Studio>
+```
+
+и `docker compose up -d backend`. Модель должна поддерживать function calling (tools). Сравнение провайдеров и пошаговое получение ключа: `docs/llm-setup.md` (рекомендуется Yandex AI Studio). GPU не нужен: модель вызывается по API. Если модель не ответила за `LLM_TIMEOUT` (20 с), ответ собирается офлайн.
 
 Остановить: `docker compose down`. Удалить и базу тоже (начать с чистого листа): `docker compose down -v`.
 
@@ -56,7 +72,14 @@ curl -X POST http://localhost:8080/api/goals/f3000000-0000-4000-8000-00000000000
 # 5. справочник и поиск
 curl http://localhost:8080/api/kb -H "Authorization: Bearer <token>"
 curl -G http://localhost:8080/api/kb/search --data-urlencode "q=как взять отгул" -H "Authorization: Bearer <token>"
+
+# 6. главный сценарий: доступ к GitLab через AI-buddy (actionId – из карточки confirm)
+curl -X POST http://localhost:8080/api/chat/messages -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d "{\"text\":\"Запроси доступ к GitLab\"}"
+curl -X POST http://localhost:8080/api/chat/actions/<actionId>/confirm -H "Authorization: Bearer <token>"
+curl http://localhost:8080/api/requests -H "Authorization: Bearer <token>"   # через 45 с статус done
 ```
+
+В интерфейсе то же самое: войти как `intern_anna` → «Мой путь» → «Оформить с AI-buddy» у задачи «Получить доступ к GitLab» → «Подтвердить». Через 45 секунд (`MOCK_DECISION_DELAY`) на странице «Заявки» статус «выполнена», а пункт пути закрыт. Отказ согласующего можно показать вручную: `POST http://localhost:8090/v1/tickets/<ACC-номер>/decision` с `{"approve":false,"reason":"…"}` (номер – в `backend/api.http`).
 
 Или в VS Code: файл `backend/api.http` (расширение REST Client).
 
@@ -70,7 +93,15 @@ docker compose --profile test run --rm backend-tests
 - `backend/coverage/coverage.out` – профиль покрытия,
 - `backend/coverage/coverage.html` – отчет для браузера.
 
-Покрытие считается по всему прикладному коду backend (`-coverpkg=./...`), тесты и зависимости не учитываются. Текущее значение – около 88%.
+Покрытие считается по всему прикладному коду backend, кроме имитации корпоративных систем (`internal/mockservices`, `cmd/`). Текущее значение – около 88%.
+
+Общий отчет по фронту и бэку одним числом (покрытые строки вместе, а не среднее двух процентов):
+
+```bash
+docker compose --profile test run --rm backend-tests
+docker compose --profile test run --rm frontend-tests
+python scripts/coverage_summary.py      # итог около 90%, отчет в coverage/summary.md
+```
 
 Локально без Docker (нужен Go и запущенный postgres из compose): `cd backend && go test -p 1 -cover -coverpkg=./... ./...` с переменной `TEST_DATABASE_URL=postgres://buddy:buddy@localhost:5432/ai_buddy_test?sslmode=disable`. Без этой переменной интеграционные тесты пропускаются.
 
@@ -97,6 +128,13 @@ docker compose --profile test run --rm backend-tests
 | JWT_TTL | 24h | срок жизни токена |
 | DEMO_MODE | false (в compose – true) | включает GET /api/auth/test-users |
 | CORS_ORIGINS | http://localhost:5173 | разрешенные адреса фронта через запятую |
+| LLM_PROVIDER | mock | mock (без ключа) или openai_compat |
+| LLM_BASE_URL, LLM_API_KEY, LLM_MODEL | – | подключение OpenAI-совместимой модели |
+| LLM_PROJECT | – | ID каталога для Yandex AI Studio (заголовок OpenAI-Project) |
+| LLM_TIMEOUT | 20s | сколько ждать модель, потом офлайн-ответ |
+| MOCK_SERVICES_URL | – (в compose – http://mock-services:8090) | система заявок; пусто – имитация внутри backend |
+| MOCK_DECISION_DELAY | 45s | через сколько имитация «согласует» заявку (контейнер mock-services) |
+| REQUEST_SYNC_INTERVAL | 5s | как часто забирать решения по заявкам |
 
 ## API (этап 1 – авторизация)
 
@@ -147,9 +185,23 @@ docker compose --profile test run --rm backend-tests
 | PATCH/DELETE | /api/goals/{id} | так же | изменить, удалить |
 | POST | /api/interns/{id}/goals/agree | руководитель | согласовать цели |
 
+## API (этап 4 – чат с AI-buddy и заявки)
+
+Контракт: `docs/api-chat-requests.md`, спецификация со схемой последовательности: `specs/003-access-request`.
+
+| Метод | Путь | Что делает |
+|---|---|---|
+| POST | /api/chat/messages | вопрос помощнику (`text`, `action` и `taskId` задачи пути) |
+| GET | /api/chat/messages | последние сообщения |
+| POST | /api/chat/actions/{id}/confirm | подтвердить заявку |
+| POST | /api/chat/actions/{id}/cancel | отказаться |
+| GET | /api/requests | мои заявки |
+
+Помощник отвечает из справочника со ссылкой на статью, готовит заявки на доступ и отгул (создаются только после подтверждения), не оформляет доступ, запрещенный роли, показывает статусы и передает вопрос наставнику. Наставник переписку стажера с помощником не видит, только переданные ему вопросы.
+
 ## База данных
 
-Миграции 005–011 приводят схему к 3НФ и заполняют демо-данные: справочники (роли, сервисы, уровни прав read/edit/admin, проекты с владельцами), справочник знаний с полнотекстовым поиском, цели и OKR, заявки, чат, уведомления, события для метрик, feature flags. Всего 54 таблицы. Даты в демо-данных считаются от дня применения миграций. Чтобы пересоздать демо-данные на сегодня: `docker compose down -v` и `docker compose up --build`.
+Миграции 005–012 приводят схему к 3НФ и заполняют демо-данные: справочники (роли, сервисы, уровни прав read/edit/admin, проекты с владельцами), справочник знаний с полнотекстовым поиском, цели и OKR, заявки, чат, уведомления, события для метрик, feature flags. Всего 55 таблиц. Даты в демо-данных считаются от дня применения миграций. Чтобы пересоздать демо-данные на сегодня: `docker compose down -v` и `docker compose up --build`.
 
 ## Структура backend
 
@@ -159,8 +211,12 @@ backend/
 ├── internal/app              роутер, запуск и остановка сервера
 ├── internal/config           чтение переменных окружения
 ├── internal/database         подключение к БД и миграции
+├── cmd/mockservices          имитация системы заявок (отдельный контейнер)
 ├── internal/handlers         HTTP-обработчики
 ├── internal/httpx            единый формат JSON-ответов и ошибок
+├── internal/integrations     адаптер к системе заявок (заменяется на настоящую)
+├── internal/llm              модель: mock и OpenAI-совместимый API
+├── internal/mockservices     имитация системы заявок (не входит в покрытие)
 ├── internal/middleware       проверка JWT
 ├── internal/models           структуры ответов API
 ├── internal/repository       SQL-запросы

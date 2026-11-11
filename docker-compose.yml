@@ -42,10 +42,21 @@ services:
       JWT_TTL: ${JWT_TTL:-24h}
       DEMO_MODE: ${DEMO_MODE:-true}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      # LLM: mock работает без ключа; openai_compat – Yandex AI Studio, Cloud.ru, A-Vibe через Ollama (см. docs/llm-setup.md)
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_PROJECT: ${LLM_PROJECT:-}
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-20s}
+      MOCK_SERVICES_URL: http://mock-services:8090
+      REQUEST_SYNC_INTERVAL: ${REQUEST_SYNC_INTERVAL:-5s}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
       postgres:
+        condition: service_healthy
+      mock-services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
@@ -94,7 +105,23 @@ services:
     volumes:
       - ./frontend/coverage:/coverage
 
-  # Сюда позже добавятся agent и mock-services.
+  # Имитация корпоративной системы заявок (доступы, кадровые заявки). REST, контракт: GET /openapi.yaml.
+  # Согласующий «одобряет» заявку через MOCK_DECISION_DELAY; вручную – POST /v1/tickets/{ref}/decision.
+  mock-services:
+    build:
+      context: ./backend
+      target: mockservices
+    environment:
+      PORT: "8090"
+      MOCK_DECISION_DELAY: ${MOCK_DECISION_DELAY:-45s}
+    ports:
+      - "${MOCK_SERVICES_PORT:-8090}:8090"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8090/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
 
 volumes:
   pgdata:

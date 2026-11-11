@@ -19,7 +19,10 @@ import (
 	"ai-buddy/backend/internal/database"
 	"ai-buddy/backend/internal/handlers"
 	"ai-buddy/backend/internal/httpx"
+	"ai-buddy/backend/internal/integrations"
+	"ai-buddy/backend/internal/llm"
 	"ai-buddy/backend/internal/middleware"
+	"ai-buddy/backend/internal/mockservices"
 	"ai-buddy/backend/internal/repository"
 	"ai-buddy/backend/internal/services"
 	"ai-buddy/backend/migrations"
@@ -33,21 +36,36 @@ type AuthService interface {
 
 // Services – все сервисы, которые нужны роутеру.
 type Services struct {
-	Auth  AuthService
-	Path  handlers.PathService
-	KB    handlers.KBService
-	Goals handlers.GoalsService
+	Auth     AuthService
+	Path     handlers.PathService
+	KB       handlers.KBService
+	Goals    handlers.GoalsService
+	Chat     handlers.ChatService
+	Requests *services.Requests // и страница «Заявки», и синхронизация статусов
 }
 
-// NewServices собирает сервисы поверх базы.
-func NewServices(cfg config.Config, pool *pgxpool.Pool) Services {
+// NewServices собирает сервисы поверх базы, модели и системы заявок.
+func NewServices(cfg config.Config, pool *pgxpool.Pool, log *slog.Logger) (Services, error) {
 	users := repository.NewUsers(pool)
-	return Services{
-		Auth:  services.NewAuth(users, cfg.JWTSecret, cfg.JWTTTL),
-		Path:  services.NewPath(repository.NewOnboarding(pool), users),
-		KB:    services.NewKB(repository.NewKB(pool), users),
-		Goals: services.NewGoals(repository.NewGoals(pool), users),
+	model, err := llm.New(llm.Config{Provider: cfg.LLMProvider, BaseURL: cfg.LLMBaseURL, APIKey: cfg.LLMAPIKey, Model: cfg.LLMModel, Project: cfg.LLMProject})
+	if err != nil {
+		return Services{}, err
 	}
+	var corp integrations.Corporate = mockservices.NewStore(cfg.MockDecisionDelay)
+	if cfg.MockServicesURL != "" {
+		corp = integrations.NewHTTP(cfg.MockServicesURL, nil)
+	}
+	reqStore := repository.NewRequests(pool)
+	kb := repository.NewKB(pool)
+	reqs := services.NewRequests(reqStore, users, corp, log)
+	return Services{
+		Auth:     services.NewAuth(users, cfg.JWTSecret, cfg.JWTTTL),
+		Path:     services.NewPath(repository.NewOnboarding(pool), users),
+		KB:       services.NewKB(kb, users),
+		Goals:    services.NewGoals(repository.NewGoals(pool), users),
+		Chat:     services.NewAgent(repository.NewChat(pool), reqStore, kb, users, corp, model, cfg.LLMTimeout, log),
+		Requests: reqs,
+	}, nil
 }
 
 // NewRouter описывает все маршруты API.
@@ -57,7 +75,7 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Recoverer)
-	r.Use(chimw.Timeout(10 * time.Second))
+	r.Use(chimw.Timeout(30 * time.Second)) // ответ модели может идти дольше простых запросов
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: cfg.CORSOrigins,
 		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -71,6 +89,7 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 	pathH := handlers.NewPath(svc.Path, log)
 	kbH := handlers.NewKB(svc.KB, log)
 	goalsH := handlers.NewGoals(svc.Goals, log)
+	chatH := handlers.NewChat(svc.Chat, svc.Requests, log)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", handlers.Health)
@@ -107,6 +126,13 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 			r.Get("/interns/{internId}/goals", goalsH.OfIntern)
 			r.Post("/interns/{internId}/goals", goalsH.Create)
 			r.Post("/interns/{internId}/goals/agree", goalsH.Agree)
+
+			// Чат с помощником и заявки.
+			r.Get("/chat/messages", chatH.History)
+			r.Post("/chat/messages", chatH.Send)
+			r.Post("/chat/actions/{actionId}/confirm", chatH.Confirm)
+			r.Post("/chat/actions/{actionId}/cancel", chatH.Cancel)
+			r.Get("/requests", chatH.Requests)
 
 			// Справочник.
 			r.Get("/kb", kbH.Get)
@@ -150,8 +176,19 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, ready chan<- 
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
+	svc, err := NewServices(cfg, pool, log)
+	if err != nil {
+		return err
+	}
+	syncCtx, stopSync := context.WithCancel(ctx)
+	defer stopSync()
+	if cfg.RequestSync > 0 {
+		go svc.Requests.Run(syncCtx, cfg.RequestSync)
+	}
+	log.Info("assistant ready", "llm", cfg.LLMProvider, "requestService", withDefault(cfg.MockServicesURL, "in-process mock"))
+
 	srv := &http.Server{
-		Handler:           NewRouter(cfg, NewServices(cfg, pool), log),
+		Handler:           NewRouter(cfg, svc, log),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -178,4 +215,11 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, ready chan<- 
 	}
 	log.Info("backend stopped")
 	return nil
+}
+
+func withDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
 }

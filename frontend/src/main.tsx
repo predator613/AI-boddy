@@ -26,7 +26,7 @@ declare module '@tanstack/react-router' {
 
 // Моки MSW:
 // - npm run dev:mock или VITE_USE_MOCKS=true – все запросы, backend не нужен;
-// - по умолчанию – только эндпоинты, которых еще нет в backend (чат, заявки, справочник).
+// - по умолчанию – только эндпоинты, которых еще нет в backend (src/mocks/pending.ts: кабинет наставника).
 //   Выключить: VITE_PENDING_MOCKS=false.
 async function enableMocks() {
   const env = import.meta.env
@@ -34,6 +34,7 @@ async function enableMocks() {
   if (!full && env.VITE_PENDING_MOCKS === 'false') return
   const mocks = await import('./mocks/browser')
   const worker = full ? mocks.fullWorker() : mocks.pendingWorker()
+  if (!worker) return
   await worker.start({ onUnhandledFrame: 'bypass', quiet: !full })
 }
 

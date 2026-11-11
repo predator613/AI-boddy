@@ -37,7 +37,12 @@ export function RequestsPage({
   onSelect: (id: string) => void
 }) {
   const [filter, setFilter] = useState<Filter>('all')
-  const query = useQuery({ queryKey: ['requests'], queryFn: getRequests })
+  // Пока есть заявки на согласовании, статусы обновляются сами раз в 10 секунд.
+  const query = useQuery({
+    queryKey: ['requests'],
+    queryFn: getRequests,
+    refetchInterval: (q) => (q.state.data?.some((r) => r.status === 'waiting') ? 10_000 : false),
+  })
 
   return (
     <Page maxWidth={1400}>

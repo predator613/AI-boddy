@@ -50,7 +50,9 @@ func newServer(t *testing.T, demo bool) *httptest.Server {
 	_, err = database.Migrate(ctx, pool, migrations.FS)
 	require.NoError(t, err)
 
-	srv := httptest.NewServer(NewRouter(cfg, NewServices(cfg, pool), quietLog))
+	svc, err := NewServices(cfg, pool, quietLog)
+	require.NoError(t, err)
+	srv := httptest.NewServer(NewRouter(cfg, svc, quietLog))
 	t.Cleanup(srv.Close)
 	return srv
 }

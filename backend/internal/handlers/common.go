@@ -42,6 +42,8 @@ func serviceError(w http.ResponseWriter, log *slog.Logger, err error) {
 		httpx.Error(w, http.StatusForbidden, httpx.CodeForbidden, "not allowed for your role")
 	case errors.Is(err, services.ErrNotFound):
 		httpx.NotFound(w, nil)
+	case errors.Is(err, services.ErrUnavailable):
+		httpx.Error(w, http.StatusServiceUnavailable, httpx.CodeUnavailable, "request service is unavailable, try again later")
 	default:
 		log.Error("request failed", "err", err)
 		httpx.Error(w, http.StatusInternalServerError, httpx.CodeInternal, "internal server error")

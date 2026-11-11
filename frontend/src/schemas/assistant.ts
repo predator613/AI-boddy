@@ -1,5 +1,4 @@
-// Схемы чата, заявок и справочника. Справочник уже отдает backend (docs/api-goals-kb.md),
-// чат и заявки пока имитирует MSW (src/mocks/pending.ts), контракт – docs/api-frontend-pending.md.
+// Схемы чата, заявок и справочника. Контракты: docs/api-chat-requests.md, docs/api-goals-kb.md.
 import { z } from 'zod'
 import { Action } from './path'
 
@@ -47,6 +46,8 @@ export const ChatReply = z.object({ messages: z.array(ChatMessage) })
 export const SendMessageInput = z.object({
   text: z.string().trim().min(1, 'Напиши сообщение').max(2000),
   action: Action.nullable().default(null),
+  // Задача «Моего пути», из которой пришел вопрос: backend закроет ее, когда заявка выполнится.
+  taskId: z.string().nullable().optional(),
 })
 
 export const KbSection = z.object({

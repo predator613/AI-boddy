@@ -3,7 +3,7 @@ import { API_URL } from '../api/client'
 import { MOCK_PASSWORD, mockTestUsers, mockToken, mockUsers } from './data'
 import { mockGoals, setMockGoalProgress } from './goalsData'
 import { buildMockPath, mockInterns, setMockTaskStatus } from './pathData'
-import { KB, pendingHandlers } from './pending'
+import { KB, assistantHandlers, pendingHandlers } from './pending'
 import { consoleHandlers } from './consoleData'
 
 const apiError = (status: number, code: string, message: string) =>
@@ -160,5 +160,6 @@ export const allHandlers = [
   ...pathHandlers,
   ...goalsKbHandlers,
   ...consoleHandlers,
+  ...assistantHandlers,
   ...pendingHandlers,
 ]

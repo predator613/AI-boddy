@@ -87,12 +87,13 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
   const ask = (
     question: string,
     action: TPathView['stages'][number]['tasks'][number]['action'] = null,
+    fromTask: string | null = null,
   ) => {
     const q = question.trim()
     if (!q || send.isPending) return
     setLastFailed(null)
     setMessages((prev) => [...prev, userMessage(q)])
-    send.mutate({ text: q, action })
+    send.mutate({ text: q, action, taskId: fromTask })
   }
 
   // Пришли из «Моего пути» или панели помощника – сразу отправляем вопрос (и действие задачи).
@@ -104,7 +105,7 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
     const task = taskId
       ? path?.stages.flatMap((s) => s.tasks).find((t) => t.id === taskId)
       : undefined
-    ask(initialQuestion, task?.action ?? null)
+    ask(initialQuestion, task?.action ?? null, task?.id ?? null)
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuestion, taskId])
 

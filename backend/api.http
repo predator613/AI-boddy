@@ -166,3 +166,42 @@ Authorization: Bearer {{login.response.body.token}}
 ### Поиск
 GET {{base}}/api/kb/search?q=как взять отгул
 Authorization: Bearer {{login.response.body.token}}
+
+### ===================== Чат с AI-buddy и заявки =====================
+
+### Анна просит доступ к GitLab: пояснение и карточка подтверждения
+# @name ask
+POST {{base}}/api/chat/messages
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{ "text": "Запроси доступ к GitLab" }
+
+### Подтвердить (actionId из второго сообщения)
+# @name confirm
+POST {{base}}/api/chat/actions/{{ask.response.body.messages[1].confirm.actionId}}/confirm
+Authorization: Bearer {{login.response.body.token}}
+
+### Мои заявки (через MOCK_DECISION_DELAY статус станет done)
+GET {{base}}/api/requests
+Authorization: Bearer {{login.response.body.token}}
+
+### Запрещенный доступ – отказ с причиной
+POST {{base}}/api/chat/messages
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{ "text": "дай доступ к логам продакшена" }
+
+### Вопрос в справочник
+POST {{base}}/api/chat/messages
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{ "text": "как устроено код-ревью?" }
+
+### Отклонить заявку вручную в mock-services (номер ACC-… – в базе: requests.external_ref)
+POST http://localhost:8090/v1/tickets/ACC-8001/decision
+Content-Type: application/json
+
+{ "approve": false, "reason": "Сначала пройди инструктаж по безопасности" }

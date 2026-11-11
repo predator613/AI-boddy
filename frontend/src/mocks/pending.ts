@@ -1,6 +1,6 @@
-// Имитация эндпоинтов, которых еще нет в backend: чат с помощником, заявки, справочник.
-// Работает и вместе с настоящим backend: MSW перехватывает только эти адреса
-// (см. main.tsx, VITE_PENDING_MOCKS). Когда backend их реализует – удалите обработчик отсюда.
+// Имитация чата с помощником и заявок для полного режима без backend (npm run dev:mock) и тестов.
+// Backend эти эндпоинты уже реализует (docs/api-chat-requests.md), поэтому вместе с настоящим
+// backend перехватываются только pendingHandlers внизу файла – то, чего в backend еще нет.
 import { HttpResponse, delay, http } from 'msw'
 import { API_URL } from '../api/client'
 import type { TChatMessage, TKnowledgeBase, TRequestItem } from '../schemas/assistant'
@@ -378,7 +378,7 @@ const reply = (messages: TChatMessage[]) => HttpResponse.json({ messages })
 const notFound = () =>
   HttpResponse.json({ error: { code: 'not_found', message: 'not found' } }, { status: 404 })
 
-export const pendingHandlers = [
+export const assistantHandlers = [
   http.post(`${API_URL}/api/chat/messages`, async ({ request }) => {
     const body = (await request.json().catch(() => null)) as {
       text?: string
@@ -438,7 +438,10 @@ export const pendingHandlers = [
   }),
 
   http.get(`${API_URL}/api/requests`, () => HttpResponse.json(requests)),
-  // Кабинет наставника и чат стажера с наставником (docs/api-mentor-console.md).
-  ...mentorHandlers,
   // GET /api/kb уже отдает backend: обработчик перенесен в handlers.ts (только полный режим без backend).
 ]
+
+// Эндпоинты, которых еще нет в backend: MSW перехватывает их и при работе с настоящим backend
+// (main.tsx, VITE_PENDING_MOCKS). Сейчас это кабинет наставника и чат стажера с наставником
+// (docs/api-mentor-console.md). Когда backend реализует ручку – удалите ее из mentorHandlers.
+export const pendingHandlers = [...mentorHandlers]

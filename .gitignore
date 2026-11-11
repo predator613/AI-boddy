@@ -7,3 +7,4 @@ backend/coverage/
 .idea/
 .DS_Store
 frontend/coverage/
+coverage/

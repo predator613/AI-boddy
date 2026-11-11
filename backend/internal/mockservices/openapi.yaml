@@ -1,0 +1,68 @@
+openapi: 3.0.3
+info:
+  title: Mock-services – имитация системы заявок
+  version: 1.0.0
+  description: >
+    Условная корпоративная система заявок на доступ и кадровых заявок. AI-buddy работает с ней через
+    адаптер internal/integrations. Для внедрения достаточно заменить адаптер на клиент настоящей
+    системы с тем же интерфейсом. Данные синтетические.
+paths:
+  /v1/tickets:
+    post:
+      summary: Создать заявку
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Order' }
+      responses:
+        '201': { description: Создана, content: { application/json: { schema: { $ref: '#/components/schemas/Ticket' } } } }
+        '400': { description: Неверный вид заявки }
+  /v1/tickets/{ref}:
+    get:
+      summary: Статус заявки
+      parameters: [{ name: ref, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Заявка, content: { application/json: { schema: { $ref: '#/components/schemas/Ticket' } } } }
+        '404': { description: Нет такой заявки }
+  /v1/tickets/{ref}/decision:
+    post:
+      summary: Решение согласующего (для ручной проверки сценария)
+      parameters: [{ name: ref, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                approve: { type: boolean }
+                reason: { type: string }
+      responses:
+        '200': { description: Решение принято, content: { application/json: { schema: { $ref: '#/components/schemas/Ticket' } } } }
+        '404': { description: Нет такой заявки }
+components:
+  schemas:
+    Order:
+      type: object
+      required: [kind, requester]
+      properties:
+        kind: { type: string, enum: [access, leave] }
+        requestNumber: { type: integer, description: Номер заявки в AI-buddy }
+        requester: { type: string }
+        approver: { type: string, description: Пусто – выдается автоматически }
+        service: { type: string, example: gitlab }
+        role: { type: string, example: developer }
+        project: { type: string, example: backend/auth-service }
+        accessLevel: { type: string, enum: [read, edit, admin] }
+        justification: { type: string }
+        leaveDate: { type: string, format: date }
+        leaveType: { type: string, example: day_off }
+        auto: { type: boolean, description: Выдать без согласования }
+    Ticket:
+      type: object
+      required: [ref, status]
+      properties:
+        ref: { type: string, example: ACC-8001 }
+        status: { type: string, enum: [waiting, approved, granted, rejected] }
+        reason: { type: string }
+        decidedAt: { type: string, format: date-time }

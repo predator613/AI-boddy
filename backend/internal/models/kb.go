@@ -62,4 +62,5 @@ type KBSearchMatch struct {
 	Snippet   string  `json:"snippet"`
 	StageCode *string `json:"stageCode"`
 	Score     float64 `json:"score"`
+	Coverage  float64 `json:"coverage"` // доля слов запроса, найденных в статье (0..1)
 }
