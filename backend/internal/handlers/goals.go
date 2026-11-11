@@ -18,6 +18,7 @@ type GoalsService interface {
 	Update(ctx context.Context, viewerID, goalID string, in services.GoalInput) (*models.Goal, error)
 	Delete(ctx context.Context, viewerID, goalID string) error
 	Progress(ctx context.Context, viewerID, goalID string, in services.ProgressInput) (*models.Goal, error)
+	Step(ctx context.Context, viewerID, goalID, stepID string, in services.StepInput) (*models.Goal, error)
 	Agree(ctx context.Context, viewerID, internID string) (*models.GoalsView, error)
 }
 
@@ -100,6 +101,20 @@ func (h *Goals) Progress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v, err := h.svc.Progress(r.Context(), id, chi.URLParam(r, "goalId"), in)
+	reply(w, h.log, http.StatusOK, v, err)
+}
+
+// Step – POST /api/goals/{goalId}/steps/{stepId}: {done}. Наставник или руководитель подтверждает шаг.
+func (h *Goals) Step(w http.ResponseWriter, r *http.Request) {
+	id, ok := viewerID(w, r)
+	if !ok {
+		return
+	}
+	var in services.StepInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	v, err := h.svc.Step(r.Context(), id, chi.URLParam(r, "goalId"), chi.URLParam(r, "stepId"), in)
 	reply(w, h.log, http.StatusOK, v, err)
 }
 

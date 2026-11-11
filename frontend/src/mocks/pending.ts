@@ -116,8 +116,61 @@ let nextNumber = 1042
 // Переписка, как ее хранит backend: GET /api/chat/messages возвращает ее после перезагрузки.
 let chatLog: TChatMessage[] = []
 
+// Прошлые диалоги (docs/api-chat-dialogs.md): «Новый диалог» переносит переписку сюда.
+interface PastDialog {
+  id: string
+  title: string
+  preview: string
+  kind: 'request' | 'handoff' | 'answer'
+  updatedAt: string
+  messages: TChatMessage[]
+}
+const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
+function seedDialogs(): PastDialog[] {
+  const m = (id: string, role: 'user' | 'assistant', text: string): TChatMessage => ({
+    id,
+    role,
+    kind: 'text',
+    text,
+    source: null,
+    confirm: null,
+    result: null,
+    mood: role === 'assistant' ? 'calm' : 'calm',
+  })
+  return [
+    {
+      id: 'dlg-review',
+      title: 'Как проходит код-ревью',
+      preview: 'Передано наставнику',
+      kind: 'handoff',
+      updatedAt: daysAgo(1),
+      messages: [
+        m('dr-1', 'user', 'Как проходит код-ревью?'),
+        m(
+          'dr-2',
+          'assistant',
+          'В справочнике нет ответа для твоей команды – передал вопрос Игорю.',
+        ),
+      ],
+    },
+    {
+      id: 'dlg-leave',
+      title: 'Отгул на 14 ноября',
+      preview: 'Заявка одобрена',
+      kind: 'request',
+      updatedAt: daysAgo(3),
+      messages: [
+        m('dl-1', 'user', 'Хочу взять отгул 14 ноября'),
+        m('dl-2', 'assistant', 'Заявка на отгул создана, Олег ее одобрил.'),
+      ],
+    },
+  ]
+}
+let dialogs = seedDialogs()
+
 export function resetPendingMocks() {
   chatLog = []
+  dialogs = seedDialogs()
   requests = initialRequests()
   actions = new Map()
   nextNumber = 1042
@@ -456,7 +509,47 @@ export const assistantHandlers = [
 
   http.get(`${API_URL}/api/chat/messages`, () => HttpResponse.json({ messages: chatLog })),
 
+  http.get(`${API_URL}/api/chat/dialogs`, () =>
+    HttpResponse.json([
+      ...(chatLog.length
+        ? [
+            {
+              id: 'current',
+              title: chatLog.find((x) => x.role === 'user')?.text.slice(0, 60) ?? 'Текущий диалог',
+              preview: 'идет сейчас',
+              kind: 'answer',
+              updatedAt: new Date().toISOString(),
+              current: true,
+            },
+          ]
+        : []),
+      ...dialogs.map(({ messages: _m, ...d }) => ({ ...d, current: false })),
+    ]),
+  ),
+
+  http.get(`${API_URL}/api/chat/dialogs/:id/messages`, ({ params }) => {
+    const d = dialogs.find((x) => x.id === params.id)
+    return d
+      ? HttpResponse.json({ messages: d.messages })
+      : HttpResponse.json({ error: { code: 'not_found', message: 'not found' } }, { status: 404 })
+  }),
+
   http.post(`${API_URL}/api/chat/reset`, () => {
+    if (chatLog.length) {
+      const first = chatLog.find((x) => x.role === 'user')?.text ?? 'Диалог'
+      const req = chatLog.some((x) => x.result)
+      dialogs = [
+        {
+          id: `dlg-${Date.now()}`,
+          title: first.slice(0, 60),
+          preview: req ? 'Заявка создана' : 'Ответ из справочника',
+          kind: req ? 'request' : 'answer',
+          updatedAt: new Date().toISOString(),
+          messages: chatLog,
+        },
+        ...dialogs,
+      ]
+    }
     chatLog = []
     actions = new Map()
     return HttpResponse.json({ messages: [] })
@@ -467,4 +560,5 @@ export const assistantHandlers = [
 // Эндпоинты, которых еще нет в backend: MSW перехватывает их и при работе с настоящим backend
 // (main.tsx, VITE_PENDING_MOCKS). Сейчас это кабинет наставника и чат стажера с наставником
 // (docs/api-mentor-console.md). Когда backend реализует ручку – удалите ее из mentorHandlers.
+// Календарь стажера backend уже отдает сам: его моки только в полном режиме (handlers.ts).
 export const pendingHandlers = [...mentorHandlers]

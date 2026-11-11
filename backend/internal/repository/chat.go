@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -81,17 +83,34 @@ func (r *Chat) AddMessage(ctx context.Context, m NewMessage) (string, time.Time,
 
 // Messages – последние сообщения переписки в хронологическом порядке.
 func (r *Chat) Messages(ctx context.Context, conversationID string, limit int) ([]StoredMessage, error) {
+	return r.messages(ctx, `m.dialog_id = (SELECT id FROM chat_dialogs WHERE conversation_id::text = $1 AND closed_at IS NULL)`,
+		limit, conversationID)
+}
+
+// DialogMessages – сообщения одного диалога этой переписки. Чужой или несуществующий диалог – ErrNotFound.
+func (r *Chat) DialogMessages(ctx context.Context, conversationID, dialogID string, limit int) ([]StoredMessage, error) {
+	var ok bool
+	if err := r.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM chat_dialogs WHERE id::text = $1 AND conversation_id::text = $2)`,
+		dialogID, conversationID).Scan(&ok); err != nil || !ok {
+		if err == nil {
+			err = ErrNotFound
+		}
+		return nil, err
+	}
+	return r.messages(ctx, `m.dialog_id::text = $1`, limit, dialogID)
+}
+
+func (r *Chat) messages(ctx context.Context, where string, limit int, arg string) ([]StoredMessage, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT * FROM (
 			SELECT m.id::text, m.author_kind, m.kind, m.text, m.mood, m.request_id::text,
 			       s.article_id::text, s.label, a.title, m.created_at
 			FROM messages m
-			JOIN conversations c ON c.id = m.conversation_id
 			LEFT JOIN message_sources s ON s.message_id = m.id AND s.position = 1
 			LEFT JOIN kb_articles a ON a.id = s.article_id
-			WHERE m.conversation_id::text = $1 AND m.created_at > COALESCE(c.cleared_at, '-infinity')
+			WHERE `+where+`
 			ORDER BY m.created_at DESC, m.id DESC LIMIT $2
-		) x ORDER BY created_at, id`, conversationID, limit)
+		) x ORDER BY created_at, id`, arg, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -103,22 +122,97 @@ func (r *Chat) Messages(ctx context.Context, conversationID string, limit int) (
 	})
 }
 
-// Clear начинает новый диалог: старые сообщения остаются в базе, но больше не показываются.
-// Неподтвержденные карточки старого диалога отменяются, чтобы не висели черновиками.
+// DialogRow – диалог для колонки истории. Заголовок и итог считаются по сообщениям.
+type DialogRow struct {
+	ID        string
+	Title     string // первая реплика стажера
+	Kind      string // request | handoff | answer
+	Preview   string
+	UpdatedAt time.Time
+	Current   bool
+}
+
+// Dialogs – диалоги переписки, новые сверху: открытый и прошлые, в которых были сообщения.
+func (r *Chat) Dialogs(ctx context.Context, conversationID string, limit int) ([]DialogRow, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT d.id::text,
+		       COALESCE((SELECT left(m.text, 60) FROM messages m
+		                 WHERE m.dialog_id = d.id AND m.author_kind = 'user' ORDER BY m.created_at LIMIT 1), ''),
+		       q.number, q.status,
+		       EXISTS (SELECT 1 FROM handoffs h JOIN messages m ON m.id = h.question_id WHERE m.dialog_id = d.id),
+		       EXISTS (SELECT 1 FROM message_sources s JOIN messages m ON m.id = s.message_id
+		               WHERE m.dialog_id = d.id AND s.article_id IS NOT NULL),
+		       COALESCE((SELECT max(m.created_at) FROM messages m WHERE m.dialog_id = d.id), d.started_at),
+		       d.closed_at IS NULL
+		FROM chat_dialogs d
+		LEFT JOIN LATERAL (
+			SELECT r.number, r.status FROM messages m JOIN requests r ON r.id = m.request_id
+			WHERE m.dialog_id = d.id AND m.kind = 'result' ORDER BY m.created_at DESC LIMIT 1
+		) q ON true
+		WHERE d.conversation_id::text = $1
+		  AND (d.closed_at IS NULL OR EXISTS (SELECT 1 FROM messages m WHERE m.dialog_id = d.id))
+		ORDER BY d.closed_at IS NULL DESC, 7 DESC
+		LIMIT $2`, conversationID, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (DialogRow, error) {
+		var d DialogRow
+		var number *int
+		var status *string
+		var handoff, fromKB bool
+		err := row.Scan(&d.ID, &d.Title, &number, &status, &handoff, &fromKB, &d.UpdatedAt, &d.Current)
+		switch {
+		case number != nil:
+			d.Kind = "request"
+			d.Preview = fmt.Sprintf("Заявка №%d ", *number) + map[string]string{
+				"waiting": "создана", "approved": "одобрена", "done": "выполнена", "rejected": "отклонена", "cancelled": "отменена",
+			}[*status]
+		case handoff:
+			d.Kind, d.Preview = "handoff", "Передано наставнику"
+		case fromKB:
+			d.Kind, d.Preview = "answer", "Ответ из справочника"
+		default:
+			d.Kind, d.Preview = "answer", "Разговор с AI-buddy"
+		}
+		if d.Title == "" {
+			d.Title = "Новый диалог"
+		}
+		return d, err
+	})
+}
+
+// Clear – «Новый диалог»: открытый диалог закрывается (сообщения остаются в истории) и открывается
+// следующий. Пустой диалог не закрываем. Неподтвержденные карточки закрытого диалога отменяются.
 func (r *Chat) Clear(ctx context.Context, conversationID string) error {
 	return pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `UPDATE conversations SET cleared_at = clock_timestamp() WHERE id::text = $1`, conversationID); err != nil {
+		var open string
+		err := tx.QueryRow(ctx, `
+			SELECT d.id::text FROM chat_dialogs d
+			WHERE d.conversation_id::text = $1 AND d.closed_at IS NULL
+			  AND EXISTS (SELECT 1 FROM messages m WHERE m.dialog_id = d.id)
+			FOR UPDATE`, conversationID).Scan(&open)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `
+		if _, err := tx.Exec(ctx, `
 			WITH c AS (
 				UPDATE requests SET status = 'cancelled'
 				WHERE status = 'draft' AND id IN (
-					SELECT request_id FROM messages WHERE conversation_id::text = $1 AND kind = 'confirm' AND request_id IS NOT NULL)
+					SELECT request_id FROM messages WHERE dialog_id::text = $1 AND kind = 'confirm' AND request_id IS NOT NULL)
 				RETURNING id, requester_id
 			)
 			INSERT INTO request_events (request_id, status, actor_kind, actor_id, note)
-			SELECT id, 'cancelled', 'user', requester_id, 'Новый диалог: черновик отменен' FROM c`, conversationID)
+			SELECT id, 'cancelled', 'user', requester_id, 'Новый диалог: черновик отменен' FROM c`, open); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE chat_dialogs SET closed_at = clock_timestamp() WHERE id::text = $1`, open); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO chat_dialogs (conversation_id) VALUES ($1::uuid)`, conversationID)
 		return err
 	})
 }

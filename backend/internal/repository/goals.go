@@ -22,8 +22,15 @@ func NewGoals(db *pgxpool.Pool) *Goals {
 }
 
 // Последняя отметка о прогрессе берется из goal_updates, OKR и автор – по ссылкам.
+// Если у цели есть шаги, процент – доля выполненных шагов (считается запросом, не хранится).
 const goalSelect = `
-	SELECT g.id::text, g.intern_id::text, g.position, g.title, g.criterion, g.due_week, g.progress_pct, g.updated_at,
+	SELECT g.id::text, g.intern_id::text, g.position, g.title, g.criterion, g.due_week,
+	       COALESCE((
+	           SELECT round(100.0 * count(*) FILTER (WHERE ` + stepDone + `) / count(*))::int
+	           FROM goal_steps s
+	           LEFT JOIN intern_task_progress p ON p.task_id = s.task_id AND p.intern_id = g.intern_id
+	           WHERE s.goal_id = g.id HAVING count(*) > 0), g.progress_pct),
+	       g.updated_at,
 	       o.id::text, o.period, o.title,
 	       cu.id::text, cu.name,
 	       lu.author_id::text, lu.author_name, lu.progress_pct, lu.note, lu.created_at
@@ -36,16 +43,99 @@ const goalSelect = `
 		WHERE x.goal_id = g.id ORDER BY x.created_at DESC, x.id DESC LIMIT 1
 	) lu ON true`
 
-// List – цели стажера по порядку.
+// stepDone – шаг выполнен: задача пути закрыта или наставник (руководитель) отметил шаг.
+const stepDone = `(s.source = 'task' AND p.status = 'done') OR s.done_at IS NOT NULL`
+
+// List – цели стажера по порядку, с шагами.
 func (r *Goals) List(ctx context.Context, internID string) ([]models.Goal, error) {
 	rows, err := r.db.Query(ctx, goalSelect+` WHERE g.intern_id::text = $1 ORDER BY g.position, g.created_at`, internID)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (models.Goal, error) {
+	goals, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (models.Goal, error) {
 		g, _, err := scanGoal(row)
 		return g, err
 	})
+	if err != nil {
+		return nil, err
+	}
+	steps, err := r.steps(ctx, `g.intern_id::text = $1`, internID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range goals {
+		goals[i].Steps = orEmpty(steps[goals[i].ID])
+	}
+	return goals, nil
+}
+
+// steps – шаги целей по условию на g (intern_goals), сгруппированные по цели.
+func (r *Goals) steps(ctx context.Context, where string, arg string) (map[string][]models.GoalStep, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT s.goal_id::text, s.id::text, s.title, s.source, lpad(st.position::text, 2, '0'), s.task_id::text,
+		       CASE WHEN s.source = 'task' THEN
+		                CASE COALESCE(p.status, 'todo') WHEN 'waiting' THEN 'in_progress' ELSE COALESCE(p.status, 'todo') END
+		            WHEN s.done_at IS NOT NULL THEN 'done' ELSE 'todo' END
+		FROM goal_steps s
+		JOIN intern_goals g ON g.id = s.goal_id
+		LEFT JOIN onboarding_tasks t ON t.id = s.task_id
+		LEFT JOIN onboarding_stages st ON st.id = t.stage_id
+		LEFT JOIN intern_task_progress p ON p.task_id = s.task_id AND p.intern_id = g.intern_id
+		WHERE `+where+` ORDER BY s.goal_id, s.position`, arg)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]models.GoalStep{}
+	for rows.Next() {
+		var goalID string
+		var st models.GoalStep
+		if err := rows.Scan(&goalID, &st.ID, &st.Title, &st.Source, &st.StageCode, &st.TaskID, &st.Status); err != nil {
+			return nil, err
+		}
+		out[goalID] = append(out[goalID], st)
+	}
+	return out, rows.Err()
+}
+
+func orEmpty(s []models.GoalStep) []models.GoalStep {
+	if s == nil {
+		return []models.GoalStep{}
+	}
+	return s
+}
+
+// Step – шаг цели (для проверки перед отметкой).
+func (r *Goals) Step(ctx context.Context, goalID, stepID string) (*models.GoalStep, error) {
+	var st models.GoalStep
+	err := r.db.QueryRow(ctx, `SELECT id::text, title, source FROM goal_steps WHERE id::text = $1 AND goal_id::text = $2`,
+		stepID, goalID).Scan(&st.ID, &st.Title, &st.Source)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
+// SetStepDone отмечает шаг наставника или руководителя выполненным (done = false снимает отметку).
+func (r *Goals) SetStepDone(ctx context.Context, goalID, stepID, by string, done bool) (*models.Goal, error) {
+	var err error
+	if done {
+		err = execOne(r.db.Exec(ctx, `
+			UPDATE goal_steps SET done_at = COALESCE(done_at, now()), done_by = COALESCE(done_by, $3::uuid)
+			WHERE id::text = $1 AND goal_id::text = $2 AND source <> 'task'`, stepID, goalID, by))
+	} else {
+		err = execOne(r.db.Exec(ctx, `
+			UPDATE goal_steps SET done_at = NULL, done_by = NULL
+			WHERE id::text = $1 AND goal_id::text = $2 AND source <> 'task'`, stepID, goalID))
+	}
+	if err != nil {
+		return nil, constraintErr(err)
+	}
+	g, _, err := r.Get(ctx, goalID)
+	return g, err
 }
 
 // Get – цель и id стажера, которому она принадлежит.
@@ -57,6 +147,11 @@ func (r *Goals) Get(ctx context.Context, id string) (*models.Goal, string, error
 	if err != nil {
 		return nil, "", err
 	}
+	steps, err := r.steps(ctx, `g.id::text = $1`, id)
+	if err != nil {
+		return nil, "", err
+	}
+	g.Steps = orEmpty(steps[g.ID])
 	return &g, internID, nil
 }
 

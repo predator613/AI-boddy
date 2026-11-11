@@ -60,6 +60,8 @@ func newChatEnv(t *testing.T, llmURL string) *chatEnv {
 		bg := context.Background()
 		for _, q := range []string{
 			`DELETE FROM messages WHERE created_at >= $1`,
+			`DELETE FROM chat_dialogs WHERE started_at >= $1`,
+			`UPDATE chat_dialogs SET closed_at = NULL WHERE closed_at >= $1`,
 			`DELETE FROM notifications WHERE created_at >= $1`,
 			`DELETE FROM agent_tool_calls WHERE created_at >= $1`,
 			`DELETE FROM requests WHERE created_at >= $1`,
@@ -687,4 +689,79 @@ func TestChatHistoryAndNewDialog(t *testing.T) {
 
 	// Наставнику чат с помощником недоступен.
 	assert.Equal(t, http.StatusForbidden, e.call("mentor_igor", http.MethodPost, "/api/chat/reset", nil, nil))
+}
+
+// История диалогов: «Новый диалог» закрывает текущий, прошлый можно открыть для чтения.
+func TestChatDialogsHistory(t *testing.T) {
+	e := newChatEnv(t, "")
+	dialogs := func(user string) []models.ChatDialog {
+		t.Helper()
+		var out []models.ChatDialog
+		require.Equal(t, http.StatusOK, e.call(user, http.MethodGet, "/api/chat/dialogs", nil, &out))
+		return out
+	}
+	reset := func() {
+		t.Helper()
+		require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/chat/reset", nil, nil))
+	}
+	reset()
+	before := len(dialogs("intern_anna"))
+	reset() // пустой диалог не закрывается
+	require.Len(t, dialogs("intern_anna"), before)
+	assert.True(t, dialogs("intern_anna")[0].Current)
+
+	// Диалог с ответом из справочника и неподтвержденной карточкой.
+	e.say("intern_anna", map[string]any{"text": "как устроено код-ревью в команде"})
+	card := confirmOf(t, e.say("intern_anna", map[string]any{"text": "как получить доступ к GitLab"}))
+	cur := dialogs("intern_anna")[0]
+	assert.True(t, cur.Current)
+	assert.Equal(t, "как устроено код-ревью в команде", cur.Title)
+	reset()
+
+	list := dialogs("intern_anna")
+	require.Len(t, list, before+1)
+	assert.True(t, list[0].Current)
+	assert.Equal(t, "Новый диалог", list[0].Title)
+	past := list[1]
+	assert.False(t, past.Current)
+	assert.Equal(t, "как устроено код-ревью в команде", past.Title)
+	assert.Equal(t, "answer", past.Kind)
+	assert.Equal(t, "Ответ из справочника", past.Preview)
+
+	var r models.ChatReply
+	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/chat/dialogs/"+past.ID+"/messages", nil, &r))
+	require.GreaterOrEqual(t, len(r.Messages), 4)
+	assert.Equal(t, "как устроено код-ревью в команде", r.Messages[0].Text)
+	var cardMsg *models.ChatMessage
+	for i := range r.Messages {
+		if r.Messages[i].Confirm != nil && r.Messages[i].Confirm.ActionID == card.ActionID {
+			cardMsg = &r.Messages[i]
+		}
+	}
+	require.NotNil(t, cardMsg)
+	assert.Equal(t, "cancelled", cardMsg.Confirm.State, "в прошлом диалоге карточку не нажать")
+
+	// Диалог с заявкой: в итоге – номер заявки.
+	card = confirmOf(t, e.say("intern_anna", map[string]any{"text": "нужен монитор"}))
+	var cr models.ChatReply
+	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/chat/actions/"+card.ActionID+"/confirm", nil, &cr))
+	reset()
+	withRequest := dialogs("intern_anna")[1]
+	assert.Equal(t, "request", withRequest.Kind)
+	assert.Equal(t, "Заявка №"+cr.Messages[0].Result.Number+" создана", withRequest.Preview)
+	assert.Equal(t, "нужен монитор", withRequest.Title)
+
+	// Диалог с передачей наставнику.
+	e.say("intern_anna", map[string]any{"text": "передай наставнику: как попасть на демо?"})
+	reset()
+	assert.Equal(t, "handoff", dialogs("intern_anna")[1].Kind)
+	assert.Equal(t, "Передано наставнику", dialogs("intern_anna")[1].Preview)
+
+	// Текущий диалог по-прежнему отдает GET /api/chat/messages, чужой диалог – 404.
+	var cur2 models.ChatReply
+	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/chat/messages", nil, &cur2))
+	assert.Empty(t, cur2.Messages)
+	assert.Equal(t, http.StatusNotFound, e.call("intern_pavel", http.MethodGet, "/api/chat/dialogs/"+past.ID+"/messages", nil, nil))
+	assert.Equal(t, http.StatusNotFound, e.call("intern_anna", http.MethodGet, "/api/chat/dialogs/missing/messages", nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("mentor_igor", http.MethodGet, "/api/chat/dialogs", nil, nil))
 }

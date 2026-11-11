@@ -35,9 +35,12 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 // serviceError превращает ошибку сервиса в HTTP-ответ.
 func serviceError(w http.ResponseWriter, log *slog.Logger, err error) {
 	var ve *services.ValidationError
+	var ce *services.ConflictError
 	switch {
 	case errors.As(err, &ve):
 		httpx.Error(w, http.StatusBadRequest, httpx.CodeValidation, ve.Message)
+	case errors.As(err, &ce):
+		httpx.Error(w, http.StatusConflict, httpx.CodeConflict, ce.Message)
 	case errors.Is(err, services.ErrForbidden):
 		httpx.Error(w, http.StatusForbidden, httpx.CodeForbidden, "not allowed for your role")
 	case errors.Is(err, services.ErrNotFound):

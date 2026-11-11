@@ -1,4 +1,4 @@
-import { cleanup, screen } from '@testing-library/react'
+import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { API_URL } from '../src/api/client'
@@ -112,5 +112,36 @@ describe('Чат', () => {
     expect(screen.getAllByText('Как оформить отгул?')).toHaveLength(2)
     expect(screen.queryByRole('button', { name: 'Подтвердить' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Новый диалог' })).toBeEnabled()
+  })
+})
+
+describe('история диалогов', () => {
+  it('прошлый диалог открывается только для чтения, «Новый диалог» переносит текущий в историю', async () => {
+    loginAs('intern_anna')
+    renderApp('/chat')
+    const side = await screen.findByRole('complementary', { name: 'Диалоги' }, { timeout: 3000 })
+    await userEvent.click(await within(side).findByRole('button', { name: /Отгул на 14 ноября/ }))
+    expect(await screen.findByText('Заявка на отгул создана, Олег ее одобрил.')).toBeInTheDocument()
+    expect(screen.getByText('Это прошлый диалог, он только для чтения.')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Сообщение')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Вернуться к текущему' }))
+
+    await userEvent.type(await screen.findByLabelText('Сообщение'), 'Что такое код-ревью?{Enter}')
+    await screen.findByText(/ревьюер оставляет комментарии/i, {}, { timeout: 3000 })
+    await userEvent.click(within(side).getByRole('button', { name: 'Новый диалог' }))
+    expect(
+      await within(side).findByRole('button', { name: /Что такое код-ревью\?/ }, { timeout: 3000 }),
+    ).toBeInTheDocument()
+  })
+
+  it('без ручки истории на backend остается только текущий диалог', async () => {
+    server.use(
+      http.get(`${API_URL}/api/chat/dialogs`, () => new HttpResponse(null, { status: 404 })),
+    )
+    loginAs('intern_anna')
+    renderApp('/chat')
+    const side = await screen.findByRole('complementary', { name: 'Диалоги' }, { timeout: 3000 })
+    expect(within(side).getByRole('button', { name: /Текущий диалог/ })).toBeInTheDocument()
+    expect(within(side).queryByRole('button', { name: /Отгул/ })).not.toBeInTheDocument()
   })
 })

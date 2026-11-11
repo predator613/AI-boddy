@@ -42,6 +42,7 @@ type Services struct {
 	Goals    handlers.GoalsService
 	Chat     handlers.ChatService
 	People   handlers.PeopleService
+	Calendar handlers.CalendarService
 	Requests *services.Requests // и страница «Заявки», и синхронизация статусов
 }
 
@@ -67,6 +68,7 @@ func NewServices(cfg config.Config, pool *pgxpool.Pool, log *slog.Logger) (Servi
 		Goals:    services.NewGoals(repository.NewGoals(pool), users),
 		Chat:     services.NewAgent(repository.NewChat(pool), reqStore, kb, users, people, corp, model, cfg.LLMTimeout, log),
 		People:   services.NewPeople(people),
+		Calendar: services.NewCalendar(repository.NewCalendar(pool), users, people),
 		Requests: reqs,
 	}, nil
 }
@@ -94,6 +96,7 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 	goalsH := handlers.NewGoals(svc.Goals, log)
 	chatH := handlers.NewChat(svc.Chat, svc.Requests, log)
 	peopleH := handlers.NewPeople(svc.People, log)
+	calendarH := handlers.NewCalendar(svc.Calendar, log)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", handlers.Health)
@@ -127,6 +130,7 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 			r.Patch("/goals/{goalId}", goalsH.Update)
 			r.Delete("/goals/{goalId}", goalsH.Delete)
 			r.Post("/goals/{goalId}/progress", goalsH.Progress)
+			r.Post("/goals/{goalId}/steps/{stepId}", goalsH.Step)
 			r.Get("/interns/{internId}/goals", goalsH.OfIntern)
 			r.Post("/interns/{internId}/goals", goalsH.Create)
 			r.Post("/interns/{internId}/goals/agree", goalsH.Agree)
@@ -135,12 +139,20 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 			r.Get("/chat/messages", chatH.History)
 			r.Post("/chat/messages", chatH.Send)
 			r.Post("/chat/reset", chatH.Reset)
+			r.Get("/chat/dialogs", chatH.Dialogs)
+			r.Get("/chat/dialogs/{dialogId}/messages", chatH.DialogMessages)
 			r.Post("/chat/actions/{actionId}/confirm", chatH.Confirm)
 			r.Post("/chat/actions/{actionId}/cancel", chatH.Cancel)
 			r.Get("/requests", chatH.Requests)
 
 			// Свои люди (наставник, руководитель) и отделы – для «Поддержки».
 			r.Get("/me/contacts", peopleH.Contacts)
+
+			// Календарь стажера: встречи из кабинета наставника и свои записи.
+			r.Get("/me/calendar", calendarH.Events)
+			r.Post("/me/calendar/entries", calendarH.CreateEntry)
+			r.Delete("/me/calendar/entries/{id}", calendarH.DeleteEntry)
+			r.Post("/me/calendar/events/{meetingId}/answer", calendarH.Answer)
 
 			// Справочник.
 			r.Get("/kb", kbH.Get)
