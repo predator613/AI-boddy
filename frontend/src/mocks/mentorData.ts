@@ -622,3 +622,173 @@ export const mentorHandlers = [
     return HttpResponse.json(automations.find((x) => x.id === a.id))
   }),
 ]
+
+// ---------- календарь стажера (docs/api-intern-calendar.md) ----------
+// Встречи берутся из расписания наставника (стажер Анна и общие), плюс прошедшие знакомства
+// и собственные записи стажера.
+
+type CalEvent = import('../schemas/calendar').TCalendarEvent
+type Answer = 'accept' | 'move'
+
+function seedOwnCalendar(): { own: CalEvent[]; answers: Record<string, Answer> } {
+  return { own: [], answers: {} }
+}
+let cal = seedOwnCalendar()
+export function resetCalendarMock() {
+  cal = seedOwnCalendar()
+}
+
+const FIXED: CalEvent[] = [
+  {
+    id: 'ce-intro',
+    title: 'Встреча-знакомство с командой',
+    kind: 'team',
+    startsAt: at(0, 11),
+    durationMin: 60,
+    withName: 'команда Backend',
+    place: 'переговорка «Байкал»',
+    note: 'Записала имена и роли команды – они в справочнике, раздел «Кто за что отвечает».',
+    status: 'accepted',
+    shared: false,
+  },
+  {
+    id: 'ce-lead',
+    title: 'Цели стажировки с Олегом',
+    kind: 'lead',
+    startsAt: at(1, 12),
+    durationMin: 30,
+    withName: 'Олег, руководитель',
+    place: 'видеозвонок',
+    note: 'Согласовали 3 цели от OKR команды. Они уже в «Моем пути».',
+    status: 'accepted',
+    shared: false,
+  },
+  {
+    id: 'ce-devops',
+    title: 'Знакомство с DevOps',
+    kind: 'intro',
+    startsAt: at(2, 14),
+    durationMin: 30,
+    withName: 'Кирилл, DevOps',
+    place: 'видеозвонок',
+    note: 'Спроси про тестовый стенд: заявка ждет его согласования.',
+    status: 'accepted',
+    shared: false,
+  },
+]
+
+const NOTES: Record<string, string> = {
+  one_on_one: 'Темы AI-buddy соберет из вопросов, которые ты задавала за неделю.',
+  review: 'Подготовь вопросы по замечаниям из ревью.',
+  team: 'Посмотришь, что команда выпустила. Можно просто слушать.',
+}
+
+function calendarEvents(): CalEvent[] {
+  const fromMentor: CalEvent[] = meetings
+    .filter((m) => m.internId === 'u-anna' || m.internId === null)
+    .map((m) => {
+      const a = cal.answers[m.id]
+      return {
+        id: m.id,
+        title: m.internId ? m.title.replace('с Анной', 'с Игорем') : m.title,
+        kind: m.kind === 'team' ? 'team' : 'mentor',
+        startsAt: m.startsAt,
+        durationMin: m.durationMin,
+        withName: m.internId ? 'Игорь, наставник' : 'вся команда и стажеры',
+        place: m.kind === 'team' ? 'большая переговорка' : 'видеозвонок',
+        note: NOTES[m.kind] ?? '',
+        status: a === 'accept' ? 'accepted' : a === 'move' ? 'move_requested' : 'pending',
+        shared: false,
+      }
+    })
+  return [...FIXED, ...fromMentor, ...cal.own]
+}
+
+export const calendarHandlers = [
+  http.get(`${API_URL}/api/me/calendar`, ({ request }) => {
+    if (forbiddenFor(request, 'staff')) return err(403, 'forbidden', 'only interns')
+    const u = new URL(request.url)
+    const from = u.searchParams.get('from') ?? ''
+    const to = u.searchParams.get('to') ?? '9999'
+    return HttpResponse.json({
+      events: calendarEvents()
+        .filter((e) => e.startsAt >= from && e.startsAt < to)
+        .sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
+    })
+  }),
+
+  http.post(`${API_URL}/api/me/calendar/entries`, async ({ request }) => {
+    const b = (await request.json().catch(() => null)) as {
+      title?: string
+      kind?: CalEvent['kind']
+      startsAt?: string
+      durationMin?: number
+      shareWithMentor?: boolean
+    } | null
+    if (!b?.title?.trim() || !b.startsAt || !b.durationMin || !b.kind)
+      return err(400, 'validation_error', 'title, kind, startsAt and durationMin are required')
+    const start = new Date(b.startsAt).getTime()
+    const end = start + b.durationMin * 60_000
+    const clash = calendarEvents().find((e) => {
+      const s = new Date(e.startsAt).getTime()
+      return start < s + e.durationMin * 60_000 && s < end
+    })
+    if (clash) return err(409, 'conflict', `Пересекается с «${clash.title}»`)
+    await wait()
+    const item: CalEvent = {
+      id: nid('own'),
+      title: b.title.trim(),
+      kind: b.kind,
+      startsAt: new Date(b.startsAt).toISOString(),
+      durationMin: b.durationMin,
+      withName: 'только ты',
+      place: '–',
+      note: b.shareWithMentor
+        ? 'Наставник видит, что ты занята в это время.'
+        : 'Видна только тебе.',
+      status: 'own',
+      shared: Boolean(b.shareWithMentor),
+    }
+    cal.own = [...cal.own, item]
+    return HttpResponse.json(item, { status: 201 })
+  }),
+
+  http.delete(`${API_URL}/api/me/calendar/entries/:id`, ({ params }) => {
+    const before = cal.own.length
+    cal.own = cal.own.filter((e) => e.id !== params.id)
+    return cal.own.length === before
+      ? err(404, 'not_found', 'not found')
+      : new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post(`${API_URL}/api/me/calendar/events/:id/answer`, async ({ request, params }) => {
+    const id = String(params.id)
+    const m = meetings.find((x) => x.id === id)
+    if (!m) return err(404, 'not_found', 'only meetings from the mentor can be answered')
+    const b = (await request.json().catch(() => null)) as {
+      answer?: Answer
+      reason?: string
+    } | null
+    if (b?.answer !== 'accept' && b?.answer !== 'move')
+      return err(400, 'validation_error', 'answer must be accept or move')
+    await wait()
+    cal.answers = { ...cal.answers, [id]: b.answer }
+    if (b.answer === 'move') {
+      const t = threads['u-anna']!
+      t.messages = [
+        ...t.messages,
+        {
+          id: nid('msg'),
+          kind: 'text',
+          author: 'intern',
+          authorName: t.internName,
+          text: `Можно перенести «${m.title.replace('с Анной', 'с тобой')}»? ${b.reason ?? ''}`.trim(),
+          at: new Date().toISOString(),
+          update: null,
+        },
+      ]
+      t.unread += 1
+    }
+    return HttpResponse.json(calendarEvents().find((e) => e.id === id))
+  }),
+]

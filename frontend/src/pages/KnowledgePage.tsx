@@ -4,14 +4,13 @@ import {
   Group,
   Modal,
   Paper,
-  SimpleGrid,
   Stack,
   Text,
   TextInput,
   Title,
   UnstyledButton,
 } from '@mantine/core'
-import { IconChevronRight, IconSearch } from '@tabler/icons-react'
+import { IconArrowLeft, IconChevronRight, IconFileText, IconSearch } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useKbArticle, useKbSearch, useKnowledgeBase } from '../hooks/useKb'
@@ -21,8 +20,6 @@ import { Page } from '../components/Page'
 import { ErrorBlock, LoadingBlocks } from '../components/QueryState'
 import { StatusTag } from '../components/StatusTag'
 import type { TKbArticle } from '../schemas/assistant'
-
-const TILTS = [-1.2, 0, 1, 0, -0.8, 0]
 
 interface KnowledgePageProps {
   articleId?: string
@@ -54,7 +51,6 @@ export function KnowledgePage({ articleId, onArticle, stageCode }: KnowledgePage
             placeholder="Найди статью: доступы, отгул, код-ревью…"
             size="lg"
             radius="md"
-            maw={720}
             leftSection={<IconSearch size={20} />}
             value={search}
             onChange={(e) => setSearch(e.currentTarget.value)}
@@ -91,67 +87,64 @@ export function KnowledgePage({ articleId, onArticle, stageCode }: KnowledgePage
                   ? 'Нужно на твоем этапе'
                   : 'Популярное'
             const open = kb.data.articles.find((a) => a.id === articleId) ?? null
+            const sectionColor = new Map(kb.data.sections.map((x) => [x.id, x.color]))
+            const listTitleFinal =
+              q || section ? listTitle : forStage.length ? 'Часто задаваемые вопросы' : 'Популярное'
             return (
               <>
-                {!q && (
-                  <Stack gap="sm">
-                    <Group justify="space-between">
-                      <Title order={2}>Разделы</Title>
-                      {section && (
-                        <Anchor component="button" c="ink.6" onClick={() => setSection(null)}>
-                          Все разделы
-                        </Anchor>
+                <Paper radius={20} p="lg" component="section" aria-label={listTitleFinal}>
+                  <Group justify="space-between" mb="xs" gap={8}>
+                    <Title order={2}>{listTitleFinal}</Title>
+                    <Group gap={8}>
+                      {stageCode && !q && !section && forStage.length > 0 && (
+                        <StatusTag bg="#BADAFB">Этап {stageCode}</StatusTag>
                       )}
-                    </Group>
-                    <SimpleGrid cols={{ base: 1, xs: 2, md: 3 }} spacing="md">
-                      {kb.data.sections.map((s, i) => (
-                        <UnstyledButton
-                          key={s.id}
-                          className="ab-lift"
-                          onClick={() => setSection(section === s.id ? null : s.id)}
-                          aria-pressed={section === s.id}
-                          style={{
-                            background: s.color,
-                            padding: 18,
-                            minHeight: 140,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8,
-                            transform: `rotate(${TILTS[i % TILTS.length]}deg)`,
-                            outline: section === s.id ? '2px solid #141414' : 0,
-                            outlineOffset: -2,
+                      {(q || section) && (
+                        <Button
+                          size="xs"
+                          radius="xl"
+                          variant="outline"
+                          color="ink"
+                          leftSection={<IconArrowLeft size={14} />}
+                          onClick={() => {
+                            setSection(null)
+                            setSearch('')
                           }}
                         >
-                          <span className="ab-hand" style={{ fontSize: 22, lineHeight: 1 }}>
-                            {s.hand}
-                          </span>
-                          <span
-                            style={{ fontSize: 18, fontWeight: 500, lineHeight: 1.15, flex: 1 }}
-                          >
-                            {s.title}
-                          </span>
-                          <span style={{ fontSize: 12 }}>
-                            {s.count} {s.count === 1 ? 'статья' : s.count < 5 ? 'статьи' : 'статей'}
-                          </span>
-                        </UnstyledButton>
-                      ))}
-                    </SimpleGrid>
-                  </Stack>
-                )}
-                <Paper radius="lg" p="lg">
-                  <Group justify="space-between" mb="xs">
-                    <Title order={2}>{listTitle}</Title>
-                    {stageCode && !q && !section && forStage.length > 0 && (
-                      <StatusTag bg="#BADAFB">Этап {stageCode}</StatusTag>
-                    )}
+                          Назад
+                        </Button>
+                      )}
+                    </Group>
                   </Group>
                   {list.length === 0 ? (
-                    <Text c="ink.5" py="md">
-                      Ничего не нашлось. Попробуй спросить AI-buddy.
-                    </Text>
+                    <Group
+                      gap="md"
+                      py="md"
+                      wrap="nowrap"
+                      style={{ borderTop: '1px solid #EDEDED' }}
+                    >
+                      <Mascot size={52} mood="think" />
+                      <Text size="sm">
+                        Ничего не нашлось. Попробуй спросить{' '}
+                        <Anchor renderRoot={(p) => <Link {...p} to="/chat" />} c="ink.9" fw={500}>
+                          AI-buddy
+                        </Anchor>
+                        : он поищет по всем разделам и покажет источник.
+                      </Text>
+                    </Group>
                   ) : (
                     list.map((a) => (
-                      <ArticleRow key={a.id} article={a} onOpen={() => onArticle(a.id)} />
+                      <ArticleRow
+                        key={a.id}
+                        article={a}
+                        color={sectionColor.get(a.sectionId) ?? '#F4F4F4'}
+                        forStage={
+                          Boolean(stageCode) &&
+                          a.stageCode === stageCode &&
+                          (Boolean(q) || Boolean(section))
+                        }
+                        onOpen={() => onArticle(a.id)}
+                      />
                     ))
                   )}
                 </Paper>
@@ -202,64 +195,138 @@ export function KnowledgePage({ articleId, onArticle, stageCode }: KnowledgePage
           })()}
       </Stack>
 
-      <Stack gap="md" style={{ flex: '1 1 300px', maxWidth: 400, minWidth: 0 }}>
-        <Paper radius="lg" p="lg">
+      <Stack
+        gap={24}
+        pt={{ base: 0, md: 70 }}
+        style={{ flex: '1 1 300px', maxWidth: 340, minWidth: 0 }}
+      >
+        {kb.data && (
+          <nav aria-label="Разделы справочника">
+            <Title order={3} fz={18} mb={10}>
+              Поиск по разделам
+            </Title>
+            <Stack gap={4}>
+              {kb.data.sections.map((s) => {
+                const on = section === s.id
+                return (
+                  <UnstyledButton
+                    key={s.id}
+                    onClick={() => {
+                      setSection(on ? null : s.id)
+                      setSearch('')
+                    }}
+                    aria-pressed={on}
+                    className="ab-nudge"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr auto',
+                      alignItems: 'end',
+                      columnGap: 12,
+                      padding: '6px 0',
+                    }}
+                  >
+                    <span
+                      className="ab-hand"
+                      style={{
+                        gridColumn: '1 / -1',
+                        fontSize: 17,
+                        lineHeight: 1,
+                        color: '#5C5C5C',
+                      }}
+                    >
+                      {s.hand}
+                    </span>
+                    <span style={{ fontSize: 18, lineHeight: 1.3, fontWeight: on ? 500 : 400 }}>
+                      <span
+                        style={{
+                          background: on ? '#00AAFF' : 'transparent',
+                          padding: '0 4px',
+                          marginLeft: -4,
+                        }}
+                      >
+                        {s.title}
+                      </span>
+                    </span>
+                    <Text span size="xs" c="ink.5" pb={3}>
+                      {s.count}
+                    </Text>
+                  </UnstyledButton>
+                )
+              })}
+            </Stack>
+          </nav>
+        )}
+        <Paper radius={20} p="xl" style={{ background: '#141414', color: '#FFFFFF' }}>
           <Stack align="center" gap="sm" ta="center">
-            <Mascot size={96} glow />
-            <Text fz={18} fw={500}>
+            <Mascot size={84} glow float />
+            <Text fz={20} fw={500}>
               Не нашла ответ?
             </Text>
-            <Text size="sm" c="ink.5">
+            <Text size="sm" c="#D6D6D6" lh={1.45}>
               Спроси AI-buddy: он поищет по всем разделам и покажет, откуда взял ответ.
             </Text>
-            <Button component={Link} to="/chat" color="ink">
+            <Button
+              renderRoot={(p) => <Link {...p} to="/chat" />}
+              variant="white"
+              color="ink"
+              radius="md"
+            >
               Спросить AI-buddy
             </Button>
           </Stack>
         </Paper>
-        {kb.data && (
-          <Paper radius="lg" p="md">
-            <Title order={3} mb={8}>
-              Словарик
-            </Title>
-            {kb.data.terms.map((t) => (
-              <div key={t.term} style={{ padding: '10px 0', borderTop: '1px solid #D6D6D6' }}>
-                <Text size="sm" fw={500}>
-                  {t.term}
-                </Text>
-                <Text size="sm" c="ink.5">
-                  {t.def}
-                </Text>
-              </div>
-            ))}
-          </Paper>
-        )}
       </Stack>
     </Page>
   )
 }
 
-function ArticleRow({ article, onOpen }: { article: TKbArticle; onOpen: () => void }) {
+function ArticleRow({
+  article,
+  color,
+  forStage,
+  onOpen,
+}: {
+  article: TKbArticle
+  color: string
+  forStage: boolean
+  onOpen: () => void
+}) {
   return (
     <UnstyledButton
       onClick={onOpen}
+      className="ab-row"
       style={{
         width: '100%',
         display: 'flex',
         alignItems: 'center',
         gap: 14,
         padding: '14px 0',
-        borderTop: '1px solid #D6D6D6',
+        borderTop: '1px solid #EDEDED',
       }}
     >
+      <span
+        style={{
+          width: 40,
+          height: 40,
+          flex: 'none',
+          borderRadius: 10,
+          background: color,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <IconFileText size={18} stroke={1.8} aria-hidden="true" />
+      </span>
       <span style={{ flex: 1, minWidth: 0 }}>
         <Text fw={500} size="15px">
           {article.title}
         </Text>
-        <Text size="sm" c="ink.5">
+        <Text size="sm" c="ink.5" truncate>
           {article.summary} · {article.minutes} мин
         </Text>
       </span>
+      {forStage && <StatusTag bg="#BADAFB">твой этап</StatusTag>}
       <IconChevronRight size={18} color="#5C5C5C" aria-hidden="true" />
     </UnstyledButton>
   )

@@ -18,6 +18,7 @@ export type NavPath =
   | '/'
   | '/chat'
   | '/mentor'
+  | '/calendar'
   | '/kb'
   | '/requests'
   | '/support'
@@ -42,6 +43,7 @@ export function navItems(role: User['role']): NavItem[] {
       { to: '/', label: 'Мой путь', icon: IconRoute },
       { to: '/chat', label: 'Чат с помощником', icon: IconMessageCircle },
       { to: '/mentor', label: 'Чат с наставником', icon: IconMessageUser },
+      { to: '/calendar', label: 'Календарь', icon: IconCalendarEvent },
       KB,
       { to: '/requests', label: 'Мои заявки', icon: IconFileText },
       SUPPORT,

@@ -12,6 +12,17 @@ export const GoalNote = z.object({
   at: z.string(),
 })
 
+// Шаг цели: связан с задачей плана (закрывается вместе с ней) или подтверждается наставником
+// или руководителем. Процент цели = доля выполненных шагов, считает backend.
+export const GoalStep = z.object({
+  id: z.string(),
+  title: z.string(),
+  source: z.enum(['task', 'mentor', 'lead']),
+  stageCode: z.string().nullable(),
+  taskId: z.string().nullable(),
+  status: z.enum(['todo', 'in_progress', 'done']),
+})
+
 export const Goal = z.object({
   id: z.string(),
   position: z.number(),
@@ -23,6 +34,7 @@ export const Goal = z.object({
   lastUpdate: GoalNote.nullable(),
   updatedAt: z.string(),
   createdBy: PersonRef.nullable(),
+  steps: z.array(GoalStep).default([]),
 })
 
 export const GoalsView = z.object({
@@ -50,6 +62,7 @@ export const ProgressInput = z.object({
 })
 
 export type TGoal = z.infer<typeof Goal>
+export type TGoalStep = z.infer<typeof GoalStep>
 export type TGoalsView = z.infer<typeof GoalsView>
 export type TTeamOkr = z.infer<typeof TeamOkr>
 export type TGoalInput = z.input<typeof GoalInput>

@@ -3,11 +3,10 @@ import { BuddyPanel } from '../components/BuddyPanel'
 import { Marker, PageHeader } from '../components/PageHeader'
 import { Page } from '../components/Page'
 import { ErrorBlock, LoadingBlocks } from '../components/QueryState'
-import { StatusTag } from '../components/StatusTag'
+import { WeekMeta } from '../components/path/WeekMeta'
 import { GoalsCard } from '../components/path/GoalsCard'
 import { PathScreen } from '../components/path/PathScreen'
 import { useCompleteTask, useMyPath } from '../hooks/usePath'
-import { Group } from '@mantine/core'
 
 interface MyPathPageProps {
   stage: string | null
@@ -59,16 +58,7 @@ export function MyPathPage({ stage, onStage, now }: MyPathPageProps) {
                 Привет, <Marker>{path.intern.name}!</Marker>
               </>
             }
-            right={
-              <Group gap={8}>
-                <StatusTag bg="#FFFFFF" border="1px solid #D6D6D6" size="md">
-                  Неделя {path.week.current} из {path.week.total}
-                </StatusTag>
-                <StatusTag bg="#FFFFFF" border="1px solid #D6D6D6" size="md">
-                  Стажер · {path.intern.teamName}
-                </StatusTag>
-              </Group>
-            }
+            right={<WeekMeta path={path} />}
           />
         }
       />

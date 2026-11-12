@@ -21,6 +21,10 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     // на медленных компьютерах длинные сценарии не укладываются в 5 секунд по умолчанию
     testTimeout: 30000,
+    // не больше 3 параллельных процессов: каждый поднимает свой jsdom, и на ноутбуке
+    // с 12+ ядрами им не хватало оперативной памяти (JavaScript heap out of memory)
+    pool: 'forks',
+    maxWorkers: 3,
     css: false,
     coverage: {
       provider: 'v8',

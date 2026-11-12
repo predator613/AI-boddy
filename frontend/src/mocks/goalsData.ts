@@ -1,5 +1,5 @@
 // Цели стажировки для режима без backend и для тестов. Повторяют seed backend (011_seed_demo.sql).
-import type { TGoal, TGoalsView } from '../schemas/goals'
+import type { TGoal, TGoalStep, TGoalsView } from '../schemas/goals'
 
 const OLEG = { id: '33333333-3333-4333-8333-333333333333', name: 'Олег' }
 const OKRS = [
@@ -14,6 +14,7 @@ const goal = (
   dueWeek: number,
   pct: number,
   okr: number | null,
+  steps: TGoalStep[] = [],
 ): TGoal => ({
   id: `g-${n}`,
   position: n,
@@ -25,11 +26,30 @@ const goal = (
   lastUpdate: null,
   updatedAt: new Date().toISOString(),
   createdBy: OLEG,
+  steps,
 })
 
+const step = (
+  id: string,
+  title: string,
+  source: TGoalStep['source'],
+  stageCode: string | null,
+  status: TGoalStep['status'] = 'todo',
+): TGoalStep => ({ id, title, source, stageCode, taskId: null, status })
+
 const initial = () => [
-  goal(1, 'Пройти путь задачи до релиза', 'первый merge в main до 4 недели', 4, 0, 0),
-  goal(2, 'Разобраться в сервисе авторизации', 'провести демо команде на 8 неделе', 8, 10, 0),
+  goal(1, 'Пройти путь задачи до релиза', 'первый merge в main до 4 недели', 4, 0, 0, [
+    step('s-11', 'Доступ к GitLab', 'task', '02', 'in_progress'),
+    step('s-12', 'Окружение', 'task', '03'),
+    step('s-13', 'Первая задача', 'task', '04'),
+    step('s-14', 'Merge в main', 'mentor', null),
+  ]),
+  goal(2, 'Разобраться в сервисе авторизации', 'провести демо команде на 8 неделе', 8, 25, 0, [
+    step('s-21', 'Памятка и документация', 'task', '01', 'done'),
+    step('s-22', 'Разбор схемы на 1:1', 'mentor', null),
+    step('s-23', 'Тесты к модулю', 'task', '04'),
+    step('s-24', 'Демо команде', 'lead', null),
+  ]),
   goal(
     3,
     'Самостоятельно закрывать задачи уровня junior',
@@ -37,6 +57,11 @@ const initial = () => [
     12,
     0,
     null,
+    [
+      step('s-31', 'Задача 1', 'mentor', null),
+      step('s-32', 'Задача 2', 'mentor', null),
+      step('s-33', 'Задача 3', 'mentor', null),
+    ],
   ),
 ]
 

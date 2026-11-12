@@ -6,7 +6,7 @@ import { useAuthStore } from '../src/store/authStore'
 import { useSettingsStore } from '../src/store/settingsStore'
 import { resetPathMock } from '../src/mocks/pathData'
 import { resetPendingMocks } from '../src/mocks/pending'
-import { resetMentorMocks } from '../src/mocks/mentorData'
+import { resetCalendarMock, resetMentorMocks } from '../src/mocks/mentorData'
 import { resetConsoleMock } from '../src/mocks/consoleData'
 import { useToastStore } from '../src/store/toastStore'
 
@@ -20,6 +20,7 @@ afterEach(() => {
   resetPathMock()
   resetPendingMocks()
   resetMentorMocks()
+  resetCalendarMock()
   resetConsoleMock()
   useToastStore.setState({ text: null })
   localStorage.clear()
