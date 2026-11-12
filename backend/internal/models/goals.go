@@ -33,6 +33,17 @@ type Goal struct {
 	LastUpdate  *GoalNote  `json:"lastUpdate"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
 	CreatedBy   *PersonRef `json:"createdBy"`
+	Steps       []GoalStep `json:"steps"` // если шаги есть, progressPct – доля выполненных
+}
+
+// GoalStep – шаг цели: задача «Моего пути» или отметка наставника либо руководителя.
+type GoalStep struct {
+	ID        string  `json:"id"`
+	Title     string  `json:"title"`
+	Source    string  `json:"source"`    // task | mentor | lead
+	StageCode *string `json:"stageCode"` // этап задачи, «02»
+	TaskID    *string `json:"taskId"`
+	Status    string  `json:"status"` // todo | in_progress | done
 }
 
 // GoalNote – последняя отметка о прогрессе.

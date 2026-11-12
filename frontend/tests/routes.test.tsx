@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { API_URL } from '../src/api/client'
@@ -52,8 +52,16 @@ describe('маршруты', () => {
     loginAs('intern_anna')
     const router = renderApp('/')
     await greeting('Анна')
-    await userEvent.click(screen.getByRole('button', { name: 'Меню профиля' }))
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Выйти' }))
+    // на медленном компьютере страница может перерисоваться и закрыть меню – открываем, пока не появится пункт
+    const logout = await waitFor(
+      async () => {
+        if (!screen.queryByRole('menuitem', { name: 'Выйти' }))
+          await userEvent.click(screen.getByRole('button', { name: 'Меню профиля' }))
+        return screen.getByRole('menuitem', { name: 'Выйти' })
+      },
+      { timeout: 10000, interval: 300 },
+    )
+    await userEvent.click(logout)
     expect(await screen.findByText('Вход в AI-buddy')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/login')
     expect(useAuthStore.getState().token).toBeNull()

@@ -8,7 +8,7 @@ import {
   Textarea,
   UnstyledButton,
 } from '@mantine/core'
-import { IconArrowRight, IconPlus } from '@tabler/icons-react'
+import { IconArrowLeft, IconArrowRight } from '@tabler/icons-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import {
@@ -20,6 +20,8 @@ import {
 } from '../api/assistant'
 import { Mascot } from '../components/Mascot'
 import { ChatMessageView, ThinkingBubble } from '../components/chat/ChatMessageView'
+import { ChatHistory, dialogsKey } from '../components/chat/ChatHistory'
+import { getDialogMessages } from '../api/chatDialogs'
 import { errorText } from '../lib/errors'
 import { pathKeys } from '../hooks/usePath'
 import type { TChatMessage, TChatReply } from '../schemas/assistant'
@@ -68,6 +70,13 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
   const autoSent = useRef(false)
 
   const history = useQuery({ queryKey: chatKey, queryFn: getChatHistory })
+  // открытый прошлый диалог (только чтение); null – текущий
+  const [openId, setOpenId] = useState<string | null>(null)
+  const past = useQuery({
+    queryKey: ['chat', 'dialog', openId],
+    queryFn: () => getDialogMessages(openId!),
+    enabled: Boolean(openId),
+  })
   const messages = history.data?.messages ?? []
   const setMessages = (update: (prev: TChatMessage[]) => TChatMessage[]) =>
     queryClient.setQueryData<TChatReply>(chatKey, (old) => ({
@@ -76,7 +85,10 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
 
   const send = useMutation({
     mutationFn: sendMessage,
-    onSuccess: (reply) => setMessages((prev) => [...prev, ...reply.messages]),
+    onSuccess: (reply) => {
+      setMessages((prev) => [...prev, ...reply.messages])
+      queryClient.invalidateQueries({ queryKey: dialogsKey })
+    },
     onError: (_e, vars) => setLastFailed({ text: vars.text, action: vars.action ?? null }),
   })
 
@@ -104,7 +116,9 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
     mutationFn: resetChat,
     onSuccess: (reply) => {
       queryClient.setQueryData<TChatReply>(chatKey, reply)
+      queryClient.invalidateQueries({ queryKey: dialogsKey })
       setLastFailed(null)
+      setOpenId(null)
     },
   })
 
@@ -147,7 +161,7 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' })
-  }, [messages.length, send.isPending])
+  }, [messages.length, send.isPending, openId, past.data])
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -162,135 +176,173 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
     }
   }
 
-  return (
-    <div className={classes.chat}>
-      <header className={classes.header}>
-        <Mascot size={40} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <Text fw={600}>AI-buddy</Text>
-          <Text size="xs" c="ink.5">
-            знает твой этап, команду и права доступа
-          </Text>
-        </div>
-        <Button
-          variant="outline"
-          color="ink"
-          leftSection={<IconPlus size={16} />}
-          onClick={() => reset.mutate()}
-          loading={reset.isPending}
-          disabled={messages.length === 0 || busy}
-        >
-          Новый диалог
-        </Button>
-      </header>
+  const shown = openId ? (past.data?.messages ?? []) : messages
 
-      <div className={classes.scroll}>
-        <Stack gap={20} className={classes.column} aria-live="polite">
-          {history.isPending && (
-            <Text c="ink.5" ta="center" py={48}>
-              Загружаем переписку…
+  return (
+    <div className={classes.shell}>
+      <ChatHistory
+        openId={openId}
+        onOpen={setOpenId}
+        onNew={() => reset.mutate()}
+        newBusy={reset.isPending}
+        newDisabled={messages.length === 0 || busy}
+      />
+      <div className={classes.chat}>
+        <header className={classes.header}>
+          <Mascot size={40} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Text fw={600}>AI-buddy</Text>
+            <Text size="xs" c="ink.5">
+              знает твой этап, команду и права доступа
             </Text>
+          </div>
+          {openId && (
+            <Button
+              variant="outline"
+              color="ink"
+              leftSection={<IconArrowLeft size={16} />}
+              onClick={() => setOpenId(null)}
+            >
+              К текущему диалогу
+            </Button>
           )}
-          {history.isError && (
-            <Alert color="yellow" variant="light">
-              Не удалось загрузить прошлую переписку. Новые сообщения работают как обычно.
-            </Alert>
-          )}
-          {messages.length === 0 && !send.isPending && !history.isPending && (
-            <Stack align="center" gap="sm" py={48} className="ab-pop">
-              <Mascot size={140} glow float />
-              <Text fz={26} fw={500} ta="center" style={{ letterSpacing: '-0.02em' }}>
-                Привет{user ? `, ${user.name}` : ''}! С чего начнем?
+        </header>
+
+        <div className={classes.scroll}>
+          <Stack gap={20} className={classes.column} aria-live="polite">
+            {history.isPending && (
+              <Text c="ink.5" ta="center" py={48}>
+                Загружаем переписку…
               </Text>
-              <Text c="ink.5" ta="center" maw={460}>
-                Спроси о процессах и инструментах или попроси оформить заявку. Я покажу, откуда взял
-                ответ.
+            )}
+            {history.isError && (
+              <Alert color="yellow" variant="light">
+                Не удалось загрузить прошлую переписку. Новые сообщения работают как обычно.
+              </Alert>
+            )}
+            {openId && past.isPending && (
+              <Text c="ink.5" ta="center" py={48}>
+                Загружаем диалог…
+              </Text>
+            )}
+            {openId && past.isError && (
+              <Alert color="red" variant="light" role="alert">
+                {errorText(past.error)}
+              </Alert>
+            )}
+            {!openId && messages.length === 0 && !send.isPending && !history.isPending && (
+              <Stack align="center" gap="sm" py={48} className="ab-pop">
+                <Mascot size={140} glow float />
+                <Text fz={26} fw={500} ta="center" style={{ letterSpacing: '-0.02em' }}>
+                  Привет{user ? `, ${user.name}` : ''}! С чего начнем?
+                </Text>
+                <Text c="ink.5" ta="center" maw={460}>
+                  Спроси о процессах и инструментах или попроси оформить заявку. Я покажу, откуда
+                  взял ответ.
+                </Text>
+              </Stack>
+            )}
+            {shown.map((m) => (
+              <ChatMessageView
+                key={m.id}
+                message={m}
+                busy={act.isPending && act.variables?.actionId === m.confirm?.actionId}
+                onConfirm={(actionId) => act.mutate({ actionId, ok: true })}
+                onCancel={(actionId) => act.mutate({ actionId, ok: false })}
+              />
+            ))}
+            {!openId && send.isPending && <ThinkingBubble />}
+            {lastFailed && !send.isPending && (
+              <Alert
+                color="red"
+                variant="light"
+                role="alert"
+                icon={<Mascot size={24} mood="sad" />}
+              >
+                {errorText(send.error)}{' '}
+                <Button
+                  size="xs"
+                  variant="outline"
+                  color="ink"
+                  ml="xs"
+                  onClick={() => {
+                    setMessages((prev) => prev.slice(0, -1))
+                    ask(lastFailed.text, lastFailed.action)
+                  }}
+                >
+                  Повторить
+                </Button>
+              </Alert>
+            )}
+            {reset.isError && (
+              <Alert color="red" variant="light" role="alert">
+                {errorText(reset.error)}
+              </Alert>
+            )}
+            {act.isError && (
+              <Alert color="red" variant="light" role="alert">
+                {errorText(act.error)}
+              </Alert>
+            )}
+            <div ref={endRef} />
+          </Stack>
+        </div>
+
+        {openId ? (
+          <div className={classes.pastBanner}>
+            <Text size="sm" c="ink.5">
+              Это прошлый диалог, он только для чтения.
+            </Text>
+            <Button color="ink" onClick={() => setOpenId(null)}>
+              Вернуться к текущему
+            </Button>
+          </div>
+        ) : (
+          <div className={classes.composer}>
+            <Stack gap={10} className={classes.column}>
+              <Group gap={8}>
+                {SUGGESTIONS.map((s) => (
+                  <UnstyledButton
+                    key={s}
+                    onClick={() => ask(s)}
+                    disabled={send.isPending}
+                    className={classes.chip}
+                  >
+                    {s}
+                  </UnstyledButton>
+                ))}
+              </Group>
+              <form onSubmit={submit} className={classes.form}>
+                <Textarea
+                  aria-label="Сообщение"
+                  placeholder="Спроси о процессах, доступах или попроси оформить заявку…"
+                  autosize
+                  minRows={1}
+                  maxRows={5}
+                  variant="unstyled"
+                  size="md"
+                  value={text}
+                  onChange={(e) => setText(e.currentTarget.value)}
+                  onKeyDown={onKey}
+                  style={{ flex: 1 }}
+                />
+                <ActionIcon
+                  type="submit"
+                  size={40}
+                  radius="md"
+                  aria-label="Отправить"
+                  disabled={!text.trim() || send.isPending}
+                >
+                  <IconArrowRight size={20} />
+                </ActionIcon>
+              </form>
+              <Text size="xs" c="ink.5" ta="center">
+                AI-buddy может ошибаться. Важное уточняй у наставника. Данные демо-версии
+                синтетические.
               </Text>
             </Stack>
-          )}
-          {messages.map((m) => (
-            <ChatMessageView
-              key={m.id}
-              message={m}
-              busy={act.isPending && act.variables?.actionId === m.confirm?.actionId}
-              onConfirm={(actionId) => act.mutate({ actionId, ok: true })}
-              onCancel={(actionId) => act.mutate({ actionId, ok: false })}
-            />
-          ))}
-          {send.isPending && <ThinkingBubble />}
-          {lastFailed && !send.isPending && (
-            <Alert color="red" variant="light" role="alert" icon={<Mascot size={24} mood="sad" />}>
-              {errorText(send.error)}{' '}
-              <Button
-                size="xs"
-                variant="outline"
-                color="ink"
-                ml="xs"
-                onClick={() => {
-                  setMessages((prev) => prev.slice(0, -1))
-                  ask(lastFailed.text, lastFailed.action)
-                }}
-              >
-                Повторить
-              </Button>
-            </Alert>
-          )}
-          {reset.isError && (
-            <Alert color="red" variant="light" role="alert">
-              {errorText(reset.error)}
-            </Alert>
-          )}
-          {act.isError && (
-            <Alert color="red" variant="light" role="alert">
-              {errorText(act.error)}
-            </Alert>
-          )}
-          <div ref={endRef} />
-        </Stack>
-      </div>
-
-      <div className={classes.composer}>
-        <Stack gap={10} className={classes.column}>
-          <Group gap={8}>
-            {SUGGESTIONS.map((s) => (
-              <UnstyledButton
-                key={s}
-                onClick={() => ask(s)}
-                disabled={send.isPending}
-                className={classes.chip}
-              >
-                {s}
-              </UnstyledButton>
-            ))}
-          </Group>
-          <form onSubmit={submit} className={classes.form}>
-            <Textarea
-              aria-label="Сообщение"
-              placeholder="Спроси о процессах, доступах или попроси оформить заявку…"
-              autosize
-              minRows={1}
-              maxRows={5}
-              variant="unstyled"
-              size="md"
-              value={text}
-              onChange={(e) => setText(e.currentTarget.value)}
-              onKeyDown={onKey}
-              style={{ flex: 1 }}
-            />
-            <ActionIcon
-              type="submit"
-              size={40}
-              radius="md"
-              aria-label="Отправить"
-              disabled={!text.trim() || send.isPending}
-            >
-              <IconArrowRight size={20} />
-            </ActionIcon>
-          </form>
-          <Text size="xs" c="ink.5" ta="center">
-            AI-buddy может ошибаться. Важное уточняй у наставника. Данные демо-версии синтетические.
-          </Text>
-        </Stack>
+          </div>
+        )}
       </div>
     </div>
   )

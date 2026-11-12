@@ -18,6 +18,8 @@ type ChatService interface {
 	Cancel(ctx context.Context, viewerID, actionID string) (*models.ChatReply, error)
 	History(ctx context.Context, viewerID string) (*models.ChatReply, error)
 	Reset(ctx context.Context, viewerID string) (*models.ChatReply, error)
+	Dialogs(ctx context.Context, viewerID string) ([]models.ChatDialog, error)
+	DialogMessages(ctx context.Context, viewerID, dialogID string) (*models.ChatReply, error)
 }
 
 // RequestsService – страница «Заявки».
@@ -48,6 +50,26 @@ func (h *Chat) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v, err := h.svc.Send(r.Context(), id, in)
+	reply(w, h.log, http.StatusOK, v, err)
+}
+
+// Dialogs – GET /api/chat/dialogs: история диалогов, новые сверху.
+func (h *Chat) Dialogs(w http.ResponseWriter, r *http.Request) {
+	id, ok := viewerID(w, r)
+	if !ok {
+		return
+	}
+	v, err := h.svc.Dialogs(r.Context(), id)
+	reply(w, h.log, http.StatusOK, v, err)
+}
+
+// DialogMessages – GET /api/chat/dialogs/{dialogId}/messages: сообщения диалога (только чтение).
+func (h *Chat) DialogMessages(w http.ResponseWriter, r *http.Request) {
+	id, ok := viewerID(w, r)
+	if !ok {
+		return
+	}
+	v, err := h.svc.DialogMessages(r.Context(), id, chi.URLParam(r, "dialogId"))
 	reply(w, h.log, http.StatusOK, v, err)
 }
 

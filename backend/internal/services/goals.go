@@ -30,6 +30,13 @@ type GoalsStore interface {
 	Delete(ctx context.Context, id string) error
 	SetProgress(ctx context.Context, goalID, authorID string, pct int, note string) (*models.Goal, error)
 	Agree(ctx context.Context, internID, by string) error
+	Step(ctx context.Context, goalID, stepID string) (*models.GoalStep, error)
+	SetStepDone(ctx context.Context, goalID, stepID, by string, done bool) (*models.Goal, error)
+}
+
+// StepInput – подтверждение шага цели.
+type StepInput struct {
+	Done *bool `json:"done"`
 }
 
 // GoalInput – поля цели из формы. В PATCH отсутствующее поле не меняется;
@@ -127,9 +134,14 @@ func (s *Goals) Delete(ctx context.Context, viewerID, goalID string) error {
 
 // Progress – отметка о прогрессе по цели.
 func (s *Goals) Progress(ctx context.Context, viewerID, goalID string, in ProgressInput) (*models.Goal, error) {
-	viewer, _, _, err := s.goal(ctx, viewerID, goalID)
+	viewer, intern, _, err := s.goal(ctx, viewerID, goalID)
 	if err != nil {
 		return nil, err
+	}
+	// Стажер не выставляет себе процент сам: он складывается из шагов (задачи пути и отметки
+	// наставника). Наставнику и руководителю ручка оставлена для заметок к цели.
+	if viewer.ID == intern.ID {
+		return nil, ErrForbidden
 	}
 	if in.ProgressPct == nil || *in.ProgressPct < 0 || *in.ProgressPct > 100 {
 		return nil, invalid("progressPct must be between 0 and 100")
@@ -139,6 +151,29 @@ func (s *Goals) Progress(ctx context.Context, viewerID, goalID string, in Progre
 		return nil, invalid("note is too long (max 500)")
 	}
 	return storeResult(s.store.SetProgress(ctx, goalID, viewer.ID, *in.ProgressPct, note))
+}
+
+// Step – наставник стажера или руководитель отмечает шаг цели выполненным (или снимает отметку).
+// Шаги-задачи закрываются задачей «Моего пути», отметить их здесь нельзя.
+func (s *Goals) Step(ctx context.Context, viewerID, goalID, stepID string, in StepInput) (*models.Goal, error) {
+	viewer, intern, _, err := s.goal(ctx, viewerID, goalID)
+	if err != nil {
+		return nil, err
+	}
+	if !CanManageIntern(viewer, intern) {
+		return nil, ErrForbidden
+	}
+	if in.Done == nil {
+		return nil, invalid("done is required")
+	}
+	st, err := s.store.Step(ctx, goalID, stepID)
+	if err != nil {
+		return nil, mapNotFound(err)
+	}
+	if st.Source == "task" {
+		return nil, invalid("this step is done when the intern completes the task on the path")
+	}
+	return storeResult(s.store.SetStepDone(ctx, goalID, stepID, viewer.ID, *in.Done))
 }
 
 // Agree – руководитель согласовал цели стажера.

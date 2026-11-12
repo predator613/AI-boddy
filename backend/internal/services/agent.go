@@ -31,6 +31,8 @@ type ChatStore interface {
 	AddMessage(ctx context.Context, m repository.NewMessage) (string, time.Time, error)
 	Messages(ctx context.Context, conversationID string, limit int) ([]repository.StoredMessage, error)
 	Clear(ctx context.Context, conversationID string) error
+	Dialogs(ctx context.Context, conversationID string, limit int) ([]repository.DialogRow, error)
+	DialogMessages(ctx context.Context, conversationID, dialogID string, limit int) ([]repository.StoredMessage, error)
 	Handoff(ctx context.Context, questionID, internID, mentorID, text string) error
 	LogToolCall(ctx context.Context, c repository.ToolCall) error
 }
@@ -226,6 +228,43 @@ func (a *Agent) History(ctx context.Context, viewerID string) (*models.ChatReply
 	if err != nil {
 		return nil, err
 	}
+	return &models.ChatReply{Messages: a.toMessages(ctx, stored)}, nil
+}
+
+// Dialogs – колонка истории: открытый диалог и прошлые, новые сверху (до 50).
+func (a *Agent) Dialogs(ctx context.Context, viewerID string) ([]models.ChatDialog, error) {
+	t, err := a.begin(ctx, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := a.chat.Dialogs(ctx, t.conv, 50)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.ChatDialog, len(rows))
+	for i, d := range rows {
+		out[i] = models.ChatDialog{ID: d.ID, Title: d.Title, Preview: d.Preview, Kind: d.Kind,
+			UpdatedAt: d.UpdatedAt.In(moscow), Current: d.Current}
+	}
+	return out, nil
+}
+
+// DialogMessages – сообщения прошлого (или текущего) диалога для чтения. Чужой диалог – 404.
+// Карточки приходят с итоговым состоянием: черновики закрытого диалога отменены.
+func (a *Agent) DialogMessages(ctx context.Context, viewerID, dialogID string) (*models.ChatReply, error) {
+	t, err := a.begin(ctx, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	stored, err := a.chat.DialogMessages(ctx, t.conv, dialogID, 200)
+	if err != nil {
+		return nil, mapNotFound(err)
+	}
+	return &models.ChatReply{Messages: a.toMessages(ctx, stored)}, nil
+}
+
+// toMessages – сохраненные сообщения в формате чата, карточки – с актуальным состоянием заявки.
+func (a *Agent) toMessages(ctx context.Context, stored []repository.StoredMessage) []models.ChatMessage {
 	out := make([]models.ChatMessage, 0, len(stored))
 	for _, m := range stored {
 		msg := models.ChatMessage{ID: m.ID, Role: "assistant", Kind: m.Kind, Text: m.Text, Mood: "calm", At: m.CreatedAt}
@@ -248,7 +287,7 @@ func (a *Agent) History(ctx context.Context, viewerID string) (*models.ChatReply
 		}
 		out = append(out, msg)
 	}
-	return &models.ChatReply{Messages: out}, nil
+	return out
 }
 
 // ---------- инструменты ----------

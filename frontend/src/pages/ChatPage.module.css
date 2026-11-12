@@ -80,3 +80,94 @@
     padding-right: 16px;
   }
 }
+
+/* чат с колонкой истории диалогов слева */
+.shell {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.shell .chat {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.history {
+  flex: 0 0 260px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border-right: 1px solid #d6d6d6;
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+.historyList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  scrollbar-width: thin;
+}
+
+.historyGroup {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #5c5c5c;
+  padding: 12px 10px 4px;
+}
+
+.historyItem {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: background 0.15s ease;
+}
+
+.historyItem:hover {
+  background: #f4f4f4;
+}
+
+.historyItem[data-active] {
+  background: #c9ffbf;
+}
+
+.historyTitle {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pastBanner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 32px 24px;
+  background: #f4f4f4;
+  border-top: 1px solid #ededed;
+}
+
+@media (max-width: 900px) {
+  .history {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    height: calc(100dvh - 64px);
+  }
+}

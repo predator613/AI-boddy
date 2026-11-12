@@ -52,6 +52,31 @@ const STATUS: Record<TCalendarEvent['status'], string> = {
 const REASONS = ['Пересекается с другой встречей', 'Не успею подготовиться', 'Удобнее другое время']
 
 const hm = (d: Date) => d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+/** Раскладка дня: пересекающиеся события делят ширину колонки поровну. */
+function layoutDay(list: TCalendarEvent[]) {
+  const sorted = [...list].sort((a, b) => a.startsAt.localeCompare(b.startsAt))
+  const out: { event: TCalendarEvent; col: number; cols: number }[] = []
+  let group: typeof out = []
+  let groupEnd = 0
+  const flush = () => {
+    const cols = Math.max(1, ...group.map((g) => g.col + 1))
+    group.forEach((g) => out.push({ ...g, cols }))
+    group = []
+  }
+  for (const e of sorted) {
+    const start = new Date(e.startsAt).getTime()
+    const end = start + e.durationMin * 60_000
+    if (group.length && start >= groupEnd) flush()
+    const busy = new Set(group.filter((g) => endOf(g.event).getTime() > start).map((g) => g.col))
+    let col = 0
+    while (busy.has(col)) col++
+    group.push({ event: e, col, cols: 1 })
+    groupEnd = Math.max(groupEnd, end)
+  }
+  if (group.length) flush()
+  return out
+}
+
 const endOf = (e: TCalendarEvent) =>
   new Date(new Date(e.startsAt).getTime() + e.durationMin * 60_000)
 
@@ -260,108 +285,111 @@ export function CalendarPage({ now: nowProp }: CalendarPageProps) {
                           }}
                         />
                       )}
-                      {events
-                        .filter((e) => new Date(e.startsAt).toDateString() === day.toDateString())
-                        .map((e) => {
-                          const s = new Date(e.startsAt)
-                          const top = (s.getHours() + s.getMinutes() / 60 - HOURS[0]!) * ROW
-                          const past = endOf(e) <= now
-                          const k = KIND[e.kind]
-                          const badge =
-                            e.status === 'pending' && !past
-                              ? 'ответь'
-                              : e.status === 'move_requested'
-                                ? 'перенос?'
-                                : null
-                          // короткая встреча (меньше часа) – одна строка, иначе текст вылезает за слот
-                          const compact = e.durationMin < 60
-                          return (
-                            <UnstyledButton
-                              key={e.id}
-                              className="ab-pop"
-                              onClick={() => setSelectedId(e.id)}
-                              aria-pressed={selected?.id === e.id}
-                              aria-label={`${e.title}, ${DAYS[i]} ${hm(s)}`}
-                              title={`${e.title}, ${hm(s)}–${hm(endOf(e))}`}
-                              style={{
-                                position: 'absolute',
-                                left: 4,
-                                right: 4,
-                                top: Math.max(top, 0) + 2,
-                                height: Math.max((e.durationMin / 60) * ROW - 4, 24),
-                                background: k.bg,
-                                border: k.own ? '1px dashed #141414' : 0,
-                                boxSizing: 'border-box',
-                                borderRadius: compact ? 8 : 10,
-                                outline: selected?.id === e.id ? '2px solid #141414' : 'none',
-                                outlineOffset: -2,
-                                padding: compact ? '0 8px' : '6px 9px',
-                                overflow: 'hidden',
-                                opacity: past ? 0.55 : 1,
-                                display: 'flex',
-                                flexDirection: compact ? 'row' : 'column',
-                                alignItems: compact ? 'center' : 'stretch',
-                                gap: compact ? 6 : 2,
-                              }}
+                      {layoutDay(
+                        events.filter(
+                          (e) => new Date(e.startsAt).toDateString() === day.toDateString(),
+                        ),
+                      ).map(({ event: e, col, cols }) => {
+                        const s = new Date(e.startsAt)
+                        const top = (s.getHours() + s.getMinutes() / 60 - HOURS[0]!) * ROW
+                        const past = endOf(e) <= now
+                        const k = KIND[e.kind]
+                        const badge =
+                          e.status === 'pending' && !past
+                            ? 'ответь'
+                            : e.status === 'move_requested'
+                              ? 'перенос?'
+                              : null
+                        // короткая встреча (меньше часа) – одна строка, иначе текст вылезает за слот
+                        const compact = e.durationMin < 60
+                        return (
+                          <UnstyledButton
+                            key={e.id}
+                            className="ab-pop"
+                            onClick={() => setSelectedId(e.id)}
+                            aria-pressed={selected?.id === e.id}
+                            aria-label={`${e.title}, ${DAYS[i]} ${hm(s)}`}
+                            title={`${e.title}, ${hm(s)}–${hm(endOf(e))}`}
+                            style={{
+                              position: 'absolute',
+                              // пересекающиеся встречи встают рядом, а не друг на друга
+                              left: `calc(${(col / cols) * 100}% + 4px)`,
+                              width: `calc(${100 / cols}% - 8px)`,
+                              top: Math.max(top, 0) + 2,
+                              height: Math.max((e.durationMin / 60) * ROW - 4, 24),
+                              background: k.bg,
+                              border: k.own ? '1px dashed #141414' : 0,
+                              boxSizing: 'border-box',
+                              borderRadius: compact ? 8 : 10,
+                              outline: selected?.id === e.id ? '2px solid #141414' : 'none',
+                              outlineOffset: -2,
+                              padding: compact ? '0 8px' : '6px 9px',
+                              overflow: 'hidden',
+                              opacity: past ? 0.55 : 1,
+                              display: 'flex',
+                              flexDirection: compact ? 'row' : 'column',
+                              alignItems: compact ? 'center' : 'stretch',
+                              gap: compact ? 6 : 2,
+                            }}
+                          >
+                            <Text
+                              size="xs"
+                              fw={600}
+                              lh={1.2}
+                              style={
+                                compact
+                                  ? {
+                                      flex: 1,
+                                      minWidth: 0,
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                    }
+                                  : {
+                                      display: '-webkit-box',
+                                      WebkitLineClamp: e.durationMin >= 90 ? 3 : 2,
+                                      WebkitBoxOrient: 'vertical',
+                                      overflow: 'hidden',
+                                    }
+                              }
                             >
-                              <Text
-                                size="xs"
-                                fw={600}
-                                lh={1.2}
-                                style={
-                                  compact
-                                    ? {
-                                        flex: 1,
-                                        minWidth: 0,
-                                        whiteSpace: 'nowrap',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                      }
-                                    : {
-                                        display: '-webkit-box',
-                                        WebkitLineClamp: e.durationMin >= 90 ? 3 : 2,
-                                        WebkitBoxOrient: 'vertical',
-                                        overflow: 'hidden',
-                                      }
-                                }
+                              {e.title}
+                            </Text>
+                            <Text size="11px" style={{ flex: 'none' }}>
+                              {compact ? hm(s) : `${hm(s)}–${hm(endOf(e))}`}
+                            </Text>
+                            {badge && e.durationMin >= 90 && (
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  textTransform: 'uppercase',
+                                  background: '#FFFFFF',
+                                  padding: '1px 5px',
+                                  alignSelf: 'flex-start',
+                                }}
                               >
-                                {e.title}
-                              </Text>
-                              <Text size="11px" style={{ flex: 'none' }}>
-                                {compact ? hm(s) : `${hm(s)}–${hm(endOf(e))}`}
-                              </Text>
-                              {badge && e.durationMin >= 90 && (
-                                <span
-                                  style={{
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    textTransform: 'uppercase',
-                                    background: '#FFFFFF',
-                                    padding: '1px 5px',
-                                    alignSelf: 'flex-start',
-                                  }}
-                                >
-                                  {badge}
-                                </span>
-                              )}
-                              {badge && e.durationMin < 90 && (
-                                <span
-                                  aria-hidden="true"
-                                  style={{
-                                    position: 'absolute',
-                                    top: compact ? '50%' : 7,
-                                    right: 7,
-                                    marginTop: compact ? -4 : 0,
-                                    width: 8,
-                                    height: 8,
-                                    borderRadius: 4,
-                                    background: e.status === 'pending' ? '#965EEB' : '#FF4053',
-                                  }}
-                                />
-                              )}
-                            </UnstyledButton>
-                          )
-                        })}
+                                {badge}
+                              </span>
+                            )}
+                            {badge && e.durationMin < 90 && (
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  position: 'absolute',
+                                  top: compact ? '50%' : 7,
+                                  right: 7,
+                                  marginTop: compact ? -4 : 0,
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: 4,
+                                  background: e.status === 'pending' ? '#965EEB' : '#FF4053',
+                                }}
+                              />
+                            )}
+                          </UnstyledButton>
+                        )
+                      })}
                     </div>
                   )
                 })}

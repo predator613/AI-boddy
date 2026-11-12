@@ -5,6 +5,7 @@ import { mockGoals, setMockGoalProgress } from './goalsData'
 import { buildMockPath, mockInterns, setMockTaskStatus } from './pathData'
 import { KB, assistantHandlers, pendingHandlers } from './pending'
 import { consoleHandlers } from './consoleData'
+import { calendarHandlers } from './mentorData'
 
 const apiError = (status: number, code: string, message: string) =>
   HttpResponse.json({ error: { code, message } }, { status })
@@ -174,5 +175,6 @@ export const allHandlers = [
   ...goalsKbHandlers,
   ...consoleHandlers,
   ...assistantHandlers,
+  ...calendarHandlers,
   ...pendingHandlers,
 ]

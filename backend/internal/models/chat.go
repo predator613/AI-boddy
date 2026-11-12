@@ -70,3 +70,14 @@ type HistoryEntry struct {
 	At    string `json:"at"`
 	State string `json:"state"` // done | now | rejected
 }
+
+// ChatDialog – диалог в колонке истории чата: заголовок – первая реплика стажера, итог – заявка,
+// передача наставнику или ответ из справочника.
+type ChatDialog struct {
+	ID        string    `json:"id"`
+	Title     string    `json:"title"`
+	Preview   string    `json:"preview"`
+	Kind      string    `json:"kind"` // request | handoff | answer
+	UpdatedAt time.Time `json:"updatedAt"`
+	Current   bool      `json:"current"`
+}
