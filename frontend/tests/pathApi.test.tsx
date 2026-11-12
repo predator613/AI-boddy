@@ -79,10 +79,10 @@ beforeEach(() => {
 
 describe('api/path', () => {
   it('стажеры и путь стажера', async () => {
-    expect(await api.getInterns()).toHaveLength(1)
+    expect(await api.getInterns()).toHaveLength(2)
     expect((await api.getInternPath('u-anna')).intern.name).toBe('Анна')
     const path = await api.setInternTaskStatus('u-anna', 't-204', { status: 'done' })
-    expect(path.progress.done).toBe(6)
+    expect(path.progress.done).toBe(8)
     expect(
       (await api.createMeeting('u-anna', { startsAt: '2026-11-13T11:00:00+03:00' })).title,
     ).toBe('Встреча 1:1')

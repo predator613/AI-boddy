@@ -71,7 +71,7 @@ export function SchedulePage() {
     <Page maxWidth={1400}>
       <Stack gap="lg" style={{ flex: 1, minWidth: 0 }}>
         <PageHeader
-          overline={`Расписание · ${dm(monday)} – ${dm(addDays(monday, 4))}`}
+          overline="Расписание"
           title={
             <>
               Встречи <Marker color="#DFCDF3">со стажерами</Marker>

@@ -48,7 +48,7 @@ export function RequestsPage({
     <Page maxWidth={1400}>
       <Stack gap="lg" style={{ flex: '999 1 520px', minWidth: 0 }}>
         <PageHeader
-          overline="Мои заявки · созданы тобой и AI-buddy"
+          overline="Мои заявки"
           title="Заявки"
           right={
             <Button

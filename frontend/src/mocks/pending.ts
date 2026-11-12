@@ -1,3 +1,4 @@
+import { leadHandlers } from './leadData'
 // Имитация чата с помощником и заявок для полного режима без backend (npm run dev:mock) и тестов.
 // Backend эти эндпоинты уже реализует (docs/api-chat-requests.md), поэтому вместе с настоящим
 // backend перехватываются только pendingHandlers внизу файла – то, чего в backend еще нет.
@@ -9,7 +10,7 @@ import { mentorHandlers } from './mentorData'
 
 type Payload = Record<string, unknown>
 interface PendingAction {
-  kind: 'access' | 'leave'
+  kind: 'access' | 'leave' | 'other'
   title: string
   fields: { label: string; value: string }[]
   taskId: string | null
@@ -237,6 +238,25 @@ function leaveConfirm(): TChatMessage[] {
   ]
 }
 
+// Задача чек-листа «Добавиться в чаты и каналы»: действие через имитацию корпоративного мессенджера.
+function joinChatsConfirm(taskId: string | null): TChatMessage[] {
+  const fields = [
+    { label: 'Чаты', value: 'Команда Backend, Стажеры Авито' },
+    { label: 'Каналы', value: 'Дежурства Backend, Релизы' },
+    { label: 'Закрытые', value: 'подтвердит наставник' },
+  ]
+  const actionId = id('act')
+  actions.set(actionId, { kind: 'other', title: 'Чаты и каналы команды', fields, taskId })
+  return [
+    msg({
+      kind: 'confirm',
+      mood: 'mentor',
+      text: 'Добавить тебя в чаты и каналы команды?',
+      confirm: { actionId, title: 'Добавить в чаты и каналы?', fields, state: 'pending' },
+    }),
+  ]
+}
+
 export function agentReply(
   text: string,
   action: { kind: string; payload: Payload } | null,
@@ -245,8 +265,26 @@ export function agentReply(
   const t = text.toLowerCase()
   if (action?.kind === 'access_request') return accessConfirm(action.payload, taskId)
   if (action?.kind === 'leave_request' || /отгул/.test(t)) return leaveConfirm()
+  if (action?.kind === 'join_chats' || /(чат|канал).*(команд|добав)|добав.*(чат|канал)/.test(t))
+    return joinChatsConfirm(taskId ?? 't-104')
   if (action?.kind === 'ask_buddy' && typeof action.payload.question === 'string')
     return agentReply(action.payload.question, null)
+  if (/защит|раскрыти|коммерческ/.test(t)) {
+    return [
+      msg({
+        text: 'Коротко: не выносим данные пользователей и коллег за пределы рабочих сервисов, не пересылаем коммерческую информацию в личные чаты, о внутреннем говорим публично только после согласования. Проверь себя: можно ли скинуть скриншот дашборда в чат с друзьями? Ответь, и я отмечу задачу.',
+        source: { title: 'Безопасность и учеба → Защита данных', articleId: 'a-security' },
+      }),
+    ]
+  }
+  if (/экватор|презентац/.test(t)) {
+    return [
+      msg({
+        text: 'Черновик к экватору: 1) кто я и команда; 2) цели и прогресс по шагам; 3) закрытые задачи: доступы, окружение, первая задача; 4) чему научилась; 5) планы до конца стажировки. Отправить черновик Игорю на проверку?',
+        source: { title: 'Экватор → Структура презентации', articleId: 'a-equator' },
+      }),
+    ]
+  }
   if (/прод|логи/.test(t)) {
     return [
       msg({
@@ -477,24 +515,27 @@ export const assistantHandlers = [
       number,
       kind: a.kind,
       title: a.title,
-      status: 'waiting',
+      status: a.kind === 'other' ? 'done' : 'waiting',
       createdAt: new Date().toISOString(),
       via: 'buddy',
       fields: a.fields,
-      history: [
-        { title: 'Создана AI-buddy', at: 'только что', state: 'done' },
-        { title: 'Ждет решения Олега', at: 'обычно до 1 рабочего дня', state: 'now' },
-      ],
+      history:
+        a.kind === 'other'
+          ? [{ title: 'Выполнено AI-buddy', at: 'только что', state: 'done' }]
+          : [
+              { title: 'Создана AI-buddy', at: 'только что', state: 'done' },
+              { title: 'Ждет решения Олега', at: 'обычно до 1 рабочего дня', state: 'now' },
+            ],
       rejectReason: null,
     }
     requests = [item, ...requests]
-    if (a.taskId) setMockTaskStatus(a.taskId, 'waiting')
+    if (a.taskId) setMockTaskStatus(a.taskId, a.kind === 'other' ? 'done' : 'waiting')
     return reply([
       msg({
         kind: 'result',
         mood: 'happy',
-        text: `Заявка №${number} создана`,
-        result: { requestId: item.id, number, title: a.title, status: 'waiting' },
+        text: a.kind === 'other' ? 'Готово: ты в чатах команды' : `Заявка №${number} создана`,
+        result: { requestId: item.id, number, title: a.title, status: item.status },
       }),
     ])
   }),
@@ -561,4 +602,4 @@ export const assistantHandlers = [
 // (main.tsx, VITE_PENDING_MOCKS). Сейчас это кабинет наставника и чат стажера с наставником
 // (docs/api-mentor-console.md). Когда backend реализует ручку – удалите ее из mentorHandlers.
 // Календарь стажера backend уже отдает сам: его моки только в полном режиме (handlers.ts).
-export const pendingHandlers = [...mentorHandlers]
+export const pendingHandlers = [...mentorHandlers, ...leadHandlers]

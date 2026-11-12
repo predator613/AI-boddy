@@ -48,11 +48,20 @@ export function MyPathPage({ stage, onStage, now }: MyPathPageProps) {
         busyTaskId={complete.isPending ? complete.variables : null}
         onComplete={(taskId) => complete.mutate(taskId)}
         onAsk={(task) =>
-          navigate({ to: '/chat', search: { q: `Помоги: ${task.title}`, task: task.id } })
+          navigate({
+            to: '/chat',
+            search: {
+              q:
+                typeof task.action?.payload.prompt === 'string'
+                  ? task.action.payload.prompt
+                  : `Помоги: ${task.title}`,
+              task: task.id,
+            },
+          })
         }
         header={
           <PageHeader
-            overline={`Мой путь · ${path.intern.teamName}${path.intern.mentor ? ` · наставник ${path.intern.mentor.name}` : ''}`}
+            overline={`Мой путь · ${path.intern.teamName}`}
             title={
               <>
                 Привет, <Marker>{path.intern.name}!</Marker>

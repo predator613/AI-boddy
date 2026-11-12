@@ -9,6 +9,7 @@ interface ChatMessageViewProps {
   message: TChatMessage
   onConfirm?: (actionId: string) => void
   onCancel?: (actionId: string) => void
+  onEdit?: () => void
   busy?: boolean
 }
 
@@ -19,7 +20,15 @@ const STATUS_TEXT = {
   rejected: 'отклонена',
 } as const
 
-export function ChatMessageView({ message: m, onConfirm, onCancel, busy }: ChatMessageViewProps) {
+export function ChatMessageView({
+  message: m,
+  onConfirm,
+  onCancel,
+  onEdit,
+  busy,
+}: ChatMessageViewProps) {
+  // Заявка уже выполнена или одобрена – обещать «напишу позже» незачем.
+  const finished = m.result?.status === 'approved' || m.result?.status === 'done'
   if (m.role === 'user') {
     return (
       <div
@@ -92,6 +101,11 @@ export function ChatMessageView({ message: m, onConfirm, onCancel, busy }: ChatM
                 <Button color="ink" loading={busy} onClick={() => onConfirm?.(m.confirm!.actionId)}>
                   Подтвердить
                 </Button>
+                {onEdit && (
+                  <Button variant="outline" color="ink" disabled={busy} onClick={onEdit}>
+                    Изменить
+                  </Button>
+                )}
                 <Button
                   variant="subtle"
                   color="ink"
@@ -136,12 +150,12 @@ export function ChatMessageView({ message: m, onConfirm, onCancel, busy }: ChatM
               <IconCheck size={15} stroke={3} aria-hidden="true" />
             </span>
             <Text fz={18} fw={500}>
-              Заявка №{m.result.number} создана
+              {finished ? 'Готово' : `Заявка №${m.result.number} создана`}
             </Text>
           </Group>
           <Text size="sm">
-            {m.result.title}. Статус: <b>{STATUS_TEXT[m.result.status]}</b>. Напишу, когда будет
-            решение.
+            {m.result.title}. Статус: <b>{STATUS_TEXT[m.result.status]}</b>.
+            {finished ? '' : ' Напишу, когда будет решение.'}
           </Text>
           <Button
             renderRoot={(p) => <Link {...p} to="/requests" search={{ id: m.result!.requestId }} />}

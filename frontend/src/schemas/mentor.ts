@@ -65,6 +65,8 @@ export const Material = z.object({
   title: z.string(),
   kind: MaterialKind,
   stageCode: z.string().nullable(),
+  // Раздел справочника, в котором стажеры увидят материал.
+  section: z.string().nullable().default(null),
   useInAi: z.boolean(),
   authorName: z.string(),
   createdAt: z.string(),
@@ -75,6 +77,7 @@ export const MaterialInput = z
   .object({
     title: z.string().trim().min(1, 'Введи название').max(120),
     stageCode: z.string().default(''),
+    section: z.string().trim().max(60).default(''),
     useInAi: z.boolean().default(true),
     notify: z.boolean().default(true),
     url: z.string().trim().default(''),

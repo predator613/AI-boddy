@@ -76,7 +76,7 @@ export function StageCarousel({ stages, selectedCode, onOpen }: StageCarouselPro
               {open ? (
                 <span className={`${classes.body} ab-pop`}>
                   <span className={classes.title}>{s.title}</span>
-                  {s.tip && <span className={classes.hint}>{s.tip}</span>}
+                  <span className={classes.hint}>{s.period ?? s.tip}</span>
                   <span style={{ flex: 1 }} />
                   <span style={{ fontSize: 12 }}>
                     {s.doneCount} из {s.totalCount} ·{' '}

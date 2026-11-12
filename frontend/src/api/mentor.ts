@@ -40,6 +40,7 @@ export async function uploadMaterial(input: TMaterialInput) {
   const form = new FormData()
   form.set('title', input.title.trim())
   form.set('stageCode', input.stageCode ?? '')
+  form.set('section', (input.section ?? '').trim())
   form.set('useInAi', String(input.useInAi ?? true))
   form.set('notify', String(input.notify ?? true))
   if (input.file) form.set('file', input.file)

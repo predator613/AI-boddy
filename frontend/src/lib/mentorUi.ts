@@ -5,6 +5,7 @@ export const ACTION_LABELS: Record<string, string> = {
   leave_request: 'оформит отгул',
   ask_buddy: 'ответит на вопрос',
   open_article: 'откроет статью',
+  join_chats: 'добавит в чаты команды',
 }
 
 export const SWATCHES = [
@@ -43,4 +44,24 @@ export function tasksWord(n: number) {
   if (a === 1 && b !== 11) return `${n} задача`
   if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return `${n} задачи`
   return `${n} задач`
+}
+
+const WEEK_MS = 7 * 86_400_000
+
+/**
+ * Карточки «новый материал» в переписке: показываем три последние за 7 дней,
+ * остальные сворачиваются (они все равно есть в справочнике).
+ */
+export function foldMaterials<
+  T extends { id: string; kind: string; at: string; update: { type: string } | null },
+>(messages: T[], now = Date.now()): { visible: T[]; hidden: number } {
+  const materials = messages.filter((m) => m.kind === 'update' && m.update?.type === 'material')
+  const keep = new Set(
+    materials
+      .filter((m) => now - new Date(m.at).getTime() <= WEEK_MS)
+      .slice(-3)
+      .map((m) => m.id),
+  )
+  const visible = messages.filter((m) => !materials.includes(m) || keep.has(m.id))
+  return { visible, hidden: messages.length - visible.length }
 }

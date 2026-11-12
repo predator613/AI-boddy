@@ -1,5 +1,6 @@
-import { Button, Group, Paper, Stack, Text, Title } from '@mantine/core'
+import { Button, Group, Paper, Stack, Text, Title, UnstyledButton } from '@mantine/core'
 import { IconCheck } from '@tabler/icons-react'
+import { useState } from 'react'
 import { useAgreeGoals, useInternGoals, useMyGoals } from '../../hooks/useGoals'
 import { agreedLabel, type TGoal, type TGoalStep, type TGoalsView } from '../../schemas/goals'
 import { ErrorBlock } from '../QueryState'
@@ -46,25 +47,39 @@ function stepSource(s: TGoalStep) {
 function GoalRow({ goal: g, showUpdate }: { goal: TGoal; showUpdate: boolean }) {
   const done = g.steps.filter((s) => s.status === 'done').length
   const pct = g.progressPct
+  // Шаги спрятаны, пока стажер не раскроет цель: на экране остаются название, критерий и полоска.
+  const [open, setOpen] = useState(false)
   return (
     <div
       aria-label={`${g.title}: ${pct}%`}
       style={{
         background: '#F4F4F4',
         borderRadius: 12,
-        padding: '14px 16px',
+        padding: '12px 16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 8,
       }}
     >
-      <Group justify="space-between" align="flex-start" wrap="nowrap" gap={16}>
+      <UnstyledButton
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={`${g.title}: показать шаги`}
+        disabled={g.steps.length === 0}
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 16,
+        }}
+      >
         <div>
           <Text fz={15} fw={500} lh={1.25}>
             {g.title}
           </Text>
           <Text size="xs" c="ink.5" mt={3}>
             критерий: {g.criterion}
+            {g.competency ? ` · ${g.competency}` : ''}
           </Text>
         </div>
         <div style={{ textAlign: 'right', flex: 'none' }}>
@@ -73,11 +88,11 @@ function GoalRow({ goal: g, showUpdate }: { goal: TGoal; showUpdate: boolean }) 
           </Text>
           {g.steps.length > 0 && (
             <Text size="11px" c="ink.5">
-              {done} из {g.steps.length} шагов
+              {done} из {g.steps.length} шагов {open ? '▴' : '▾'}
             </Text>
           )}
         </div>
-      </Group>
+      </UnstyledButton>
       {g.steps.length > 0 ? (
         <>
           <div style={{ display: 'flex', gap: 4 }} aria-hidden="true">
@@ -94,62 +109,65 @@ function GoalRow({ goal: g, showUpdate }: { goal: TGoal; showUpdate: boolean }) 
               />
             ))}
           </div>
-          <ul
-            aria-label={`Шаги цели «${g.title}»`}
-            style={{
-              listStyle: 'none',
-              margin: 0,
-              padding: 0,
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 6,
-            }}
-          >
-            {g.steps.map((s) => (
-              <li
-                key={s.id}
-                title={
-                  s.source === 'task'
-                    ? 'Закроется вместе с задачей плана'
-                    : `Подтверждает ${SOURCE[s.source]}`
-                }
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  fontSize: 12,
-                  background: '#FFFFFF',
-                  borderRadius: 14,
-                  padding: '4px 10px 4px 6px',
-                  color: s.status === 'todo' ? '#5C5C5C' : '#141414',
-                }}
-              >
-                <span
+          {open && (
+            <ul
+              className="ab-pop"
+              aria-label={`Шаги цели «${g.title}»`}
+              style={{
+                listStyle: 'none',
+                margin: 0,
+                padding: 0,
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 6,
+              }}
+            >
+              {g.steps.map((s) => (
+                <li
+                  key={s.id}
+                  title={
+                    s.source === 'task'
+                      ? 'Закроется вместе с задачей плана'
+                      : `Подтверждает ${SOURCE[s.source]}`
+                  }
                   style={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: 7,
-                    flex: 'none',
-                    boxSizing: 'border-box',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    background: s.status === 'done' ? GREEN : '#FFFFFF',
-                    border:
-                      s.status === 'in_progress'
-                        ? `2px solid ${BLUE}`
-                        : s.status === 'done'
-                          ? 0
-                          : '1px solid #D6D6D6',
+                    gap: 6,
+                    fontSize: 12,
+                    background: '#FFFFFF',
+                    borderRadius: 14,
+                    padding: '4px 10px 4px 6px',
+                    color: s.status === 'todo' ? '#5C5C5C' : '#141414',
                   }}
                 >
-                  {s.status === 'done' && <IconCheck size={9} stroke={4} color="#141414" />}
-                </span>
-                {s.title}
-                <span style={{ color: '#5C5C5C' }}>· {stepSource(s)}</span>
-              </li>
-            ))}
-          </ul>
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 7,
+                      flex: 'none',
+                      boxSizing: 'border-box',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: s.status === 'done' ? GREEN : '#FFFFFF',
+                      border:
+                        s.status === 'in_progress'
+                          ? `2px solid ${BLUE}`
+                          : s.status === 'done'
+                            ? 0
+                            : '1px solid #D6D6D6',
+                    }}
+                  >
+                    {s.status === 'done' && <IconCheck size={9} stroke={4} color="#141414" />}
+                  </span>
+                  {s.title}
+                  <span style={{ color: '#5C5C5C' }}>· {stepSource(s)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       ) : (
         <span style={{ height: 6, borderRadius: 3, background: '#FFFFFF', overflow: 'hidden' }}>
@@ -200,8 +218,7 @@ function GoalsView({ view, internId }: { view: TGoalsView; internId?: string }) 
         )}
 
         <Text size="xs" c="ink.5" lh={1.45}>
-          Прогресс считается сам: шаги из плана закрываются вместе с задачами, остальные
-          подтверждает наставник или руководитель. По пятницам AI-buddy присылает сводку.
+          Нажми на цель, чтобы увидеть шаги. Прогресс считается по ним сам.
         </Text>
         {!own && view.canAgree && !view.agreed && (
           <Button

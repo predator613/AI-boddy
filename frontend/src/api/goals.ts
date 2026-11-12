@@ -56,3 +56,11 @@ export async function deleteGoal(goalId: string) {
 export function agreeGoals(internId: string) {
   return apiRequest(`/api/interns/${id(internId)}/goals/agree`, GoalsView, { method: 'POST' })
 }
+
+/** POST /api/goals/{id}/steps/{stepId} – наставник или руководитель подтверждает шаг цели. */
+export function setGoalStep(goalId: string, stepId: string, done: boolean) {
+  return apiRequest(`/api/goals/${id(goalId)}/steps/${id(stepId)}`, Goal, {
+    method: 'POST',
+    body: { done },
+  })
+}

@@ -4,7 +4,7 @@ import type { TPathView } from '../schemas/path'
 
 type Status = 'todo' | 'in_progress' | 'waiting' | 'done'
 type ActionT = {
-  kind: 'access_request' | 'leave_request' | 'ask_buddy' | 'open_article'
+  kind: 'access_request' | 'leave_request' | 'ask_buddy' | 'open_article' | 'join_chats'
   payload: Record<string, unknown>
 } | null
 interface TaskSeed {
@@ -29,6 +29,7 @@ interface StageSeed {
   code: string
   title: string
   color: string
+  period: string
   tip: string
   suggestions: string[]
   tasks: TaskSeed[]
@@ -40,11 +41,187 @@ const gitlab: ActionT = {
   payload: { service: 'gitlab', group: 'backend', role: 'developer' },
 }
 
+// Подробности задач для раскрытия по клику (поле details в GET /api/path).
+const DETAILS: Record<
+  string,
+  { about: string; helper: string; doneWhen: string; goal: string | null }
+> = {
+  't-101': {
+    about:
+      'Команда рассказывает, кто чем занимается и как устроена неделя: стендапы, планирование, демо.',
+    helper: 'Игорь, наставник',
+    doneWhen: 'ты побывала на встрече',
+    goal: null,
+  },
+  't-102': {
+    about:
+      'Первая встреча 1:1: договоритесь, как и когда задавать вопросы и как часто встречаться.',
+    helper: 'Игорь, наставник',
+    doneWhen: 'встреча 1:1 прошла',
+    goal: null,
+  },
+  't-103': {
+    about: 'Короткая памятка про процессы команды, инструменты и правила первых двух недель.',
+    helper: 'AI-buddy ответит на вопросы по памятке',
+    doneWhen: 'памятка отмечена прочитанной',
+    goal: 'Разобраться в сервисе авторизации',
+  },
+  't-104': {
+    about:
+      'AI-buddy добавит тебя в чат команды Backend, чат стажеров и канал дежурств. Закрытые чаты подтверждает наставник.',
+    helper: 'AI-buddy, наставник',
+    doneWhen: 'ты видишь сообщения команды',
+    goal: null,
+  },
+  't-105': {
+    about:
+      'Записывай после каждой встречи с наставником: что узнала о компании, договоренности, обратную связь. Заметки лежат в календаре у встречи и видны только тебе.',
+    helper: 'Игорь, наставник',
+    doneWhen: 'есть заметки хотя бы к одной встрече 1:1',
+    goal: null,
+  },
+  't-501': {
+    about:
+      'Обязательные материалы: лендинг «Защита данных», памятка о раскрытии информации и политика по работе с коммерческой информацией. AI-buddy перескажет главное и задаст пару вопросов.',
+    helper: 'AI-buddy',
+    doneWhen: 'ты ответила на контрольные вопросы',
+    goal: null,
+  },
+  't-502': {
+    about:
+      'Как оформить стажировку как учебную практику и что можно писать в учебных работах про Авито.',
+    helper: 'куратор стажировки',
+    doneWhen: 'ты знаешь порядок и сроки',
+    goal: null,
+  },
+  't-601': {
+    about: 'Мастер-классы помогают собрать презентацию и подготовить речь. Записи тоже подойдут.',
+    helper: 'куратор стажировки',
+    doneWhen: 'ты посетила или посмотрела мастер-класс',
+    goal: null,
+  },
+  't-602': {
+    about:
+      'Презентация по заданной структуре: задачи, цели и прогресс по ним, чему научилась. AI-buddy соберет черновик из твоего пути и целей.',
+    helper: 'AI-buddy, куратор помогает с оформлением',
+    doneWhen: 'черновик готов и отправлен наставнику',
+    goal: 'Все цели стажировки',
+  },
+  't-603': {
+    about:
+      'Наставник проверит, что задачи и цели отражены верно. Можно попросить репетицию на 15 минут.',
+    helper: 'Игорь, куратор стажировки',
+    doneWhen: 'наставник и куратор согласовали презентацию',
+    goal: null,
+  },
+  't-604': {
+    about:
+      'Расскажи о промежуточных результатах. После экватора наставник даст обратную связь на 1:1.',
+    helper: 'Игорь, Олег',
+    doneWhen: 'выступление прошло',
+    goal: null,
+  },
+  't-701': {
+    about: 'Финальная встреча 1:1: что получилось по целям, куда расти дальше.',
+    helper: 'Игорь, наставник',
+    doneWhen: 'обратная связь получена',
+    goal: 'Все цели стажировки',
+  },
+  't-702': {
+    about: 'Все детали – в приглашении в календаре.',
+    helper: 'куратор стажировки',
+    doneWhen: 'ты на выпускном',
+    goal: null,
+  },
+  't-703': {
+    about: 'Короткий опрос о том, как прошла стажировка и чем помог AI-buddy.',
+    helper: 'куратор стажировки',
+    doneWhen: 'опрос пройден',
+    goal: null,
+  },
+  't-201': {
+    about: 'Трекер нужен, чтобы видеть свои задачи и задачи команды.',
+    helper: 'выдается автоматически',
+    doneWhen: 'доступ выдан',
+    goal: null,
+  },
+  't-202': {
+    about: 'В вики лежат описания сервисов, договоренности и инструкции команды.',
+    helper: 'выдается автоматически',
+    doneWhen: 'доступ выдан',
+    goal: null,
+  },
+  't-203': {
+    about: 'Стенд нужен, чтобы проверять изменения до релиза. Заявка уже отправлена.',
+    helper: 'Олег согласует, AI-buddy напоминает ему',
+    doneWhen: 'заявка согласована и доступ работает',
+    goal: null,
+  },
+  't-204': {
+    about:
+      'Без GitLab не получится взять первую задачу. Нужна группа backend с правами Developer: читать код, создавать ветки и merge request.',
+    helper: 'AI-buddy заполнит заявку, согласует Олег',
+    doneWhen: 'заявка согласована и ты видишь репозиторий',
+    goal: 'Пройти путь задачи до релиза',
+  },
+  't-301': {
+    about: 'Склонируй репозиторий, подними сервис локально в Docker и прогони тесты.',
+    helper: 'Игорь, статья про окружение',
+    doneWhen: 'сервис запускается локально и тесты проходят',
+    goal: 'Пройти путь задачи до релиза',
+  },
+  't-302': {
+    about:
+      'Посмотри, как в команде пишут и проверяют merge request: сколько нужно аппрувов и что смотрят на ревью.',
+    helper: 'Игорь, наставник',
+    doneWhen: 'ты прочитала правила и посмотрела пример ревью',
+    goal: null,
+  },
+  't-303': {
+    about:
+      'Разберись, какие проверки запускаются на merge request и как изменение попадает в прод.',
+    helper: 'Игорь, наставник',
+    doneWhen: 'ты можешь объяснить путь кода до релиза',
+    goal: null,
+  },
+  't-304': {
+    about: 'Узнай, где смотреть ошибки и нагрузку своего сервиса.',
+    helper: 'Игорь, наставник',
+    doneWhen: 'ты нашла дашборд своего сервиса',
+    goal: null,
+  },
+  't-305': {
+    about: 'Подпишись на чат команды и уведомления о дежурствах, чтобы не пропускать важное.',
+    helper: 'AI-buddy подскажет каналы',
+    doneWhen: 'подписки настроены',
+    goal: null,
+  },
+  't-401': {
+    about: 'Маленькая задача, чтобы пройти весь цикл: ветка, merge request, ревью, релиз.',
+    helper: 'Игорь, наставник',
+    doneWhen: 'изменение в main',
+    goal: 'Пройти путь задачи до релиза',
+  },
+  't-402': {
+    about: 'Покрой тестами модуль сервиса вместе с наставником.',
+    helper: 'Игорь, наставник',
+    doneWhen: 'тесты в main и проходят в CI',
+    goal: 'Разобраться в сервисе авторизации',
+  },
+  't-403': {
+    about: 'Первое ревью: посмотри merge request коллеги и оставь комментарии по правилам команды.',
+    helper: 'Игорь, наставник',
+    doneWhen: 'ревью оставлено',
+    goal: null,
+  },
+}
+
 function seed(): StageSeed[] {
   return [
     {
       id: 'st-01',
       code: '01',
+      period: 'неделя 1',
       title: 'Знакомство с командой',
       color: '#C9FFBF',
       tip: 'Если не знаешь, к кому идти с вопросом, спроси AI-buddy: он подскажет нужного человека.',
@@ -78,6 +255,22 @@ function seed(): StageSeed[] {
           due: '2026-11-03',
           action: null,
         },
+        {
+          id: 't-104',
+          title: 'Добавиться в чаты и каналы команды',
+          note: 'AI-buddy добавит в чат команды, стажеров и дежурств',
+          status: 'done',
+          due: '2026-11-03',
+          action: { kind: 'join_chats', payload: { team: 'backend' } },
+        },
+        {
+          id: 't-105',
+          title: 'Завести конспект встреч с наставником',
+          note: 'Заметки к 1:1 – в календаре, у каждой встречи',
+          status: 'done',
+          due: '2026-11-04',
+          action: null,
+        },
       ],
       resources: [
         {
@@ -109,6 +302,7 @@ function seed(): StageSeed[] {
     {
       id: 'st-02',
       code: '02',
+      period: 'недели 1–2',
       title: 'Доступы',
       color: '#BADAFB',
       tip: 'Доступы выдает руководитель команды. Обычно заявка согласуется за один рабочий день.',
@@ -189,6 +383,7 @@ function seed(): StageSeed[] {
     {
       id: 'st-03',
       code: '03',
+      period: 'недели 2–4',
       title: 'Рабочие инструменты',
       color: '#DFCDF3',
       tip: 'Откроется после этапа «Доступы»: без GitLab окружение не настроить.',
@@ -266,6 +461,7 @@ function seed(): StageSeed[] {
     {
       id: 'st-04',
       code: '04',
+      period: 'недели 4–8',
       title: 'Первые задачи',
       color: '#F7C1C5',
       tip: 'Первая задача нужна не для результата, а чтобы пройти путь от задачи до релиза.',
@@ -315,17 +511,161 @@ function seed(): StageSeed[] {
         },
       ],
     },
+    {
+      id: 'st-05',
+      code: '05',
+      period: 'месяцы 1–2',
+      title: 'Безопасность и учеба',
+      color: '#C9FFBF',
+      tip: 'Это обязательные материалы. AI-buddy коротко перескажет главное и задаст пару вопросов для проверки.',
+      suggestions: ['Перескажи правила защиты данных', 'Как закрыть практику по Авито?'],
+      tasks: [
+        {
+          id: 't-501',
+          title: 'Пройти материалы по защите данных',
+          note: 'Лендинг «Защита данных», памятка о раскрытии информации, политика по КИ',
+          status: 'todo',
+          due: '2026-12-07',
+          action: {
+            kind: 'ask_buddy',
+            payload: { prompt: 'Перескажи коротко правила защиты данных и проверь меня' },
+          },
+        },
+        {
+          id: 't-502',
+          title: 'Прочитать, как закрыть практику по Авито',
+          note: 'Если стажировка засчитывается как практика в вузе',
+          status: 'todo',
+          due: '2027-01-11',
+          action: null,
+        },
+      ],
+      resources: [
+        {
+          id: 'r-51',
+          kind: 'article',
+          name: 'Защита данных',
+          note: 'лендинг и памятки',
+          tag: 'обязательно',
+          tagKind: 'wait',
+        },
+      ],
+    },
+    {
+      id: 'st-06',
+      code: '06',
+      period: 'после 3 месяцев',
+      title: 'Экватор',
+      color: '#BADAFB',
+      tip: 'Экватор – промежуточные итоги. AI-buddy соберет черновик презентации из закрытых задач и целей.',
+      suggestions: ['Собери черновик презентации к экватору', 'Какая структура у презентации?'],
+      tasks: [
+        {
+          id: 't-601',
+          title: 'Сходить на мастер-классы к экватору',
+          note: 'Приглашения придут в календарь',
+          status: 'todo',
+          due: '2027-02-01',
+          action: null,
+        },
+        {
+          id: 't-602',
+          title: 'Подготовить презентацию с результатами',
+          note: 'AI-buddy соберет черновик по твоим задачам и целям',
+          status: 'todo',
+          due: '2027-02-08',
+          action: {
+            kind: 'ask_buddy',
+            payload: { prompt: 'Собери черновик презентации к экватору по моим задачам и целям' },
+          },
+        },
+        {
+          id: 't-603',
+          title: 'Согласовать презентацию с куратором и наставником',
+          note: 'При желании – репетиция на 15 минут',
+          status: 'todo',
+          due: '2027-02-12',
+          action: null,
+        },
+        {
+          id: 't-604',
+          title: 'Выступить на экваторе',
+          note: 'Промежуточные результаты по целям',
+          status: 'todo',
+          due: '2027-02-15',
+          action: null,
+        },
+      ],
+      resources: [
+        {
+          id: 'r-61',
+          kind: 'person',
+          name: 'Куратор стажировки',
+          note: 'помогает с презентацией',
+          tag: 'HR',
+          tagKind: 'none',
+        },
+      ],
+    },
+    {
+      id: 'st-07',
+      code: '07',
+      period: 'конец стажировки',
+      title: 'Итоги',
+      color: '#DFCDF3',
+      tip: 'Итоги подводят по целям стажировки: что получилось и куда расти дальше.',
+      suggestions: ['Как проходит выпускной?', 'Что будет после стажировки?'],
+      tasks: [
+        {
+          id: 't-701',
+          title: 'Обсудить итоги с наставником на 1:1',
+          note: 'Обратная связь по целям',
+          status: 'todo',
+          due: '2027-04-19',
+          action: null,
+        },
+        {
+          id: 't-702',
+          title: 'Прийти на выпускной',
+          note: 'Приглашение придет в календарь',
+          status: 'todo',
+          due: '2027-04-23',
+          action: null,
+        },
+        {
+          id: 't-703',
+          title: 'Пройти опрос о стажировке',
+          note: 'Пара минут, помогает сделать программу лучше',
+          status: 'todo',
+          due: '2027-04-26',
+          action: null,
+        },
+      ],
+      resources: [],
+    },
   ]
 }
 
 let stages = seed()
 
+/** Второй стажер – Павел, первая неделя: готова только встреча с командой. */
+function seedPavel(): StageSeed[] {
+  return seed().map((st) => ({
+    ...st,
+    tasks: st.tasks.map((t) => ({ ...t, status: t.id === 't-101' ? 'done' : 'todo' })),
+  }))
+}
+let pavel = seedPavel()
+
+export const PAVEL_ID = 'u-pavel'
+
 export function resetPathMock() {
   stages = seed()
+  pavel = seedPavel()
 }
 
-export function setMockTaskStatus(taskId: string, status: Status): boolean {
-  for (const s of stages) {
+export function setMockTaskStatus(taskId: string, status: Status, internId = 'u-anna'): boolean {
+  for (const s of internId === PAVEL_ID ? pavel : stages) {
     const t = s.tasks.find((x) => x.id === taskId)
     if (t) {
       t.status = status
@@ -348,7 +688,9 @@ function accessTag(status: Status | undefined) {
 export function buildMockPath(
   intern: { name: string; teamName: string } = { name: 'Анна', teamName: 'Backend' },
   today = '2026-11-10',
+  src: StageSeed[] = stages,
 ): TPathView {
+  const stages = src
   const taskStatus = new Map(stages.flatMap((s) => s.tasks.map((t) => [t.id, t.status] as const)))
   const all = stages.flatMap((s) => s.tasks)
   const next =
@@ -367,6 +709,7 @@ export function buildMockPath(
       code: s.code,
       title: s.title,
       color: s.color,
+      period: s.period,
       tip: s.tip,
       status,
       doneCount: done,
@@ -380,6 +723,7 @@ export function buildMockPath(
         isNext: next?.id === t.id,
         dueDate: t.due,
         action: t.action,
+        details: DETAILS[t.id] ?? null,
       })),
       resources: s.resources.map((r) => {
         const tag = r.taskId
@@ -467,5 +811,23 @@ export const mockInterns = () => {
       currentStageCode: cur?.code ?? '',
       currentStage: cur?.title ?? '',
     },
+    (() => {
+      const pp = buildMockPavelPath()
+      const c = pp.stages.find((x) => x.status === 'current')
+      return {
+        id: PAVEL_ID,
+        login: 'intern_pavel',
+        name: 'Павел',
+        teamName: 'Backend',
+        mentor: { id: 'u-igor', name: 'Игорь' },
+        week: 1,
+        progress: pp.progress,
+        currentStageCode: c?.code ?? '',
+        currentStage: c?.title ?? '',
+      }
+    })(),
   ]
 }
+
+export const buildMockPavelPath = () =>
+  buildMockPath({ name: 'Павел', teamName: 'Backend' }, '2026-11-10', pavel)

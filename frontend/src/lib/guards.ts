@@ -9,3 +9,7 @@ export function staffOnly() {
 export function internOnly() {
   if (useAuthStore.getState().user?.role !== 'intern') throw redirect({ to: '/' })
 }
+
+export function leadOnly() {
+  if (useAuthStore.getState().user?.role !== 'lead') throw redirect({ to: '/' })
+}

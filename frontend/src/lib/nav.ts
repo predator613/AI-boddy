@@ -1,5 +1,7 @@
 import {
   IconBook2,
+  IconChecklist,
+  IconTarget,
   IconCalendarEvent,
   IconFileText,
   IconFiles,
@@ -26,6 +28,7 @@ export type NavPath =
   | '/plan'
   | '/materials'
   | '/schedule'
+  | '/approvals'
 
 interface NavItem {
   to: NavPath
@@ -49,14 +52,20 @@ export function navItems(role: User['role']): NavItem[] {
       SUPPORT,
     ]
   }
-  // Наставник и руководитель: кабинет наставника.
+  // Руководитель: только цели стажеров и согласования заявок.
+  if (role === 'lead') {
+    return [
+      { to: '/', label: 'Цели стажеров', icon: IconTarget },
+      { to: '/approvals', label: 'Согласования', icon: IconChecklist },
+    ]
+  }
+  // Наставник: кабинет наставника.
   return [
     { to: '/', label: 'Мои стажеры', icon: IconUsers },
     { to: '/inbox', label: 'Сообщения', icon: IconMessages },
     { to: '/plan', label: 'План адаптации', icon: IconListCheck },
-    { to: '/materials', label: 'Материалы', icon: IconFiles },
+    { to: '/materials', label: 'Материалы и справочник', icon: IconFiles },
     { to: '/schedule', label: 'Расписание', icon: IconCalendarEvent },
-    KB,
     SUPPORT,
   ]
 }

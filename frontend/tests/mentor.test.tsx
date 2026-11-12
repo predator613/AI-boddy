@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { API_URL } from '../src/api/client'
@@ -7,14 +7,15 @@ import { addDays, mondayOf, tasksWord, timeLabel } from '../src/lib/mentorUi'
 import { loginAs, renderApp } from './test-utils'
 
 const T = { timeout: 3000 }
-const toastText = (re: RegExp) => screen.findByText(re, {}, T)
+const toastText = async (re: RegExp) =>
+  within(await screen.findByRole('status', {}, T)).findByText(re, {}, T)
 
 describe('меню по ролям', () => {
   it('наставник видит кабинет наставника, а не заявки', async () => {
     loginAs('mentor_igor')
     renderApp('/')
     await screen.findByRole('heading', { name: 'Мои стажеры' }, T)
-    for (const name of ['Сообщения', 'План адаптации', 'Материалы', 'Расписание'])
+    for (const name of ['Сообщения', 'План адаптации', 'Материалы и справочник', 'Расписание'])
       expect(screen.getByRole('link', { name })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Мои заявки' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Чат с наставником' })).not.toBeInTheDocument()
@@ -36,14 +37,16 @@ describe('меню по ролям', () => {
   })
 })
 
-describe('статистика наставника', () => {
-  it('показывает, сколько AI-buddy ответил сам и время наставника', async () => {
+describe('колокольчик наставника', () => {
+  it('показывает, что изменилось, и отмечает прочитанным', async () => {
     loginAs('mentor_igor')
     renderApp('/')
-    expect(await screen.findByText('23 вопр.', {}, T)).toBeInTheDocument()
-    expect(screen.getByText('≈ 4 ч сэкономлено на повторных объяснениях')).toBeInTheDocument()
-    expect(screen.getByText('9 из ~44 ч')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Передано тебе: 3/ })).toHaveAttribute('href', '/inbox')
+    await userEvent.click(await screen.findByRole('button', { name: 'Уведомления, новых: 3' }, T))
+    expect(await screen.findByText('Олег согласовал цели Анны', {}, T)).toBeInTheDocument()
+    await userEvent.click(await screen.findByText('Прочитать все', {}, T))
+    expect(
+      await screen.findByRole('button', { name: 'Уведомления, новых: 0' }, T),
+    ).toBeInTheDocument()
   })
 })
 
@@ -134,7 +137,7 @@ describe('сообщения наставника', () => {
       ),
     ).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('link', { name: 'Материалы' }))
+    await userEvent.click(screen.getByRole('link', { name: 'Материалы и справочник' }))
     expect(await screen.findByText('Ответ наставника: Обсудим на 1:1', {}, T)).toBeInTheDocument()
   })
 
@@ -265,6 +268,9 @@ describe('план адаптации', () => {
     loginAs('mentor_igor')
     renderApp('/plan')
     expect(await screen.findByText(/В шаблоне пока нет этапов/, {}, T)).toBeInTheDocument()
+    expect(screen.queryByRole('switch', { name: 'Напоминать согласующему о заявке' })).toBeNull()
+    cleanup()
+    renderApp('/profile')
     const sw = await screen.findByRole('switch', { name: 'Напоминать согласующему о заявке' }, T)
     expect(sw).not.toBeChecked()
     await userEvent.click(sw)

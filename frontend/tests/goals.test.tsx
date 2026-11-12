@@ -19,16 +19,16 @@ describe('Цели стажировки', () => {
     expect(screen.getByText(/согласованы с Олегом .* · от OKR команды/)).toBeInTheDocument()
     const goal = screen.getByLabelText('Разобраться в сервисе авторизации: 25%')
     expect(
-      within(goal).getByText('критерий: провести демо команде на 8 неделе'),
+      within(goal).getByText(/критерий: провести демо команде на 8 неделе/),
     ).toBeInTheDocument()
-    expect(within(goal).getByText('1 из 4 шагов')).toBeInTheDocument()
+    expect(within(goal).getByText(/1 из 4 шагов/)).toBeInTheDocument()
+    // шаги скрыты, пока цель не раскрыта
+    expect(within(goal).queryByRole('list', { name: /Шаги цели/ })).toBeNull()
+    await userEvent.click(within(goal).getByRole('button', { name: /показать шаги/ }))
     const steps = within(goal).getByRole('list', { name: /Шаги цели/ })
     expect(within(steps).getAllByRole('listitem')).toHaveLength(4)
     expect(within(steps).getByText('· этап 01')).toBeInTheDocument()
     expect(within(steps).getAllByText('· наставник').length).toBeGreaterThan(0)
-    expect(
-      screen.queryByRole('button', { name: /Разобраться в сервисе авторизации/ }),
-    ).not.toBeInTheDocument()
   })
 
   it('цель без шагов (старый ответ backend) показывает полоску процента', async () => {

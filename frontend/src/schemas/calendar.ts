@@ -2,6 +2,7 @@
 // Контракт – docs/api-intern-calendar.md. Пока backend его не реализовал, отвечают моки
 // (src/mocks/mentorData.ts, режим VITE_PENDING_MOCKS).
 import { z } from 'zod'
+import { msk } from '../lib/msk'
 
 export const EventKind = z.enum([
   'mentor', // встреча с наставником (1:1, разбор)
@@ -42,8 +43,8 @@ export const EntryInput = z
   })
   .refine(
     (v) => {
-      const s = new Date(v.startsAt)
-      return s.getHours() * 60 + s.getMinutes() + v.durationMin <= 18 * 60
+      const s = msk(v.startsAt)
+      return s.hour * 60 + s.minute + v.durationMin <= 18 * 60
     },
     { message: 'Запись выходит за рабочий день (до 18:00)', path: ['durationMin'] },
   )
@@ -57,3 +58,12 @@ export type TEventKind = z.infer<typeof EventKind>
 export type TCalendarEvent = z.infer<typeof CalendarEvent>
 export type TEntryInput = z.input<typeof EntryInput>
 export type TAnswerInput = z.infer<typeof AnswerInput>
+
+// Конспект встречи (чек-лист: «заведи конспект встреч с наставником»). Виден только стажеру.
+export const MeetingNote = z.object({
+  eventId: z.string(),
+  text: z.string(),
+  updatedAt: z.string(),
+})
+export const NoteInput = z.object({ text: z.string().max(4000, 'Не больше 4000 символов') })
+export type TMeetingNote = z.infer<typeof MeetingNote>

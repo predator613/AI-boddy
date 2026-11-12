@@ -6,9 +6,11 @@ import { Page } from '../components/Page'
 import { ErrorBlock, LoadingBlocks } from '../components/QueryState'
 import { StatusTag } from '../components/StatusTag'
 import { MessageComposer } from '../components/mentor/MessageComposer'
+import { MaterialsFold } from '../components/mentor/MaterialsFold'
 import { ThreadMessageView } from '../components/mentor/ThreadMessageView'
 import { useAckUpdate, useMyMentorThread, useSendToMentor } from '../hooks/useMentor'
 import { errorText } from '../lib/errors'
+import { foldMaterials } from '../lib/mentorUi'
 import { toast } from '../store/toastStore'
 import classes from './ChatPage.module.css'
 
@@ -23,6 +25,7 @@ export function MentorChatPage() {
   const ack = useAckUpdate()
   const [draft, setDraft] = useState('')
   const [onlyUpdates, setOnlyUpdates] = useState(false)
+  const [allMaterials, setAllMaterials] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
   const count = thread.data?.messages.length ?? 0
 
@@ -44,7 +47,9 @@ export function MentorChatPage() {
     )
 
   const t = thread.data
-  const messages = onlyUpdates ? t.messages.filter((m) => m.kind === 'update') : t.messages
+  const fold = foldMaterials(t.messages)
+  const recent = allMaterials ? t.messages : fold.visible
+  const messages = onlyUpdates ? recent.filter((m) => m.kind === 'update') : recent
   const sendDraft = () =>
     send.mutate(draft.trim(), {
       onSuccess: () => {
@@ -114,6 +119,11 @@ export function MentorChatPage() {
             </Text>
           </Group>
           <Stack gap={14} role="log" aria-label="Переписка с наставником">
+            <MaterialsFold
+              hidden={fold.hidden}
+              open={allMaterials}
+              onToggle={() => setAllMaterials((v) => !v)}
+            />
             {messages.length === 0 && (
               <Text c="ink.5" ta="center">
                 Пока ничего нет

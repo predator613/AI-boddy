@@ -13,9 +13,9 @@ describe('Мой путь', () => {
   it('показывает кольцо прогресса, этапы-карточки, следующий шаг и неделю', async () => {
     renderApp('/')
     expect(
-      await screen.findByRole('img', { name: /Пройдено 33%: 5 из 15 задач/ }, T),
+      await screen.findByRole('img', { name: /Пройдено 27%: 7 из 26 задач/ }, T),
     ).toBeInTheDocument()
-    expect(screen.getByText('Позади 33% пути адаптации!')).toBeInTheDocument()
+    expect(screen.getByText('Позади 27% пути адаптации!')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Этап 02: Доступы, 2 из 4/ })).toHaveAttribute(
       'aria-expanded',
       'true',
@@ -24,7 +24,7 @@ describe('Мой путь', () => {
     expect(screen.getAllByText('Получить доступ к GitLab').length).toBeGreaterThan(0)
     expect(screen.getByLabelText(/Неделя 2 из 24/)).toBeInTheDocument()
     expect(screen.getByText(/ты на этапе «Доступы»/)).toBeInTheDocument()
-    expect(screen.getByText('2 / 4')).toBeInTheDocument()
+    expect(screen.getByText('2 / 7')).toBeInTheDocument()
   })
 
   it('клик по карточке этапа показывает его задачи вместо целей, «К целям» возвращает', async () => {
@@ -50,7 +50,7 @@ describe('Мой путь', () => {
   it('«Уже сделано» отмечает задачу и двигает следующий шаг', async () => {
     renderApp('/?stage=02')
     await userEvent.click(await screen.findByRole('button', { name: 'Уже сделано' }, T))
-    expect(await screen.findByRole('img', { name: /6 из 15 задач/ }, T)).toBeInTheDocument()
+    expect(await screen.findByRole('img', { name: /8 из 26 задач/ }, T)).toBeInTheDocument()
   })
 
   it('«Открыть этап» в карточке следующего шага раскрывает этап', async () => {
@@ -97,6 +97,6 @@ describe('Мой путь', () => {
     renderApp('/')
     expect(await screen.findByRole('alert', {}, T)).toHaveTextContent('Не удалось загрузить')
     await userEvent.click(screen.getByRole('button', { name: 'Повторить' }))
-    expect(await screen.findByText('Позади 33% пути адаптации!', {}, T)).toBeInTheDocument()
+    expect(await screen.findByText('Позади 27% пути адаптации!', {}, T)).toBeInTheDocument()
   })
 })

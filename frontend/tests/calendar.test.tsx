@@ -29,7 +29,7 @@ describe('Календарь стажера', () => {
     loginAs('intern_anna')
     renderApp('/')
     await userEvent.click(await screen.findByRole('link', { name: 'Календарь' }, T))
-    expect(await screen.findByText(/Календарь · 9–13 ноября/, {}, T)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Мои встречи' }, T)).toBeInTheDocument()
     expect(
       await screen.findByRole('button', { name: /Встреча-знакомство с командой, пн 11:00/ }, T),
     ).toBeInTheDocument()

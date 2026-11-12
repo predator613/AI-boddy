@@ -5,7 +5,6 @@ import { Marker, PageHeader } from '../components/PageHeader'
 import { Page } from '../components/Page'
 import { ErrorBlock, LoadingBlocks } from '../components/QueryState'
 import { StatusTag } from '../components/StatusTag'
-import { AutomationsPanel } from '../components/mentor/AutomationsPanel'
 import { StageModal, TaskModal, type TaskSubmit } from '../components/mentor/PlanForms'
 import { ACTION_LABELS, tasksWord as plural } from '../lib/mentorUi'
 import {
@@ -18,6 +17,7 @@ import {
   useUpdateTask,
 } from '../hooks/usePath'
 import type { TStageTemplate, TTaskTemplate } from '../schemas/path'
+import { usePlanLogStore } from '../store/planLogStore'
 import { toast } from '../store/toastStore'
 
 const SAVED = 'Сохранено. Изменение уже в «Моем пути» у стажеров команды'
@@ -34,6 +34,10 @@ export function PlanEditorPage() {
   const updateTask = useUpdateTask()
   const deleteTask = useDeleteTask()
   const [taskDialog, setTaskDialog] = useState<TaskDialog>(null)
+  const log = usePlanLogStore((s) => s.entries)
+  const addLog = usePlanLogStore((s) => s.add)
+  // сообщение пользователю и запись в журнал изменений
+  const note = (text: string) => (toast(text), addLog(text))
   const [stageOpen, setStageOpen] = useState(false)
   const [stageToDelete, setStageToDelete] = useState<TStageTemplate | null>(null)
 
@@ -43,7 +47,8 @@ export function PlanEditorPage() {
 
   const saveTask = (v: TaskSubmit) => {
     if (!taskDialog) return
-    const done = { onSuccess: () => (setTaskDialog(null), toast(SAVED)) }
+    const what = `${taskDialog.task ? 'Изменена' : 'Добавлена'} задача «${v.title}»`
+    const done = { onSuccess: () => (setTaskDialog(null), toast(SAVED), addLog(what)) }
     if (taskDialog.task)
       updateTask.mutate({ id: taskDialog.task.id, position: taskDialog.task.position, ...v }, done)
     else createTask.mutate({ stageId: taskDialog.stage.id, ...v }, done)
@@ -59,7 +64,7 @@ export function PlanEditorPage() {
         suggestions: s.suggestions,
         position: s.position + dir,
       },
-      { onSuccess: () => toast(`Этап «${s.title}» перемещен`) },
+      { onSuccess: () => note(`Этап «${s.title}» перемещен`) },
     )
 
   const openTask = (d: TaskDialog) => {
@@ -72,7 +77,7 @@ export function PlanEditorPage() {
     <Page maxWidth={1400}>
       <Stack gap="lg" style={{ flex: 1, minWidth: 0 }}>
         <PageHeader
-          overline="План адаптации · шаблон твоей команды"
+          overline="План адаптации"
           title={
             <>
               Этапы и <Marker>задачи</Marker>
@@ -175,7 +180,7 @@ export function PlanEditorPage() {
                           loading={deleteTask.isPending && deleteTask.variables === t.id}
                           onClick={() =>
                             deleteTask.mutate(t.id, {
-                              onSuccess: () => toast(`Задача «${t.title}» удалена`),
+                              onSuccess: () => note(`Задача «${t.title}» удалена`),
                             })
                           }
                         >
@@ -218,7 +223,35 @@ export function PlanEditorPage() {
             </Text>
           </Paper>
         )}
-        <AutomationsPanel />
+        <Paper radius="lg" p="lg" component="section" aria-label="Журнал изменений">
+          <Text component="h2" fz={18} fw={600} m={0} mb={6}>
+            Журнал изменений
+          </Text>
+          {log.length === 0 && (
+            <Text size="sm" c="ink.5">
+              Изменений пока нет. Здесь появится все, что ты поменяешь в плане.
+            </Text>
+          )}
+          {log.slice(0, 5).map((e) => (
+            <Group
+              key={e.id}
+              gap={12}
+              py={8}
+              wrap="nowrap"
+              style={{ borderTop: '1px solid #EDEDED' }}
+            >
+              <Text size="xs" c="ink.5" style={{ flex: 'none', width: 96 }}>
+                {new Date(e.at).toLocaleString('ru-RU', {
+                  day: 'numeric',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Text>
+              <Text size="sm">{e.text}</Text>
+            </Group>
+          ))}
+        </Paper>
       </Stack>
 
       {taskDialog && (
@@ -240,7 +273,7 @@ export function PlanEditorPage() {
           onClose={() => setStageOpen(false)}
           onSubmit={(v) =>
             createStage.mutate(v, {
-              onSuccess: () => (setStageOpen(false), toast(`Добавлен этап «${v.title}»`)),
+              onSuccess: () => (setStageOpen(false), note(`Добавлен этап «${v.title}»`)),
             })
           }
         />
@@ -268,7 +301,7 @@ export function PlanEditorPage() {
                 stageToDelete &&
                 deleteStage.mutate(stageToDelete.id, {
                   onSuccess: () => {
-                    toast(`Этап «${stageToDelete.title}» удален`)
+                    note(`Этап «${stageToDelete.title}» удален`)
                     setStageToDelete(null)
                   },
                 })

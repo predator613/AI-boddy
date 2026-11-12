@@ -1,8 +1,11 @@
 // API календаря стажера (docs/api-intern-calendar.md).
+import { z } from 'zod'
 import { apiFetch, apiRequest } from './client'
 import {
   CalendarEvent,
   CalendarView,
+  MeetingNote,
+  NoteInput,
   type TAnswerInput,
   type TEntryInput,
 } from '../schemas/calendar'
@@ -22,4 +25,14 @@ export const answerEvent = (id: string, input: TAnswerInput) =>
   apiRequest(`/api/me/calendar/events/${enc(id)}/answer`, CalendarEvent, {
     method: 'POST',
     body: input,
+  })
+
+/** GET /api/me/notes – конспекты встреч стажера. */
+export const getNotes = () => apiRequest('/api/me/notes', z.array(MeetingNote))
+
+/** PUT /api/me/notes/{eventId} – сохранить конспект встречи (пустой текст удаляет его). */
+export const saveNote = (eventId: string, text: string) =>
+  apiRequest(`/api/me/notes/${encodeURIComponent(eventId)}`, MeetingNote, {
+    method: 'PUT',
+    body: NoteInput.parse({ text }),
   })

@@ -13,6 +13,8 @@ interface NextStepCardProps {
 export function NextStepCard({ step, onAsk, onOpenStage }: NextStepCardProps) {
   const due = dueText(step.dueInDays)
   const overdue = (step.dueInDays ?? 0) < 0
+  // Шаг считается от статуса задачи: впереди – узнать порядок, в работе – заявка, ждет – готово.
+  const stepIdx = step.status === 'todo' ? 1 : step.status === 'in_progress' ? 2 : 3
   return (
     <Paper radius="lg" p="lg" style={{ outline: '2px solid #141414', outlineOffset: -2 }}>
       <Stack gap="md">
@@ -37,22 +39,18 @@ export function NextStepCard({ step, onAsk, onOpenStage }: NextStepCardProps) {
           {step.title}
         </Text>
         <Group gap={8} wrap="nowrap" aria-label="Шаги задачи" fz="xs">
-          <Dot state="done">1</Dot>
-          <Text size="xs">Узнать порядок</Text>
-          <span style={{ flex: 1, height: 2, background: '#00AAFF' }} />
-          <Dot state={step.status === 'waiting' ? 'done' : 'now'}>2</Dot>
-          <Text size="xs" fw={600}>
+          <Dot state={stepIdx > 1 ? 'done' : 'now'}>1</Dot>
+          <Text size="xs" fw={stepIdx === 1 ? 600 : 400}>
+            Узнать порядок
+          </Text>
+          <span style={{ flex: 1, height: 2, background: stepIdx > 1 ? '#00AAFF' : '#D6D6D6' }} />
+          <Dot state={stepIdx > 2 ? 'done' : stepIdx === 2 ? 'now' : 'todo'}>2</Dot>
+          <Text size="xs" fw={stepIdx === 2 ? 600 : 400}>
             {step.action ? 'Заявка' : 'Сделать'}
           </Text>
-          <span
-            style={{
-              flex: 1,
-              height: 2,
-              background: step.status === 'waiting' ? '#00AAFF' : '#D6D6D6',
-            }}
-          />
-          <Dot state={step.status === 'waiting' ? 'now' : 'todo'}>3</Dot>
-          <Text size="xs" c="ink.5">
+          <span style={{ flex: 1, height: 2, background: stepIdx > 2 ? '#00AAFF' : '#D6D6D6' }} />
+          <Dot state={stepIdx === 3 ? 'now' : 'todo'}>3</Dot>
+          <Text size="xs" c={stepIdx === 3 ? undefined : 'ink.5'} fw={stepIdx === 3 ? 600 : 400}>
             Готово
           </Text>
         </Group>

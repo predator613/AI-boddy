@@ -13,6 +13,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { PageHeader } from '../components/PageHeader'
 import { Page } from '../components/Page'
 import { RoleBadge } from '../components/RoleBadge'
+import { AutomationsPanel } from '../components/mentor/AutomationsPanel'
+import { useMyPath } from '../hooks/usePath'
 import { useAuthStore } from '../store/authStore'
 import { useSettingsStore, type AnswerStyle, type NotificationKey } from '../store/settingsStore'
 
@@ -25,6 +27,7 @@ const NOTIFICATIONS: { key: NotificationKey; title: string; note: string }[] = [
 
 export function ProfilePage() {
   const user = useAuthStore((s) => s.user)
+  const path = useMyPath({ enabled: user?.role === 'intern' })
   const logout = useAuthStore((s) => s.logout)
   const queryClient = useQueryClient()
   const { notifications, answerStyle, toggle, setAnswerStyle } = useSettingsStore()
@@ -75,6 +78,20 @@ export function ProfilePage() {
               </dd>
               <dt style={{ color: '#5C5C5C' }}>Команда</dt>
               <dd style={{ margin: 0 }}>{user.teamName}</dd>
+              {user.role === 'intern' && (
+                <>
+                  <dt style={{ color: '#5C5C5C' }}>Наставник</dt>
+                  <dd style={{ margin: 0 }}>
+                    {path.data ? (path.data.intern.mentor?.name ?? 'пока не назначен') : '…'}
+                  </dd>
+                  <dt style={{ color: '#5C5C5C' }}>Стажировка</dt>
+                  <dd style={{ margin: 0 }}>
+                    {path.data
+                      ? `неделя ${path.data.week.current} из ${path.data.week.total}`
+                      : '…'}
+                  </dd>
+                </>
+              )}
             </dl>
           </Group>
           <Text size="xs" c="ink.5" mt="md" pt="sm" style={{ borderTop: '1px solid #D6D6D6' }}>
@@ -145,6 +162,8 @@ export function ProfilePage() {
             </Group>
           </Paper>
         </SimpleGrid>
+
+        {user?.role === 'mentor' && <AutomationsPanel />}
 
         <Button
           variant="outline"

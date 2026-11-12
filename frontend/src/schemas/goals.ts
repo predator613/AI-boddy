@@ -35,6 +35,8 @@ export const Goal = z.object({
   updatedAt: z.string(),
   createdBy: PersonRef.nullable(),
   steps: z.array(GoalStep).default([]),
+  // Компетенция из матрицы команды, которую развивает цель: «Обработка данных · L1».
+  competency: z.string().nullable().default(null),
 })
 
 export const GoalsView = z.object({
@@ -53,6 +55,17 @@ export const GoalInput = z.object({
   criterion: z.string().trim().min(1, 'Как поймем, что цель достигнута?').max(160),
   dueWeek: z.number().int().min(0).max(52).optional(),
   okrId: z.string().optional(),
+  competency: z.string().max(80).optional(),
+  // Шаги цели: из них считается прогресс. При изменении список заменяется целиком.
+  steps: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(120),
+        source: z.enum(['task', 'mentor', 'lead']),
+      }),
+    )
+    .max(8)
+    .optional(),
 })
 export const GoalPatch = GoalInput.partial()
 
@@ -65,6 +78,17 @@ export type TGoal = z.infer<typeof Goal>
 export type TGoalStep = z.infer<typeof GoalStep>
 export type TGoalsView = z.infer<typeof GoalsView>
 export type TTeamOkr = z.infer<typeof TeamOkr>
+// Компетенции из матрицы роли (AvitoTech Playbook): к какой компетенции и уровню относится цель.
+export const COMPETENCIES = [
+  'Обработка данных · L1',
+  'Визуализация и отчетность · L1',
+  'Автоматизация · L1',
+  'Код и ревью · L1',
+  'Продуктовый подход',
+  'Обмен знаниями',
+  'Анализ потребностей',
+]
+
 export type TGoalInput = z.input<typeof GoalInput>
 export type TGoalPatch = z.input<typeof GoalPatch>
 export type TProgressInput = z.input<typeof ProgressInput>

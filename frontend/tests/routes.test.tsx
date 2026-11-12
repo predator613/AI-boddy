@@ -41,11 +41,13 @@ describe('маршруты', () => {
     expect(router.state.location.pathname).toBe('/')
   })
 
-  it('наставник видит своих стажеров, а не «Мой путь»', async () => {
+  it('руководитель видит цели стажеров и согласования, а не «Мой путь»', async () => {
     renderApp('/login')
     await userEvent.click(await screen.findByRole('button', { name: 'Войти как Олег' }))
-    expect(await screen.findByRole('heading', { name: 'Мои стажеры' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Цели стажеров' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Согласования' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Мои заявки' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Сообщения' })).not.toBeInTheDocument()
   })
 
   it('«Выйти» в меню профиля возвращает на /login', async () => {

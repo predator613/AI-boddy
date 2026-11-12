@@ -20,6 +20,7 @@ import { Page } from '../components/Page'
 import { ErrorBlock, LoadingBlocks } from '../components/QueryState'
 import { StatusTag } from '../components/StatusTag'
 import type { TKbArticle } from '../schemas/assistant'
+import { useAuthStore } from '../store/authStore'
 
 interface KnowledgePageProps {
   articleId?: string
@@ -29,6 +30,8 @@ interface KnowledgePageProps {
 
 export function KnowledgePage({ articleId, onArticle, stageCode }: KnowledgePageProps) {
   const kb = useKnowledgeBase()
+  // Наставник смотрит справочник глазами стажера: спрашивать AI-buddy ему не нужно.
+  const intern = useAuthStore((s) => s.user?.role) === 'intern'
   const [search, setSearch] = useState('')
   const found = useKbSearch(search)
   const detail = useKbArticle(articleId)
@@ -39,7 +42,7 @@ export function KnowledgePage({ articleId, onArticle, stageCode }: KnowledgePage
       <Stack gap={28} style={{ flex: '999 1 560px', minWidth: 0 }}>
         <Stack gap="md">
           <PageHeader
-            overline="Справочник · материалы для стажеров"
+            overline="Справочник"
             title={
               <>
                 Как у нас <Marker color="#00AAFF">все устроено</Marker>
@@ -84,17 +87,15 @@ export function KnowledgePage({ articleId, onArticle, stageCode }: KnowledgePage
               : section
                 ? kb.data.sections.find((s) => s.id === section)?.title
                 : forStage.length
-                  ? 'Нужно на твоем этапе'
+                  ? 'Часто задаваемые вопросы'
                   : 'Популярное'
             const open = kb.data.articles.find((a) => a.id === articleId) ?? null
             const sectionColor = new Map(kb.data.sections.map((x) => [x.id, x.color]))
-            const listTitleFinal =
-              q || section ? listTitle : forStage.length ? 'Часто задаваемые вопросы' : 'Популярное'
             return (
               <>
-                <Paper radius={20} p="lg" component="section" aria-label={listTitleFinal}>
+                <Paper radius={20} p="lg" component="section" aria-label={listTitle}>
                   <Group justify="space-between" mb="xs" gap={8}>
-                    <Title order={2}>{listTitleFinal}</Title>
+                    <Title order={2}>{listTitle}</Title>
                     <Group gap={8}>
                       {stageCode && !q && !section && forStage.length > 0 && (
                         <StatusTag bg="#BADAFB">Этап {stageCode}</StatusTag>
@@ -124,13 +125,20 @@ export function KnowledgePage({ articleId, onArticle, stageCode }: KnowledgePage
                       style={{ borderTop: '1px solid #EDEDED' }}
                     >
                       <Mascot size={52} mood="think" />
-                      <Text size="sm">
-                        Ничего не нашлось. Попробуй спросить{' '}
-                        <Anchor renderRoot={(p) => <Link {...p} to="/chat" />} c="ink.9" fw={500}>
-                          AI-buddy
-                        </Anchor>
-                        : он поищет по всем разделам и покажет источник.
-                      </Text>
+                      {intern ? (
+                        <Text size="sm">
+                          Ничего не нашлось. Попробуй спросить{' '}
+                          <Anchor renderRoot={(p) => <Link {...p} to="/chat" />} c="ink.9" fw={500}>
+                            AI-buddy
+                          </Anchor>
+                          : он поищет по всем разделам и покажет источник.
+                        </Text>
+                      ) : (
+                        <Text size="sm">
+                          Такой статьи нет. Если стажерам ее не хватает, добавь материал – AI-buddy
+                          начнет на него ссылаться.
+                        </Text>
+                      )}
                     </Group>
                   ) : (
                     list.map((a) => (
@@ -174,19 +182,21 @@ export function KnowledgePage({ articleId, onArticle, stageCode }: KnowledgePage
                         {open.minutes} мин чтения
                         {detail.data?.authorName ? ` · ${detail.data.authorName}` : ''}
                       </Text>
-                      <Button
-                        renderRoot={(p) => (
-                          <Link
-                            {...p}
-                            to="/chat"
-                            search={{ q: `Расскажи подробнее: ${open.title}` }}
-                          />
-                        )}
-                        color="ink"
-                        style={{ alignSelf: 'flex-start' }}
-                      >
-                        Спросить AI-buddy
-                      </Button>
+                      {intern && (
+                        <Button
+                          renderRoot={(p) => (
+                            <Link
+                              {...p}
+                              to="/chat"
+                              search={{ q: `Расскажи подробнее: ${open.title}` }}
+                            />
+                          )}
+                          color="ink"
+                          style={{ alignSelf: 'flex-start' }}
+                        >
+                          Спросить AI-buddy
+                        </Button>
+                      )}
                     </Stack>
                   )}
                 </Modal>
@@ -256,25 +266,46 @@ export function KnowledgePage({ articleId, onArticle, stageCode }: KnowledgePage
             </Stack>
           </nav>
         )}
-        <Paper radius={20} p="xl" style={{ background: '#141414', color: '#FFFFFF' }}>
-          <Stack align="center" gap="sm" ta="center">
-            <Mascot size={84} glow float />
-            <Text fz={20} fw={500}>
-              Не нашла ответ?
-            </Text>
-            <Text size="sm" c="#D6D6D6" lh={1.45}>
-              Спроси AI-buddy: он поищет по всем разделам и покажет, откуда взял ответ.
-            </Text>
-            <Button
-              renderRoot={(p) => <Link {...p} to="/chat" />}
-              variant="white"
-              color="ink"
-              radius="md"
-            >
-              Спросить AI-buddy
-            </Button>
-          </Stack>
-        </Paper>
+        {intern ? (
+          <Paper radius={20} p="xl" style={{ background: '#141414', color: '#FFFFFF' }}>
+            <Stack align="center" gap="sm" ta="center">
+              <Mascot size={84} glow float />
+              <Text fz={20} fw={500}>
+                Не нашла ответ?
+              </Text>
+              <Text size="sm" c="#D6D6D6" lh={1.45}>
+                Спроси AI-buddy: он поищет по всем разделам и покажет, откуда взял ответ.
+              </Text>
+              <Button
+                renderRoot={(p) => <Link {...p} to="/chat" />}
+                variant="white"
+                color="ink"
+                radius="md"
+              >
+                Спросить AI-buddy
+              </Button>
+            </Stack>
+          </Paper>
+        ) : (
+          <Paper radius="lg" p="lg">
+            <Stack gap={10}>
+              <Text fz={16} fw={500}>
+                Только для просмотра
+              </Text>
+              <Text size="sm" c="ink.5" lh={1.45}>
+                Здесь справочник таким, каким его видят стажеры. Добавить или заменить статью можно
+                в «Материалах».
+              </Text>
+              <Button
+                renderRoot={(p) => <Link {...p} to="/materials" />}
+                variant="outline"
+                color="ink"
+              >
+                Перейти в «Материалы»
+              </Button>
+            </Stack>
+          </Paper>
+        )}
       </Stack>
     </Page>
   )

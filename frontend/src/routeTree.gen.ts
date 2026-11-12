@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthIndexRouteImport } from './routes/_auth/index'
+import { Route as AuthApprovalsRouteImport } from './routes/_auth/approvals'
 import { Route as AuthCalendarRouteImport } from './routes/_auth/calendar'
 import { Route as AuthChatRouteImport } from './routes/_auth/chat'
 import { Route as AuthInboxRouteImport } from './routes/_auth/inbox'
@@ -37,6 +38,11 @@ const LoginRoute = LoginRouteImport.update({
 const AuthIndexRoute = AuthIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthApprovalsRoute = AuthApprovalsRouteImport.update({
+  id: '/approvals',
+  path: '/approvals',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthCalendarRoute = AuthCalendarRouteImport.update({
@@ -103,6 +109,7 @@ const AuthInternsInternIdRoute = AuthInternsInternIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AuthIndexRoute
   '/login': typeof LoginRoute
+  '/approvals': typeof AuthApprovalsRoute
   '/calendar': typeof AuthCalendarRoute
   '/chat': typeof AuthChatRoute
   '/inbox': typeof AuthInboxRoute
@@ -118,6 +125,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/approvals': typeof AuthApprovalsRoute
   '/calendar': typeof AuthCalendarRoute
   '/chat': typeof AuthChatRoute
   '/inbox': typeof AuthInboxRoute
@@ -136,6 +144,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_auth': typeof AuthRouteWithChildren
   '/login': typeof LoginRoute
+  '/_auth/approvals': typeof AuthApprovalsRoute
   '/_auth/calendar': typeof AuthCalendarRoute
   '/_auth/chat': typeof AuthChatRoute
   '/_auth/inbox': typeof AuthInboxRoute
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/approvals'
     | '/calendar'
     | '/chat'
     | '/inbox'
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/approvals'
     | '/calendar'
     | '/chat'
     | '/inbox'
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_auth'
     | '/login'
+    | '/_auth/approvals'
     | '/_auth/calendar'
     | '/_auth/chat'
     | '/_auth/inbox'
@@ -228,6 +240,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/approvals': {
+      id: '/_auth/approvals'
+      path: '/approvals'
+      fullPath: '/approvals'
+      preLoaderRoute: typeof AuthApprovalsRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/calendar': {
@@ -318,6 +337,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthRouteChildren {
+  AuthApprovalsRoute: typeof AuthApprovalsRoute
   AuthCalendarRoute: typeof AuthCalendarRoute
   AuthChatRoute: typeof AuthChatRoute
   AuthInboxRoute: typeof AuthInboxRoute
@@ -334,6 +354,7 @@ interface AuthRouteChildren {
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
+  AuthApprovalsRoute: AuthApprovalsRoute,
   AuthCalendarRoute: AuthCalendarRoute,
   AuthChatRoute: AuthChatRoute,
   AuthInboxRoute: AuthInboxRoute,

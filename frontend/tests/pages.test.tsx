@@ -76,7 +76,7 @@ describe('Справочник', () => {
 
   it('после «Моего пути» показывает статьи текущего этапа', async () => {
     renderApp('/')
-    await screen.findByText('Позади 33% пути адаптации!', {}, T)
+    await screen.findByText('Позади 27% пути адаптации!', {}, T)
     await userEvent.click(screen.getByRole('link', { name: 'Справочник' }))
     expect(await screen.findByText('Часто задаваемые вопросы', {}, T)).toBeInTheDocument()
     expect(screen.getByText('Этап 02')).toBeInTheDocument()
@@ -115,11 +115,14 @@ describe('Поддержка', () => {
     expect(screen.queryByText('Игорь')).not.toBeInTheDocument()
   })
 
-  it('наставнику показываются только общие службы', async () => {
+  it('наставнику – руководитель, команда AI-buddy и свои вопросы', async () => {
     loginAs('mentor_igor')
     renderApp('/support')
     expect(await screen.findByText('HR-поддержка', {}, T)).toBeInTheDocument()
-    expect(screen.queryByText('руководитель команды')).not.toBeInTheDocument()
+    expect(await screen.findByText('руководитель команды', {}, T)).toBeInTheDocument()
+    expect(screen.getByText('Команда AI-buddy')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Частые вопросы наставников' })).toBeInTheDocument()
+    expect(screen.getByText('Приложить диалог стажера с AI-buddy')).toBeInTheDocument()
   })
 })
 
@@ -143,14 +146,15 @@ describe('Наставник', () => {
 
   it('список стажеров и путь стажера со сменой статуса', async () => {
     renderApp('/')
-    await userEvent.click(await screen.findByRole('link', { name: /Анна: 33%/ }, T))
+    await screen.findByRole('button', { name: /^Анна:/ }, T)
+    await userEvent.click(await screen.findByRole('link', { name: 'Весь путь' }, T))
     await userEvent.click(await screen.findByRole('button', { name: /Этап 02/ }, T))
     expect(screen.getByText(/как наставник/)).toBeInTheDocument()
     await userEvent.selectOptions(
       screen.getByLabelText('Статус задачи «Получить доступ к GitLab»'),
       'done',
     )
-    expect(await screen.findByRole('img', { name: /6 из 15 задач/ }, T)).toBeInTheDocument()
+    expect(await screen.findByRole('img', { name: /8 из 26 задач/ }, T)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('link', { name: /Все стажеры/ }))
     expect(await screen.findByRole('heading', { name: 'Мои стажеры' })).toBeInTheDocument()
   })

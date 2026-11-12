@@ -7,6 +7,9 @@ export function errorText(error: unknown): string {
     if (error.status === 403) return 'Этот раздел недоступен для твоей роли.'
     // конфликт (например, запись пересекается со встречей): сервер объясняет причину сам
     if (error.status === 409 && error.message) return error.message
+    // проверка данных на сервере («Записи добавляются только в будни») – тоже текст сервера
+    if (error.status === 400 && error.code === 'validation_error' && /[а-яё]/i.test(error.message))
+      return error.message
     if (error.status === 404) return 'Ничего не нашлось или у тебя нет доступа.'
     if (error.status === 503)
       return 'Сервис заявок сейчас не отвечает. Попробуй еще раз через минуту.'

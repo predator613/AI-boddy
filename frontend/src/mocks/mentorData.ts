@@ -166,6 +166,7 @@ function seedMaterials(): TMaterial[] {
     {
       id: 'mt-1',
       title: 'Памятка стажера: первые две недели',
+      section: 'Первые недели стажера',
       kind: 'pdf',
       stageCode: '01',
       useInAi: true,
@@ -176,6 +177,7 @@ function seedMaterials(): TMaterial[] {
     {
       id: 'mt-2',
       title: 'Как запросить доступ к сервису',
+      section: 'Доступы и сервисы',
       kind: 'md',
       stageCode: '02',
       useInAi: true,
@@ -186,6 +188,7 @@ function seedMaterials(): TMaterial[] {
     {
       id: 'mt-3',
       title: 'Правила код-ревью команды',
+      section: 'Код, ревью, релизы',
       kind: 'docx',
       stageCode: '03',
       useInAi: true,
@@ -196,6 +199,7 @@ function seedMaterials(): TMaterial[] {
     {
       id: 'mt-4',
       title: 'Запись демо команды за октябрь',
+      section: 'Процессы команды',
       kind: 'link',
       stageCode: null,
       useInAi: false,
@@ -412,6 +416,7 @@ export const mentorHandlers = [
           title: `Ответ наставника: ${text.slice(0, 60)}`,
           kind: 'answer',
           stageCode: t.stageCode,
+          section: 'Ответы наставника',
           useInAi: true,
           authorName: MENTOR.name,
           createdAt: new Date().toISOString(),
@@ -487,6 +492,7 @@ export const mentorHandlers = [
       title,
       kind,
       stageCode: String(form?.get('stageCode') ?? '') || null,
+      section: String(form?.get('section') ?? '').trim() || null,
       useInAi: form?.get('useInAi') !== 'false',
       authorName: MENTOR.name,
       createdAt: new Date().toISOString(),

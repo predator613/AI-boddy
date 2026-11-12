@@ -1,8 +1,19 @@
-import { Button, Group, NativeSelect, Paper, Stack, Text, Title } from '@mantine/core'
-import { IconCheck } from '@tabler/icons-react'
+import {
+  Button,
+  Group,
+  NativeSelect,
+  Paper,
+  Stack,
+  Text,
+  Title,
+  UnstyledButton,
+} from '@mantine/core'
+import { IconCheck, IconChevronDown } from '@tabler/icons-react'
+import { useState } from 'react'
 import { resourceTag, taskBadge, taskDot } from '../../lib/pathUi'
 import type { TStageView, TTaskView } from '../../schemas/path'
 import { StatusTag } from '../StatusTag'
+import { shortDate } from '../../lib/dates'
 
 export type TaskStatus = TTaskView['status']
 
@@ -32,6 +43,8 @@ export function StageDetail({
   onSetStatus,
   busyTaskId,
 }: StageDetailProps) {
+  // Раскрытая задача: по клику видно, что сделать, кто поможет и когда задача готова.
+  const [openId, setOpenId] = useState<string | null>(null)
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start' }}>
       <Paper className="ab-rise" radius="lg" p="lg" style={{ flex: '999 1 380px', minWidth: 0 }}>
@@ -49,80 +62,105 @@ export function StageDetail({
             const badge = taskBadge(t)
             const dot = taskDot(t.status)
             const done = t.status === 'done'
+            const open = openId === t.id
             return (
               <li
                 key={t.id}
                 style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 14,
-                  padding: '14px 12px',
+                  padding: '4px 12px 10px',
                   margin: '0 -12px',
                   borderTop: '1px solid #D6D6D6',
                   background: t.isNext ? '#F4F4F4' : 'transparent',
                 }}
               >
-                <span
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 12,
-                    flex: 'none',
-                    marginTop: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: dot.bg,
-                    border: dot.border,
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  {done && <IconCheck size={13} stroke={3} aria-hidden="true" />}
-                </span>
-                <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
-                  <Text fw={500} size="15px" c={done ? 'ink.5' : 'ink.6'}>
-                    {t.title}
-                  </Text>
-                  {t.note && (
-                    <Text size="sm" c="ink.5">
-                      {t.note}
-                    </Text>
-                  )}
-                  {t.isNext && (onAsk || onComplete) && (
-                    <Group gap={8} mt={6}>
-                      {onAsk && t.action && (
-                        <Button size="sm" color="ink" onClick={() => onAsk(t)}>
-                          Сделать с AI-buddy
-                        </Button>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, paddingTop: 10 }}>
+                  <UnstyledButton
+                    onClick={() => setOpenId(open ? null : t.id)}
+                    aria-expanded={open}
+                    aria-label={`${t.title}: подробнее`}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 14,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        flex: 'none',
+                        marginTop: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: dot.bg,
+                        border: dot.border,
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      {done && <IconCheck size={13} stroke={3} aria-hidden="true" />}
+                    </span>
+                    <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
+                      <Text fw={500} size="15px" c={done ? 'ink.5' : 'ink.6'}>
+                        {t.title}
+                      </Text>
+                      {t.note && (
+                        <Text size="sm" c="ink.5">
+                          {t.note}
+                        </Text>
                       )}
-                      {onComplete && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          color="ink"
-                          loading={busyTaskId === t.id}
-                          onClick={() => onComplete(t.id)}
-                        >
-                          Уже сделано
-                        </Button>
-                      )}
-                    </Group>
+                    </Stack>
+                    <IconChevronDown
+                      size={18}
+                      aria-hidden="true"
+                      style={{
+                        flex: 'none',
+                        marginTop: 3,
+                        color: '#5C5C5C',
+                        transform: open ? 'rotate(180deg)' : 'none',
+                        transition: 'transform .2s ease',
+                      }}
+                    />
+                  </UnstyledButton>
+                  {onSetStatus ? (
+                    <NativeSelect
+                      aria-label={`Статус задачи «${t.title}»`}
+                      size="xs"
+                      w={160}
+                      data={STATUS_OPTIONS}
+                      value={t.status}
+                      disabled={busyTaskId === t.id}
+                      onChange={(e) => onSetStatus(t.id, e.currentTarget.value as TaskStatus)}
+                    />
+                  ) : (
+                    <StatusTag bg={badge.bg} border={badge.border} color={badge.color}>
+                      {badge.label}
+                    </StatusTag>
                   )}
-                </Stack>
-                {onSetStatus ? (
-                  <NativeSelect
-                    aria-label={`Статус задачи «${t.title}»`}
-                    size="xs"
-                    w={160}
-                    data={STATUS_OPTIONS}
-                    value={t.status}
-                    disabled={busyTaskId === t.id}
-                    onChange={(e) => onSetStatus(t.id, e.currentTarget.value as TaskStatus)}
-                  />
-                ) : (
-                  <StatusTag bg={badge.bg} border={badge.border} color={badge.color}>
-                    {badge.label}
-                  </StatusTag>
+                </div>
+                {open && <TaskDetailsPanel task={t} />}
+                {t.isNext && (onAsk || onComplete) && (
+                  <Group gap={8} mt={10} ml={38}>
+                    {onAsk && t.action && (
+                      <Button size="sm" color="ink" onClick={() => onAsk(t)}>
+                        Сделать с AI-buddy
+                      </Button>
+                    )}
+                    {onComplete && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        color="ink"
+                        loading={busyTaskId === t.id}
+                        onClick={() => onComplete(t.id)}
+                      >
+                        Уже сделано
+                      </Button>
+                    )}
+                  </Group>
                 )}
               </li>
             )
@@ -164,16 +202,6 @@ export function StageDetail({
             })}
           </Paper>
         )}
-        {stage.tip && (
-          <div style={{ background: stage.color, padding: '16px 18px' }}>
-            <div className="ab-hand" style={{ fontSize: 22, lineHeight: 1 }}>
-              Совет
-            </div>
-            <Text size="sm" mt={6} style={{ lineHeight: 1.4 }}>
-              {stage.tip}
-            </Text>
-          </div>
-        )}
       </Stack>
     </div>
   )
@@ -186,4 +214,40 @@ function resourcesTitle(stage: TStageView) {
   if (kinds.has('tool')) return 'Инструменты'
   if (kinds.has('article')) return 'Материалы'
   return 'Полезное'
+}
+
+function TaskDetailsPanel({ task }: { task: TTaskView }) {
+  const d = task.details
+  const rows: [string, string][] = [['Срок', shortDate(task.dueDate)]]
+  if (d) {
+    rows.push(['Кто поможет', d.helper], ['Готово, когда', d.doneWhen])
+    rows.push(['Идет в цель', d.goal ?? 'не входит в цели'])
+  }
+  return (
+    <div
+      className="ab-pop"
+      style={{ margin: '10px 0 4px 38px', display: 'flex', flexDirection: 'column', gap: 12 }}
+    >
+      <Text size="sm" style={{ lineHeight: 1.5, maxWidth: 640 }}>
+        {d?.about || task.note || 'Подробностей пока нет – спроси наставника или AI-buddy.'}
+      </Text>
+      <dl
+        style={{
+          margin: 0,
+          display: 'grid',
+          gridTemplateColumns: '130px 1fr',
+          gap: '6px 12px',
+          fontSize: 13,
+          lineHeight: 1.4,
+        }}
+      >
+        {rows.map(([k, v]) => (
+          <div key={k} style={{ display: 'contents' }}>
+            <dt style={{ color: '#5C5C5C' }}>{k}</dt>
+            <dd style={{ margin: 0 }}>{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
 }

@@ -1,11 +1,12 @@
 import { Button, Text, UnstyledButton } from '@mantine/core'
 import { IconPlus } from '@tabler/icons-react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getDialogs } from '../../api/chatDialogs'
 import type { TChatDialog } from '../../schemas/chatDialogs'
 import classes from '../../pages/ChatPage.module.css'
 
-export const dialogsKey = ['chat', 'dialogs'] as const
+import { dialogsKey } from '../../lib/chatKeys'
 
 const KIND_COLOR: Record<TChatDialog['kind'], string> = {
   request: '#5C5C5C',
@@ -34,7 +35,8 @@ export function ChatHistory({ openId, onOpen, onNew, newDisabled, newBusy }: Cha
   const dialogs = useQuery({ queryKey: dialogsKey, queryFn: getDialogs, retry: false })
   const list = dialogs.data ?? []
   const past = list.filter((d) => !d.current)
-  const now = new Date()
+  // «Сегодня/вчера» достаточно считать раз за загрузку списка, а не на каждый рендер.
+  const now = useMemo(() => new Date(dialogs.dataUpdatedAt || 0), [dialogs.dataUpdatedAt])
   const groups: { title: string; items: TChatDialog[] }[] = []
   for (const d of past) {
     const g = groupOf(d.updatedAt, now)

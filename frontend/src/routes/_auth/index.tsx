@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { InternsPage } from '../../pages/InternsPage'
+import { LeadGoalsPage } from '../../pages/LeadGoalsPage'
+import { MentorHomePage } from '../../pages/MentorHomePage'
 import { MyPathPage } from '../../pages/MyPathPage'
 import { useAuthStore } from '../../store/authStore'
 
@@ -13,12 +14,13 @@ export const Route = createFileRoute('/_auth/')({
   component: HomePage,
 })
 
-// Главная зависит от роли: стажеру – «Мой путь», наставнику и руководителю – их стажеры.
+// Главная зависит от роли: стажеру – «Мой путь», наставнику – его стажеры, руководителю – цели стажеров.
 function HomePage() {
   const role = useAuthStore((s) => s.user?.role)
   const { stage } = Route.useSearch()
   const navigate = Route.useNavigate()
-  if (role !== 'intern') return <InternsPage />
+  if (role === 'mentor') return <MentorHomePage />
+  if (role === 'lead') return <LeadGoalsPage />
   return (
     <MyPathPage
       stage={stage ?? null}

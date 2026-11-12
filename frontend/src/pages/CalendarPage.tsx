@@ -11,6 +11,7 @@ import {
   Stack,
   Text,
   TextInput,
+  Textarea,
   UnstyledButton,
 } from '@mantine/core'
 import { IconChevronLeft, IconChevronRight, IconPlus } from '@tabler/icons-react'
@@ -20,10 +21,18 @@ import { Marker, PageHeader } from '../components/PageHeader'
 import { Page } from '../components/Page'
 import { ErrorBlock, LoadingBlocks } from '../components/QueryState'
 import { StatusTag } from '../components/StatusTag'
-import { useAddEntry, useAnswerEvent, useCalendar, useDeleteEntry } from '../hooks/useCalendar'
+import {
+  useAddEntry,
+  useAnswerEvent,
+  useCalendar,
+  useDeleteEntry,
+  useNotes,
+  useSaveNote,
+} from '../hooks/useCalendar'
 import { useMyPath } from '../hooks/usePath'
 import { errorText } from '../lib/errors'
 import { addDays, mondayOf } from '../lib/mentorUi'
+import { msk, mskIso, ymd } from '../lib/msk'
 import { EntryInput, type TCalendarEvent, type TEventKind } from '../schemas/calendar'
 import { toast } from '../store/toastStore'
 
@@ -51,7 +60,8 @@ const STATUS: Record<TCalendarEvent['status'], string> = {
 
 const REASONS = ['Пересекается с другой встречей', 'Не успею подготовиться', 'Удобнее другое время']
 
-const hm = (d: Date) => d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+const hm = (d: Date) =>
+  d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })
 /** Раскладка дня: пересекающиеся события делят ширину колонки поровну. */
 function layoutDay(list: TCalendarEvent[]) {
   const sorted = [...list].sort((a, b) => a.startsAt.localeCompare(b.startsAt))
@@ -104,18 +114,18 @@ export function CalendarPage({ now: nowProp }: CalendarPageProps) {
     .filter((t) => t.dueDate && t.status !== 'done')
     .sort((a, b) => a.dueDate!.localeCompare(b.dueDate!))
   const weekDeadlines = (k: number) => {
-    const day = addDays(monday, k).toDateString()
-    return deadlines.filter((t) => new Date(t.dueDate!).toDateString() === day)
+    const day = ymd(addDays(monday, k))
+    return deadlines.filter((t) => t.dueDate!.slice(0, 10) === day)
   }
 
-  const nowTop = (now.getHours() + now.getMinutes() / 60 - HOURS[0]!) * ROW
-  const range = `${monday.getDate()}–${addDays(monday, 4).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}`
+  const nowMsk = msk(now)
+  const nowTop = (nowMsk.hour + nowMsk.minute / 60 - HOURS[0]!) * ROW
 
   return (
     <Page maxWidth={1400}>
       <Stack gap="lg" style={{ flex: 1, minWidth: 0 }}>
         <PageHeader
-          overline={`Календарь · ${range}`}
+          overline="Календарь"
           title={
             <>
               Мои <Marker color="#DFCDF3">встречи</Marker>
@@ -184,7 +194,7 @@ export function CalendarPage({ now: nowProp }: CalendarPageProps) {
                 <div />
                 {DAYS.map((d, i) => {
                   const day = addDays(monday, i)
-                  const today = day.toDateString() === now.toDateString()
+                  const today = ymd(day) === nowMsk.ymd
                   return (
                     <div
                       key={d}
@@ -258,7 +268,7 @@ export function CalendarPage({ now: nowProp }: CalendarPageProps) {
                 </div>
                 {DAYS.map((d, i) => {
                   const day = addDays(monday, i)
-                  const today = day.toDateString() === now.toDateString()
+                  const today = ymd(day) === nowMsk.ymd
                   return (
                     <div
                       key={d}
@@ -285,111 +295,110 @@ export function CalendarPage({ now: nowProp }: CalendarPageProps) {
                           }}
                         />
                       )}
-                      {layoutDay(
-                        events.filter(
-                          (e) => new Date(e.startsAt).toDateString() === day.toDateString(),
-                        ),
-                      ).map(({ event: e, col, cols }) => {
-                        const s = new Date(e.startsAt)
-                        const top = (s.getHours() + s.getMinutes() / 60 - HOURS[0]!) * ROW
-                        const past = endOf(e) <= now
-                        const k = KIND[e.kind]
-                        const badge =
-                          e.status === 'pending' && !past
-                            ? 'ответь'
-                            : e.status === 'move_requested'
-                              ? 'перенос?'
-                              : null
-                        // короткая встреча (меньше часа) – одна строка, иначе текст вылезает за слот
-                        const compact = e.durationMin < 60
-                        return (
-                          <UnstyledButton
-                            key={e.id}
-                            className="ab-pop"
-                            onClick={() => setSelectedId(e.id)}
-                            aria-pressed={selected?.id === e.id}
-                            aria-label={`${e.title}, ${DAYS[i]} ${hm(s)}`}
-                            title={`${e.title}, ${hm(s)}–${hm(endOf(e))}`}
-                            style={{
-                              position: 'absolute',
-                              // пересекающиеся встречи встают рядом, а не друг на друга
-                              left: `calc(${(col / cols) * 100}% + 4px)`,
-                              width: `calc(${100 / cols}% - 8px)`,
-                              top: Math.max(top, 0) + 2,
-                              height: Math.max((e.durationMin / 60) * ROW - 4, 24),
-                              background: k.bg,
-                              border: k.own ? '1px dashed #141414' : 0,
-                              boxSizing: 'border-box',
-                              borderRadius: compact ? 8 : 10,
-                              outline: selected?.id === e.id ? '2px solid #141414' : 'none',
-                              outlineOffset: -2,
-                              padding: compact ? '0 8px' : '6px 9px',
-                              overflow: 'hidden',
-                              opacity: past ? 0.55 : 1,
-                              display: 'flex',
-                              flexDirection: compact ? 'row' : 'column',
-                              alignItems: compact ? 'center' : 'stretch',
-                              gap: compact ? 6 : 2,
-                            }}
-                          >
-                            <Text
-                              size="xs"
-                              fw={600}
-                              lh={1.2}
-                              style={
-                                compact
-                                  ? {
-                                      flex: 1,
-                                      minWidth: 0,
-                                      whiteSpace: 'nowrap',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                    }
-                                  : {
-                                      display: '-webkit-box',
-                                      WebkitLineClamp: e.durationMin >= 90 ? 3 : 2,
-                                      WebkitBoxOrient: 'vertical',
-                                      overflow: 'hidden',
-                                    }
-                              }
+                      {layoutDay(events.filter((e) => msk(e.startsAt).ymd === ymd(day))).map(
+                        ({ event: e, col, cols }) => {
+                          const m = msk(e.startsAt)
+                          const s = new Date(e.startsAt)
+                          const top = (m.hour + m.minute / 60 - HOURS[0]!) * ROW
+                          const past = endOf(e) <= now
+                          const k = KIND[e.kind]
+                          const badge =
+                            e.status === 'pending' && !past
+                              ? 'ответь'
+                              : e.status === 'move_requested'
+                                ? 'перенос?'
+                                : null
+                          // короткая встреча (меньше часа) – одна строка, иначе текст вылезает за слот
+                          const compact = e.durationMin < 60
+                          return (
+                            <UnstyledButton
+                              key={e.id}
+                              className="ab-pop"
+                              onClick={() => setSelectedId(e.id)}
+                              aria-pressed={selected?.id === e.id}
+                              aria-label={`${e.title}, ${DAYS[i]} ${hm(s)}`}
+                              title={`${e.title}, ${hm(s)}–${hm(endOf(e))}`}
+                              style={{
+                                position: 'absolute',
+                                // пересекающиеся встречи встают рядом, а не друг на друга
+                                left: `calc(${(col / cols) * 100}% + 4px)`,
+                                width: `calc(${100 / cols}% - 8px)`,
+                                top: Math.max(top, 0) + 2,
+                                height: Math.max((e.durationMin / 60) * ROW - 4, 24),
+                                background: k.bg,
+                                border: k.own ? '1px dashed #141414' : 0,
+                                boxSizing: 'border-box',
+                                borderRadius: compact ? 8 : 10,
+                                outline: selected?.id === e.id ? '2px solid #141414' : 'none',
+                                outlineOffset: -2,
+                                padding: compact ? '0 8px' : '6px 9px',
+                                overflow: 'hidden',
+                                opacity: past ? 0.55 : 1,
+                                display: 'flex',
+                                flexDirection: compact ? 'row' : 'column',
+                                alignItems: compact ? 'center' : 'stretch',
+                                gap: compact ? 6 : 2,
+                              }}
                             >
-                              {e.title}
-                            </Text>
-                            <Text size="11px" style={{ flex: 'none' }}>
-                              {compact ? hm(s) : `${hm(s)}–${hm(endOf(e))}`}
-                            </Text>
-                            {badge && e.durationMin >= 90 && (
-                              <span
-                                style={{
-                                  fontSize: 10,
-                                  fontWeight: 600,
-                                  textTransform: 'uppercase',
-                                  background: '#FFFFFF',
-                                  padding: '1px 5px',
-                                  alignSelf: 'flex-start',
-                                }}
+                              <Text
+                                size="xs"
+                                fw={600}
+                                lh={1.2}
+                                style={
+                                  compact
+                                    ? {
+                                        flex: 1,
+                                        minWidth: 0,
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                      }
+                                    : {
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: e.durationMin >= 90 ? 3 : 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        overflow: 'hidden',
+                                      }
+                                }
                               >
-                                {badge}
-                              </span>
-                            )}
-                            {badge && e.durationMin < 90 && (
-                              <span
-                                aria-hidden="true"
-                                style={{
-                                  position: 'absolute',
-                                  top: compact ? '50%' : 7,
-                                  right: 7,
-                                  marginTop: compact ? -4 : 0,
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: 4,
-                                  background: e.status === 'pending' ? '#965EEB' : '#FF4053',
-                                }}
-                              />
-                            )}
-                          </UnstyledButton>
-                        )
-                      })}
+                                {e.title}
+                              </Text>
+                              <Text size="11px" style={{ flex: 'none' }}>
+                                {compact ? hm(s) : `${hm(s)}–${hm(endOf(e))}`}
+                              </Text>
+                              {badge && e.durationMin >= 90 && (
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 600,
+                                    textTransform: 'uppercase',
+                                    background: '#FFFFFF',
+                                    padding: '1px 5px',
+                                    alignSelf: 'flex-start',
+                                  }}
+                                >
+                                  {badge}
+                                </span>
+                              )}
+                              {badge && e.durationMin < 90 && (
+                                <span
+                                  aria-hidden="true"
+                                  style={{
+                                    position: 'absolute',
+                                    top: compact ? '50%' : 7,
+                                    right: 7,
+                                    marginTop: compact ? -4 : 0,
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: 4,
+                                    background: e.status === 'pending' ? '#965EEB' : '#FF4053',
+                                  }}
+                                />
+                              )}
+                            </UnstyledButton>
+                          )
+                        },
+                      )}
                     </div>
                   )
                 })}
@@ -532,7 +541,7 @@ function EventDetails({
   const s = new Date(e.startsAt)
   const past = endOf(e) <= now
   const k = KIND[e.kind]
-  const day = DAYS_FULL[(s.getDay() + 6) % 7] ?? ''
+  const day = DAYS_FULL[msk(e.startsAt).weekday] ?? ''
   const whoTo = e.kind === 'mentor' ? 'наставнику' : 'организатору'
   return (
     <Paper radius={20} p="lg" className="ab-pop">
@@ -555,8 +564,13 @@ function EventDetails({
             Когда
           </Text>
           <Text size="sm">
-            {day}, {s.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}, {hm(s)}–
-            {hm(endOf(e))}
+            {day},{' '}
+            {s.toLocaleDateString('ru-RU', {
+              day: 'numeric',
+              month: 'long',
+              timeZone: 'Europe/Moscow',
+            })}
+            , {hm(s)}–{hm(endOf(e))}
           </Text>
           <Text size="sm" c="ink.5">
             С кем
@@ -669,12 +683,69 @@ function EventDetails({
             Удалить запись
           </Button>
         ) : (
-          <Anchor renderRoot={(p) => <Link {...p} to="/mentor" />} size="sm" fw={500} c="ink.9">
-            Написать наставнику →
-          </Anchor>
+          <>
+            <MeetingNotes eventId={e.id} />
+            <Anchor renderRoot={(p) => <Link {...p} to="/mentor" />} size="sm" fw={500} c="ink.9">
+              Написать наставнику →
+            </Anchor>
+          </>
         )}
       </Stack>
     </Paper>
+  )
+}
+
+/** Конспект встречи: свернут, пока не нужен. Виден только стажеру. */
+function MeetingNotes({ eventId }: { eventId: string }) {
+  const notes = useNotes()
+  const save = useSaveNote()
+  const saved = notes.data?.find((n) => n.eventId === eventId)?.text ?? ''
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState<string | null>(null)
+  const text = draft ?? saved
+  return (
+    <div style={{ borderTop: '1px solid #EDEDED', paddingTop: 10 }}>
+      <UnstyledButton
+        fz="sm"
+        fw={500}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+      >
+        Конспект встречи
+        <Text span fz="xs" c="ink.5">
+          {saved ? '· есть заметки' : '· только для тебя'}
+        </Text>
+      </UnstyledButton>
+      {open && (
+        <Stack gap={8} mt={8} className="ab-pop">
+          <Textarea
+            aria-label="Конспект встречи"
+            placeholder="Что узнала, о чем договорились, обратная связь"
+            autosize
+            minRows={3}
+            maxRows={8}
+            value={text}
+            onChange={(e) => setDraft(e.currentTarget.value)}
+          />
+          <Button
+            size="xs"
+            color="ink"
+            style={{ alignSelf: 'flex-start' }}
+            disabled={draft === null || draft === saved}
+            loading={save.isPending}
+            onClick={() =>
+              save.mutate(
+                { eventId, text },
+                { onSuccess: () => (setDraft(null), toast('Конспект сохранен')) },
+              )
+            }
+          >
+            Сохранить
+          </Button>
+        </Stack>
+      )}
+    </div>
   )
 }
 
@@ -696,7 +767,7 @@ function EntryModal({
   onCreated: (id: string) => void
 }) {
   const add = useAddEntry()
-  const todayIdx = (now.getDay() + 6) % 7
+  const todayIdx = msk(now).weekday
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState<(typeof TYPES)[number]['value']>('focus')
   const [day, setDay] = useState(
@@ -708,13 +779,10 @@ function EntryModal({
   const [error, setError] = useState<string | null>(null)
 
   const submit = () => {
-    const start = addDays(monday, Number(day))
-    const t = Number(time)
-    start.setHours(Math.floor(t), t % 1 ? 30 : 0, 0, 0)
     const input = {
       title,
       kind,
-      startsAt: start.toISOString(),
+      startsAt: mskIso(addDays(monday, Number(day)), Number(time)),
       durationMin: Number(dur),
       shareWithMentor: share,
     }
@@ -724,7 +792,7 @@ function EntryModal({
       onSuccess: (ev) => {
         toast(
           share
-            ? 'Запись добавлена. Наставник увидит, что ты занята'
+            ? 'Запись добавлена. Наставник увидит, что это время занято'
             : 'Запись добавлена в твой календарь',
         )
         onCreated(ev.id)

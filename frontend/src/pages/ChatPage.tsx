@@ -20,10 +20,14 @@ import {
 } from '../api/assistant'
 import { Mascot } from '../components/Mascot'
 import { ChatMessageView, ThinkingBubble } from '../components/chat/ChatMessageView'
-import { ChatHistory, dialogsKey } from '../components/chat/ChatHistory'
+import { ChatHistory } from '../components/chat/ChatHistory'
+import { chatKey, dialogsKey } from '../lib/chatKeys'
 import { getDialogMessages } from '../api/chatDialogs'
 import { errorText } from '../lib/errors'
-import { pathKeys } from '../hooks/usePath'
+import { pathKeys, useMyPath } from '../hooks/usePath'
+import { ApiError } from '../api/client'
+import { StatusTag } from '../components/StatusTag'
+import { toast } from '../store/toastStore'
 import type { TChatMessage, TChatReply } from '../schemas/assistant'
 import type { TPathView } from '../schemas/path'
 import { useAuthStore } from '../store/authStore'
@@ -50,7 +54,6 @@ const userMessage = (text: string): TChatMessage => ({
 
 // Переписка живет в backend (GET /api/chat/messages) и в кеше запросов: после перехода на другую
 // страницу или перезагрузки чат восстанавливается вместе с состоянием карточек.
-export const chatKey = ['chat', 'history'] as const
 
 interface ChatPageProps {
   initialQuestion?: string
@@ -67,6 +70,11 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
     action: TPathView['stages'][number]['tasks'][number]['action']
   } | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const path = useMyPath({ enabled: user?.role === 'intern' })
+  const stage =
+    path.data?.stages.find((s) => s.code === path.data?.nextStep?.stageCode) ??
+    path.data?.stages.find((s) => s.status === 'current')
   const autoSent = useRef(false)
 
   const history = useQuery({ queryKey: chatKey, queryFn: getChatHistory })
@@ -88,6 +96,8 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
     onSuccess: (reply) => {
       setMessages((prev) => [...prev, ...reply.messages])
       queryClient.invalidateQueries({ queryKey: dialogsKey })
+      // backend мог отменить прошлую карточку подтверждения – берем свежую историю
+      queryClient.invalidateQueries({ queryKey: chatKey })
     },
     onError: (_e, vars) => setLastFailed({ text: vars.text, action: vars.action ?? null }),
   })
@@ -108,6 +118,13 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
       if (ok) {
         queryClient.invalidateQueries({ queryKey: ['requests'] })
         queryClient.invalidateQueries({ queryKey: pathKeys.my })
+      }
+    },
+    onError: (e) => {
+      // Карточку уже отменил backend (стажер поправил заявку или начал другую) – обновляем чат.
+      if (e instanceof ApiError && e.status === 404) {
+        toast('Эта карточка уже неактуальна')
+        queryClient.invalidateQueries({ queryKey: chatKey })
       }
     },
   })
@@ -196,6 +213,11 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
               знает твой этап, команду и права доступа
             </Text>
           </div>
+          {stage && !openId && (
+            <StatusTag bg="#BADAFB">
+              Этап {stage.code} · {stage.title}
+            </StatusTag>
+          )}
           {openId && (
             <Button
               variant="outline"
@@ -249,6 +271,11 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
                 busy={act.isPending && act.variables?.actionId === m.confirm?.actionId}
                 onConfirm={(actionId) => act.mutate({ actionId, ok: true })}
                 onCancel={(actionId) => act.mutate({ actionId, ok: false })}
+                onEdit={() => {
+                  // правку backend понимает текстом: «сделай только чтение», «перенеси на 25 ноября»
+                  setText('Измени в заявке: ')
+                  requestAnimationFrame(() => inputRef.current?.focus())
+                }}
               />
             ))}
             {!openId && send.isPending && <ThinkingBubble />}
@@ -314,6 +341,7 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
               </Group>
               <form onSubmit={submit} className={classes.form}>
                 <Textarea
+                  ref={inputRef}
                   aria-label="Сообщение"
                   placeholder="Спроси о процессах, доступах или попроси оформить заявку…"
                   autosize

@@ -84,3 +84,14 @@ export function useAgreeGoals(internId: string) {
     onSuccess: (view) => qc.setQueryData(goalKeys.intern(internId), view),
   })
 }
+
+/** Подтвердить шаг цели (наставник – свои шаги, руководитель – свои). */
+export function useGoalStep(internId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ goalId, stepId, done }: { goalId: string; stepId: string; done: boolean }) =>
+      api.setGoalStep(goalId, stepId, done),
+    onSuccess: (goal) =>
+      qc.setQueryData<TGoalsView>(goalKeys.intern(internId), (v) => replaceGoal(v, goal)),
+  })
+}

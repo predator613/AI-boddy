@@ -18,13 +18,23 @@ import { z } from 'zod'
 import { Mascot } from '../components/Mascot'
 import { Marker, PageHeader } from '../components/PageHeader'
 import { Page } from '../components/Page'
-import { DEPARTMENT_STYLE, FAQ, PERSON_CARDS, PROBLEM_TYPES } from '../content/support'
+import {
+  BUDDY_TEAM_CARD,
+  DEPARTMENT_STYLE,
+  FAQ,
+  FAQ_STAFF,
+  PERSON_CARDS,
+  PROBLEM_TYPES,
+  PROBLEM_TYPES_STAFF,
+} from '../content/support'
+import { useInterns } from '../hooks/usePath'
 import { getContacts } from '../api/people'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../store/authStore'
 
 const ProblemSchema = z.object({
   type: z.string().min(1, 'Выбери, что случилось'),
+  intern: z.string(),
   details: z.string().trim().min(10, 'Опиши подробнее, хотя бы пару слов').max(1000),
   attachDialog: z.boolean(),
 })
@@ -33,10 +43,15 @@ type Problem = z.infer<typeof ProblemSchema>
 // Поддержка: помощник разгружает наставника, но не заменяет его – здесь всегда можно позвать людей.
 export function SupportPage() {
   const role = useAuthStore((s) => s.user?.role)
+  // Наставнику – свои вопросы: про стажеров, доступы и работу AI-buddy.
+  const staff = role !== 'intern'
+  const faq = staff ? FAQ_STAFF : FAQ
+  const types = staff ? PROBLEM_TYPES_STAFF : PROBLEM_TYPES
+  const interns = useInterns({ enabled: staff })
   const [sent, setSent] = useState(false)
   const form = useForm<Problem>({
     mode: 'uncontrolled',
-    initialValues: { type: PROBLEM_TYPES[0], details: '', attachDialog: true },
+    initialValues: { type: types[0], intern: '', details: '', attachDialog: true },
     validate: zod4Resolver(ProblemSchema),
   })
   // Имена – из связей пользователя в backend. Стажеру показываем наставника и руководителя,
@@ -54,7 +69,17 @@ export function SupportPage() {
           },
           ...(data.lead ? [{ id: 'lead', name: data.lead.name, ...PERSON_CARDS.lead }] : []),
         ].map((c) => ({ ...c, initials: c.name.slice(0, 1) }))
-      : []
+      : staff && data?.lead
+        ? [
+            {
+              id: 'lead',
+              name: data.lead.name,
+              initials: data.lead.name.slice(0, 1),
+              ...PERSON_CARDS.lead,
+              when: 'Цели стажеров, согласования, оценка по итогам стажировки.',
+            },
+          ]
+        : []
   const departments = (data?.departments ?? []).map((d) => ({
     id: d.code,
     name: d.title,
@@ -63,7 +88,7 @@ export function SupportPage() {
     initials: DEPARTMENT_STYLE[d.code]?.initials ?? d.title.slice(0, 2),
     bg: DEPARTMENT_STYLE[d.code]?.bg ?? '#FFFFFF',
   }))
-  const contacts = [...people, ...departments]
+  const contacts = [...people, ...(staff ? [BUDDY_TEAM_CARD] : []), ...departments]
 
   return (
     <Page maxWidth={1240}>
@@ -76,16 +101,23 @@ export function SupportPage() {
           <Mascot mood="mentor" size={120} glow />
           <div style={{ flex: '1 1 320px' }}>
             <PageHeader
-              overline="Поддержка"
+              overline={staff ? 'Поддержка наставника' : 'Поддержка'}
               title={
-                <>
-                  Не получается? <Marker color="#965EEB">Позову людей</Marker>
-                </>
+                staff ? (
+                  <>
+                    Нужна помощь <Marker color="#965EEB">со стажерами?</Marker>
+                  </>
+                ) : (
+                  <>
+                    Не получается? <Marker color="#965EEB">Позову людей</Marker>
+                  </>
+                )
               }
             />
-            <Text c="ink.5" mt="sm" maw={560}>
-              AI-buddy разгружает наставника, но не заменяет его. Если вопрос сложный или ответ
-              показался неверным, напиши человеку напрямую.
+            <Text c="ink.5" mt="sm" maw={600}>
+              {staff
+                ? 'Здесь вопросы про наставничество, доступы стажеров и работу AI-buddy. Вопросы самих стажеров приходят в «Сообщения».'
+                : 'AI-buddy разгружает наставника, но не заменяет его. Если вопрос сложный или ответ показался неверным, напиши человеку напрямую.'}
             </Text>
           </div>
         </Paper>
@@ -144,10 +176,10 @@ export function SupportPage() {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start' }}>
           <Paper radius="lg" p="lg" style={{ flex: '999 1 420px', minWidth: 0 }}>
             <Title order={2} mb="sm">
-              Частые вопросы
+              {staff ? 'Частые вопросы наставников' : 'Частые вопросы'}
             </Title>
-            <Accordion defaultValue={FAQ[0].q} chevronPosition="right" variant="default">
-              {FAQ.map((f) => (
+            <Accordion defaultValue={faq[0].q} chevronPosition="right" variant="default">
+              {faq.map((f) => (
                 <Accordion.Item key={f.q} value={f.q}>
                   <Accordion.Control>{f.q}</Accordion.Control>
                   <Accordion.Panel>{f.a}</Accordion.Panel>
@@ -159,7 +191,9 @@ export function SupportPage() {
           <Paper radius="lg" p="lg" style={{ flex: '1 1 320px', minWidth: 0 }}>
             <Title order={2}>Сообщить о проблеме</Title>
             <Text size="sm" c="ink.5" mt={6} mb="md">
-              Например, если AI-buddy ответил неверно или не сработала заявка.
+              {staff
+                ? 'Например, AI-buddy дал стажеру неверный ответ или не сработала автоматизация.'
+                : 'Например, если AI-buddy ответил неверно или не сработала заявка.'}
             </Text>
             {sent ? (
               <Alert
@@ -189,11 +223,23 @@ export function SupportPage() {
                 <Stack gap="sm">
                   <Select
                     label="Что случилось"
-                    data={PROBLEM_TYPES}
+                    data={types}
                     allowDeselect={false}
                     key={form.key('type')}
                     {...form.getInputProps('type')}
                   />
+                  {staff && (
+                    <Select
+                      label="Какой стажер"
+                      data={[
+                        ...(interns.data ?? []).map((i) => ({ value: i.id, label: i.name })),
+                        { value: '', label: 'не про конкретного стажера' },
+                      ]}
+                      allowDeselect={false}
+                      key={form.key('intern')}
+                      {...form.getInputProps('intern')}
+                    />
+                  )}
                   <Textarea
                     label="Подробности"
                     placeholder="Опиши, что произошло"
@@ -203,7 +249,11 @@ export function SupportPage() {
                     {...form.getInputProps('details')}
                   />
                   <Checkbox
-                    label="Приложить последний диалог с AI-buddy"
+                    label={
+                      staff
+                        ? 'Приложить диалог стажера с AI-buddy'
+                        : 'Приложить последний диалог с AI-buddy'
+                    }
                     key={form.key('attachDialog')}
                     {...form.getInputProps('attachDialog', { type: 'checkbox' })}
                   />
