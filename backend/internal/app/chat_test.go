@@ -498,7 +498,62 @@ func TestNextStepUsesChatState(t *testing.T) {
 
 	// Стажер без заявок получает подсказку про «Мой путь» или про свою заявку.
 	pavel := e.say("intern_pavel", map[string]any{"text": "что мне делать дальше"})
-	assert.Regexp(t, "Мой путь|ждет решения", pavel[0].Text)
+	assert.Regexp(t, "Моем пути|ждет решения", pavel[0].Text)
+}
+
+// «Кто мой наставник?», правка карточки текстом, «какие у меня заявки», «поговорить с наставником»,
+// «следующий шаг» с задачей «Моего пути».
+func TestAssistantIntents(t *testing.T) {
+	e := newChatEnv(t, "")
+
+	who := e.say("intern_anna", map[string]any{"text": "Кто мой наставник?"})
+	require.Len(t, who, 1)
+	assert.Contains(t, who[0].Text, "Игорь")
+	assert.Contains(t, who[0].Text, "Олег")
+	assert.Contains(t, who[0].Text, "Чат с наставником")
+	pavelWho := e.say("intern_pavel", map[string]any{"text": "кто у меня руководитель"})
+	assert.Contains(t, pavelWho[0].Text, "не назначили")
+	assert.Contains(t, pavelWho[0].Text, "Нина")
+
+	next := e.say("intern_anna", map[string]any{"text": "Какой мой следующий шаг?"})
+	assert.Contains(t, next[0].Text, "Моем пути")
+	assert.Contains(t, next[0].Text, "GitLab")
+
+	// Карточка GitLab, затем правка текстом: старая отменяется, новая – с другим уровнем.
+	first := confirmOf(t, e.say("intern_anna", map[string]any{"text": "нужен доступ в GitLab"}))
+	assert.Contains(t, fieldsMap(first.Fields)["Уровень прав"], "Developer")
+	edited := e.say("intern_anna", map[string]any{"text": "сделай только чтение"})
+	second := confirmOf(t, edited)
+	assert.NotEqual(t, first.ActionID, second.ActionID)
+	assert.Contains(t, fieldsMap(second.Fields)["Уровень прав"], "Reporter")
+	assert.Contains(t, edited[0].Text, "Обновил карточку")
+	var r models.ChatReply
+	assert.Equal(t, http.StatusNotFound, e.call("intern_anna", http.MethodPost, "/api/chat/actions/"+first.ActionID+"/confirm", nil, &r),
+		"старая карточка больше не подтверждается")
+	same := e.say("intern_anna", map[string]any{"text": "поменяй на чтение"})
+	assert.Contains(t, same[len(same)-1].Text, "уже выше", "тот же уровень – карточка не меняется")
+
+	// Отгул: карточка GitLab убирается с пояснением, новая дата заменяет карточку отгула.
+	leave := e.say("intern_anna", map[string]any{"text": "хочу отгул 20 ноября"})
+	assert.Contains(t, leave[0].Text, "Карточку «Доступ к GitLab» выше убрал")
+	assert.NotContains(t, leave[0].Text, "Обновил")
+	l1 := confirmOf(t, leave)
+	moved := e.say("intern_anna", map[string]any{"text": "перенеси на 25 ноября"})
+	l2 := confirmOf(t, moved)
+	assert.NotEqual(t, l1.ActionID, l2.ActionID)
+	assert.Contains(t, fieldsMap(l2.Fields)["Дата"], "25 ноября")
+
+	// Заявка в отдел: комментарий дописывается в новую карточку.
+	confirmOf(t, e.say("intern_anna", map[string]any{"text": "нужен ноутбук"}))
+	withComment := confirmOf(t, e.say("intern_anna", map[string]any{"text": "добавь комментарий: нужен macOS"}))
+	assert.Contains(t, fieldsMap(withComment.Fields)["Комментарий"], "macOS")
+
+	list := e.say("intern_anna", map[string]any{"text": "Какие у меня заявки?"})
+	assert.Contains(t, list[0].Text, "№")
+
+	handoff := e.say("intern_anna", map[string]any{"text": "Хочу поговорить с наставником"})
+	assert.Contains(t, handoff[0].Text, "Игорь")
+	assert.Equal(t, "mentor", handoff[0].Mood)
 }
 
 // С настоящей моделью: в запрос уходят история и неподтвержденная карточка, пояснение к карточке

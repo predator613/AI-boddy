@@ -61,12 +61,13 @@ func NewServices(cfg config.Config, pool *pgxpool.Pool, log *slog.Logger) (Servi
 	kb := repository.NewKB(pool)
 	people := repository.NewPeople(pool)
 	reqs := services.NewRequests(reqStore, users, corp, log)
+	path := services.NewPath(repository.NewOnboarding(pool), users)
 	return Services{
 		Auth:     services.NewAuth(users, cfg.JWTSecret, cfg.JWTTTL),
-		Path:     services.NewPath(repository.NewOnboarding(pool), users),
+		Path:     path,
 		KB:       services.NewKB(kb, users, people),
 		Goals:    services.NewGoals(repository.NewGoals(pool), users),
-		Chat:     services.NewAgent(repository.NewChat(pool), reqStore, kb, users, people, corp, model, cfg.LLMTimeout, log),
+		Chat:     services.NewAgent(repository.NewChat(pool), reqStore, kb, users, people, corp, model, cfg.LLMTimeout, log).WithPath(path),
 		People:   services.NewPeople(people),
 		Calendar: services.NewCalendar(repository.NewCalendar(pool), users, people),
 		Requests: reqs,

@@ -35,6 +35,11 @@ func TestInternCalendar(t *testing.T) {
 	day := oneOnOne.In(msk)
 	day = time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, msk)
 	at := func(h, m int) time.Time { return day.Add(time.Duration(h)*time.Hour + time.Duration(m)*time.Minute) }
+	saturday := day
+	for saturday.Weekday() != time.Saturday {
+		saturday = saturday.AddDate(0, 0, 1)
+	}
+	assert.NotContains(t, []time.Weekday{time.Saturday, time.Sunday}, day.Weekday(), "демо-встречи переносятся на будни")
 
 	list := func(from, to time.Time) []models.CalendarEvent {
 		t.Helper()
@@ -111,6 +116,8 @@ func TestInternCalendar(t *testing.T) {
 		"вид":          {"title": "test вид", "kind": "party", "startsAt": at(9, 0), "durationMin": 30},
 		"длительность": {"title": "test мало", "kind": "focus", "startsAt": at(9, 0), "durationMin": 5},
 		"без времени":  {"title": "test без", "kind": "focus", "durationMin": 30},
+		"раньше 10:00": {"title": "test рано", "kind": "focus", "startsAt": at(9, 30), "durationMin": 30},
+		"выходной":     {"title": "test суббота", "kind": "focus", "startsAt": saturday.Add(12 * time.Hour), "durationMin": 30},
 	} {
 		assert.Equal(t, http.StatusBadRequest, e.call("intern_anna", http.MethodPost, "/api/me/calendar/entries", body, nil), name)
 	}

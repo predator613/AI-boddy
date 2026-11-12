@@ -70,6 +70,18 @@ type Agent struct {
 	log      *slog.Logger
 	now      func() time.Time
 	fallback llm.Provider
+	path     PathReader
+}
+
+// PathReader – «Мой путь» стажера: следующая задача для подсказок «что дальше».
+type PathReader interface {
+	GetPath(ctx context.Context, viewerID, internID string) (*models.PathView, error)
+}
+
+// WithPath подключает «Мой путь»: агент знает следующую задачу стажера.
+func (a *Agent) WithPath(p PathReader) *Agent {
+	a.path = p
+	return a
 }
 
 // NewAgent создает агента. timeout – сколько ждать модель, потом ответ собирается офлайн.
@@ -89,7 +101,11 @@ type turn struct {
 	// Контекст переписки: последние сообщения до текущего вопроса и неподтвержденная карточка.
 	history []llm.Message
 	draft   *models.Request
-	circle  *models.Circle // наставник, руководитель, команда – для подстановки в статьи и промпт
+	circle  *models.Circle   // наставник, руководитель, команда – для подстановки в статьи и промпт
+	next    *models.NextStep // следующая задача «Моего пути»
+	// replaced – старая карточка заменена новой (стажер поменял поля), dropped – убрана карточка другой заявки.
+	replaced bool
+	dropped  string
 }
 
 // ---------- публичные методы ----------
@@ -200,7 +216,7 @@ func (a *Agent) Cancel(ctx context.Context, viewerID, actionID string) (*models.
 	if err := a.reqs.Cancel(ctx, q.ID, t.viewer.ID); err != nil {
 		return nil, mapNotFound(err)
 	}
-	if err := a.say(ctx, t, "text", "Хорошо, заявку не создаю. Если передумаешь, просто напиши.", "calm", nil); err != nil {
+	if err := a.say(ctx, t, "text", a.phrase(ctx, t, "Хорошо, заявку не создаю. Если передумаешь, просто напиши."), "calm", nil); err != nil {
 		return nil, err
 	}
 	return &models.ChatReply{Messages: t.out}, nil
@@ -323,7 +339,7 @@ func (a *Agent) systemPrompt(t *turn) string {
 Инструменты: search_kb – вопросы о работе и процессах; prepare_access_request – доступ к сервисам (GitLab, стенд, вики, трекер); prepare_service_request – заявка в отдел (техника, VPN, пароли, справки, отпуск, выплаты); prepare_leave_request – отгул; list_requests – статус заявок; handoff_to_mentor – передать вопрос наставнику.
 Заявка создается только после того, как стажер нажмет «Подтвердить» в карточке.`,
 		dayMonth(a.now().In(moscow))+", "+weekday(a.now().In(moscow)), t.viewer.Name, t.viewer.TeamName, a.peopleNote(t)) +
-		draftNote(t.draft)
+		nextNote(t.next) + draftNote(t.draft)
 }
 
 // peopleNote – кто вокруг стажера: имена только из связей в базе.
@@ -341,6 +357,32 @@ func (a *Agent) peopleNote(t *turn) string {
 		"Отделы: оборудование, ИТ-поддержка, HR-поддержка, бухгалтерия – заявки в них оформляешь ты.", mentor, lead)
 }
 
+// nextNote – следующая задача «Моего пути»: на вопрос «что дальше» модель называет ее.
+func nextNote(n *models.NextStep) string {
+	if n == nil {
+		return ""
+	}
+	return "\nСледующая задача стажера на «Моем пути»: " + nextTaskText(n) + ". На вопрос «что дальше» или «какой следующий шаг» назови ее."
+}
+
+// nextTaskText – «Получить доступ к GitLab» (этап 02, срок сегодня).
+func nextTaskText(n *models.NextStep) string {
+	due := ""
+	if n.DueInDays != nil {
+		switch d := *n.DueInDays; {
+		case d < 0:
+			due = ", срок прошел"
+		case d == 0:
+			due = ", срок сегодня"
+		case d == 1:
+			due = ", срок завтра"
+		default:
+			due = fmt.Sprintf(", срок через %d дн.", d)
+		}
+	}
+	return fmt.Sprintf("«%s» (этап %s%s)", n.Title, n.StageCode, due)
+}
+
 // draftNote – что модель должна знать о неподтвержденной карточке в чате.
 func draftNote(q *models.Request) string {
 	if q == nil {
@@ -353,7 +395,8 @@ func draftNote(q *models.Request) string {
 	return fmt.Sprintf(`
 Сейчас в чате есть неподтвержденная карточка «%s» (%s). Заявка уйдет, только когда стажер нажмет
 «Подтвердить» в карточке; «Отмена» – передумал. Если стажер спрашивает, что делать дальше, объясни это.
-Не готовь вторую такую же заявку.`, RequestTitle(q), strings.Join(parts, "; "))
+Если стажер просит поменять поля карточки (уровень прав, проект, дату, комментарий), вызови тот же инструмент
+с новыми значениями – старая карточка заменится новой. Без изменений вторую такую же заявку не готовь.`, RequestTitle(q), strings.Join(parts, "; "))
 }
 
 // historySize – сколько последних сообщений переписки видит модель.
@@ -386,11 +429,25 @@ func (a *Agent) loadContext(ctx context.Context, t *turn) error {
 		}
 		t.history = append(t.history, llm.Message{Role: "assistant", Content: text})
 	}
+	if a.path != nil {
+		if v, err := a.path.GetPath(ctx, t.viewer.ID, ""); err == nil {
+			t.next = v.NextStep
+		}
+	}
 	return nil
 }
 
 // runModel – вопрос текстом: модель выбирает инструмент.
 func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
+	low := strings.ToLower(text)
+	if reWho.MatchString(low) {
+		return a.whoAnswer(ctx, t)
+	}
+	if t.draft != nil && reEdit.MatchString(low) {
+		if done, err := a.editDraft(ctx, t, text); done {
+			return err
+		}
+	}
 	msgs := append([]llm.Message{{Role: "system", Content: a.systemPrompt(t)}}, t.history...)
 	msgs = append(msgs, llm.Message{Role: "user", Content: text})
 	resp := a.ask(ctx, t, llm.Request{Messages: msgs, Tools: agentTools})
@@ -409,7 +466,7 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 	case "prepare_access_request":
 		code, err := a.reqs.ResolveService(ctx, first(args["resource"], text))
 		if errors.Is(err, repository.ErrNotFound) {
-			return a.say(ctx, t, "text", "Не понял, к какому сервису нужен доступ. Например: GitLab, тестовый стенд, вики, трекер задач.", "think", nil)
+			return a.say(ctx, t, "text", a.phrase(ctx, t, "Не понял, к какому сервису нужен доступ. Например: GitLab, тестовый стенд, вики, трекер задач."), "think", nil)
 		}
 		if err != nil {
 			return err
@@ -515,7 +572,7 @@ func (a *Agent) searchAnswer(ctx context.Context, t *turn, msgs []llm.Message, c
 func (a *Agent) prepareAccess(ctx context.Context, t *turn, service, role, level, project, justification string, taskID *string) error {
 	svc, err := a.reqs.Service(ctx, service)
 	if errors.Is(err, repository.ErrNotFound) {
-		return a.say(ctx, t, "error", "Такого сервиса нет в списке доступов. Проверь название или спроси наставника.", "sad", nil)
+		return a.say(ctx, t, "error", a.phrase(ctx, t, "Такого сервиса нет в списке доступов. Проверь название или спроси наставника."), "sad", nil)
 	}
 	if err != nil {
 		return err
@@ -539,9 +596,11 @@ func (a *Agent) prepareAccess(ctx context.Context, t *turn, service, role, level
 		return a.say(ctx, t, "error", a.phrase(ctx, t, reason), "sad", nil)
 	}
 
-	// Карточка на этот сервис уже ждет подтверждения – вторую не создаем.
-	if t.draft != nil && t.draft.Type == "access" && t.draft.ServiceCode == svc.Code {
-		return a.say(ctx, t, "text", "Карточка на этот доступ уже выше: проверь поля и нажми «Подтвердить».", "mentor", nil)
+	// Карточка на этот сервис уже ждет подтверждения: без изменений вторую не создаем,
+	// с другим уровнем или проектом – заменяем.
+	if q := t.draft; q != nil && q.Type == "access" && q.ServiceCode == svc.Code &&
+		q.RoleTitle == chosen.Title && (project == "" || q.ProjectTitle == nil || strings.EqualFold(*q.ProjectTitle, project)) {
+		return a.say(ctx, t, "text", a.phrase(ctx, t, "Карточка на этот доступ уже выше: проверь поля и нажми «Подтвердить»."), "mentor", nil)
 	}
 	// Уже есть доступ или заявка на согласовании – не создаем дубль.
 	if open, err := a.reqs.OpenRequest(ctx, t.viewer.ID, svc.Code); err == nil {
@@ -578,6 +637,9 @@ func (a *Agent) prepareAccess(ctx context.Context, t *turn, service, role, level
 			justification = "Нужен для задачи «" + task.Title + "»"
 		}
 	}
+	if err := a.dropDraft(ctx, t, t.draft != nil && t.draft.Type == "access" && t.draft.ServiceCode == svc.Code); err != nil {
+		return err
+	}
 	d := models.AccessDraft{RequesterID: t.viewer.ID, Service: svc.Code, Role: chosen.Code, Justification: justification}
 	if proj != nil {
 		d.Project = &proj.Code
@@ -597,6 +659,10 @@ func (a *Agent) prepareAccess(ctx context.Context, t *turn, service, role, level
 	if svc.ApproverKind == "auto" {
 		intro = fmt.Sprintf("%s выдается автоматически, сразу после подтверждения.", svc.Title)
 	}
+	if t.replaced {
+		intro = fmt.Sprintf("Обновил карточку: уровень «%s». ", levelLabel(*chosen)) + intro
+	}
+	intro = droppedNote(t) + intro
 	source := a.articleFor(ctx, t, "как запросить доступ к сервису")
 	if err := a.say(ctx, t, "text", a.phrase(ctx, t, intro), "calm", &sayOpts{article: source}); err != nil {
 		return err
@@ -688,6 +754,9 @@ func (a *Agent) prepareLeave(ctx context.Context, t *turn, dateText, kind string
 	if lead != nil {
 		d.ApproverID = &lead.ID
 	}
+	if err := a.dropDraft(ctx, t, t.draft != nil && t.draft.Type == "leave"); err != nil {
+		return err
+	}
 	q, err := a.reqs.CreateLeaveDraft(ctx, d)
 	if err != nil {
 		return mapNotFound(err)
@@ -703,6 +772,10 @@ func (a *Agent) prepareLeave(ctx context.Context, t *turn, dateText, kind string
 	if t.circle != nil && t.circle.Mentor != nil {
 		intro += " Наставника (" + t.circle.Mentor.Name + ") я предупрежу, когда подтвердишь."
 	}
+	if t.replaced {
+		intro = "Обновил карточку: новая дата " + dayMonth(day) + ". " + intro
+	}
+	intro = droppedNote(t) + intro
 	source := a.articleFor(ctx, t, "как взять отгул")
 	if err := a.say(ctx, t, "text", a.phrase(ctx, t, intro), "calm", &sayOpts{article: source}); err != nil {
 		return err
@@ -735,7 +808,7 @@ func (a *Agent) listRequests(ctx context.Context, t *turn, number string) error 
 		}
 	}
 	if len(lines) == 0 {
-		return a.say(ctx, t, "text", "Заявок пока нет. Могу оформить доступ или отгул.", "calm", nil)
+		return a.say(ctx, t, "text", a.phrase(ctx, t, "Заявок пока нет. Могу оформить доступ, отгул или заявку в отдел."), "calm", nil)
 	}
 	label := "Заявки"
 	return a.say(ctx, t, "text", a.phrase(ctx, t, "Вот твои заявки:\n"+strings.Join(lines, "\n")), "calm", &sayOpts{label: &label})
@@ -769,8 +842,11 @@ func (a *Agent) noAnswer(ctx context.Context, t *turn) error {
 	if reNextStep.MatchString(t.question) {
 		return a.nextStep(ctx, t)
 	}
-	return a.say(ctx, t, "text",
-		"Точного ответа в справочнике нет. Напиши «передай наставнику», и я передам вопрос.", "mentor", nil)
+	text := "Точного ответа в справочнике нет. Напиши «передай наставнику», и я передам вопрос."
+	if t.circle != nil && t.circle.Mentor != nil {
+		text = fmt.Sprintf("Точного ответа в справочнике нет. Могу передать вопрос наставнику (%s) – напиши «передай наставнику».", t.circle.Mentor.Name)
+	}
+	return a.say(ctx, t, "text", a.phrase(ctx, t, text), "mentor", nil)
 }
 
 // nextStep – подсказка по состоянию: карточка ждет подтверждения, заявка на согласовании или «Мой путь».
@@ -787,15 +863,116 @@ func (a *Agent) nextStep(ctx context.Context, t *turn) error {
 	if err != nil {
 		return err
 	}
+	var parts []string
+	if n := t.next; n != nil {
+		s := "Следующий шаг на «Моем пути» – " + nextTaskText(n) + "."
+		if n.Action != nil && (n.Action.Kind == "access_request" || n.Action.Kind == "leave_request") {
+			s += " Могу оформить заявку прямо здесь – нажми «Сделать с AI-buddy» в карточке на главной или напиши, что нужно."
+		}
+		parts = append(parts, s)
+	}
 	for _, q := range list {
 		if q.Status == "waiting" {
-			return a.say(ctx, t, "text", a.phrase(ctx, t, fmt.Sprintf(
-				"Заявка №%d «%s» ждет решения: %s, обычно до %d ч. Я напишу сюда, когда придет ответ. Пока можно взять следующий пункт на «Моем пути».",
-				q.Number, RequestTitle(q), approverText(q), q.SLAHours)), "calm", nil)
+			parts = append(parts, fmt.Sprintf("Заявка №%d «%s» ждет решения: %s, обычно до %d ч, я напишу, когда придет ответ.",
+				q.Number, RequestTitle(q), approverText(q), q.SLAHours))
+			break
 		}
 	}
-	return a.say(ctx, t, "text",
-		"Открой «Мой путь»: в карточке «Следующий шаг» – ближайшая задача. Если с ней нужна помощь, спроси меня, например «как получить доступ к GitLab».", "calm", nil)
+	if len(parts) == 0 {
+		parts = append(parts, "Все задачи на «Моем пути» закрыты, заявок на согласовании нет. Спроси наставника, что взять дальше, или загляни в справочник.")
+	}
+	return a.say(ctx, t, "text", a.phrase(ctx, t, strings.Join(parts, " ")), "calm", nil)
+}
+
+// reWho – вопрос «кто мой наставник / руководитель»: ответ из связей в базе, а не из справочника.
+var reWho = regexp.MustCompile(`кто\s+(у меня\s+|мой\s+|моя\s+|мне\s+|наш\s+)?(наставник|ментор|руководител|тимлид|лид\b)|как зовут\s+(моего\s+|нашего\s+)?(наставник|ментор|руководител|тимлид)|кто меня (ведет|курирует)|к кому (мне )?обращаться`)
+
+// whoAnswer – кто вокруг стажера и как с ними связаться.
+func (a *Agent) whoAnswer(ctx context.Context, t *turn) error {
+	c := t.circle
+	var parts []string
+	if c != nil && c.Mentor != nil {
+		parts = append(parts, fmt.Sprintf("Твой наставник – %s. Написать ему можно в разделе «Чат с наставником», а если вопрос возник здесь, напиши «передай наставнику», и я перешлю.", c.Mentor.Name))
+	} else {
+		parts = append(parts, "Наставника тебе пока не назначили.")
+	}
+	if c != nil && c.Lead != nil {
+		parts = append(parts, fmt.Sprintf("Руководитель команды – %s: согласует доступ к GitLab, отгулы и цели стажировки.", c.Lead.Name))
+	}
+	parts = append(parts, "Все контакты и отделы – в разделе «Поддержка».")
+	return a.say(ctx, t, "text", a.phrase(ctx, t, strings.Join(parts, " ")), "mentor", nil)
+}
+
+// reEdit – стажер правит неподтвержденную карточку: «поменяй», «сделай только чтение», «на другую дату».
+var reEdit = regexp.MustCompile(`измени|поменя|исправ|замени|сделай|вместо|не та|не тот|друг(ой|ую|ая)|перенес|передвин|добавь|допиши|уровень|только чтени|только смотр|на чтение|на запись|комментари`)
+
+// editDraft – правка карточки текстом. done=false – правка не распознана, вопрос уходит модели.
+func (a *Agent) editDraft(ctx context.Context, t *turn, text string) (bool, error) {
+	q := t.draft
+	low := strings.ToLower(text)
+	switch q.Type {
+	case "access":
+		level := ""
+		switch {
+		case regexp.MustCompile(`maintainer|админ|администр`).MatchString(low):
+			level = "admin"
+		case regexp.MustCompile(`чтени|смотр|read|reporter|просмотр`).MatchString(low):
+			level = "read"
+		case regexp.MustCompile(`редакт|запис|developer|выклад|деплой|пуш|push|изменени`).MatchString(low):
+			level = "edit"
+		}
+		if level == "" {
+			return false, nil
+		}
+		if level == q.Level {
+			return true, a.say(ctx, t, "text", a.phrase(ctx, t, fmt.Sprintf(
+				"В карточке уже уровень «%s», она уже выше: проверь поля и нажми «Подтвердить».", q.LevelTitle)), "mentor", nil)
+		}
+		return true, a.prepareAccess(ctx, t, q.ServiceCode, "", level, "", q.Justification, q.TaskID)
+	case "leave":
+		today := a.now().In(moscow)
+		if _, ok := ParseLeaveDate(text, today); !ok {
+			return false, nil
+		}
+		return true, a.prepareLeave(ctx, t, text, "", q.TaskID)
+	case "other":
+		if !regexp.MustCompile(`комментари|добавь|допиши|укажи|измени|поменя|исправ`).MatchString(low) {
+			return false, nil
+		}
+		comment := reCommentLead.ReplaceAllString(strings.TrimSpace(text), "")
+		return true, a.prepareService(ctx, t, q.ItemCode, comment)
+	}
+	return false, nil
+}
+
+// reCommentLead – «добавь комментарий:» в начале правки: в заявку уходит только сам комментарий.
+var reCommentLead = regexp.MustCompile(`(?i)^(добавь|допиши|укажи|измени|поменяй|исправь)\s+(в\s+)?(комментари\S*|заявк\S*)?\s*[:,–-]?\s*`)
+
+// dropDraft – перед новой карточкой старая неподтвержденная отменяется: в чате одна карточка «Подтвердить».
+// same – новая карточка про то же самое (правка), иначе стажер переключился на другую заявку.
+func (a *Agent) dropDraft(ctx context.Context, t *turn, same bool) error {
+	q := t.draft
+	if q == nil {
+		return nil
+	}
+	if err := a.reqs.Cancel(ctx, q.ID, t.viewer.ID); err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return err
+	}
+	t.draft = nil
+	if same {
+		t.replaced = true
+	} else {
+		t.dropped = RequestTitle(q)
+	}
+	return nil
+}
+
+// droppedNote – пояснение, что прошлая неподтвержденная карточка убрана.
+func droppedNote(t *turn) string {
+	if t.dropped == "" {
+		return ""
+	}
+	return fmt.Sprintf("Карточку «%s» выше убрал – подтвердить можно одну заявку за раз. ", t.dropped)
 }
 
 // articleFor – статья-источник для пояснения к заявке.

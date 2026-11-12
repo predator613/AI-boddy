@@ -28,14 +28,18 @@ func (a *Agent) prepareService(ctx context.Context, t *turn, itemText, comment s
 	if err != nil {
 		return mapNotFound(err)
 	}
-	if q := t.draft; q != nil && q.Type == "other" && q.ItemCode == item.Code {
-		return a.say(ctx, t, "text", "Карточка на это уже выше: проверь ее и нажми «Подтвердить».", "mentor", nil)
+	if q := t.draft; q != nil && q.Type == "other" && q.ItemCode == item.Code &&
+		(strings.TrimSpace(comment) == "" || strings.TrimSpace(comment) == q.ItemComment) {
+		return a.say(ctx, t, "text", a.phrase(ctx, t, "Карточка на это уже выше: проверь ее и нажми «Подтвердить»."), "mentor", nil)
 	}
 	if open, err := a.reqs.OpenServiceRequest(ctx, t.viewer.ID, item.Code); err == nil {
 		return a.say(ctx, t, "text", a.phrase(ctx, t, fmt.Sprintf(
 			"Заявка №%d «%s» уже в работе: %s, обычно до %d ч. Ответ придет сюда же.",
 			open.Number, RequestTitle(open), open.DepartmentTitle, open.SLAHours)), "calm", nil)
 	} else if !errors.Is(err, repository.ErrNotFound) {
+		return err
+	}
+	if err := a.dropDraft(ctx, t, t.draft != nil && t.draft.Type == "other" && t.draft.ItemCode == item.Code); err != nil {
 		return err
 	}
 	q, err := a.reqs.CreateServiceDraft(ctx, models.ServiceDraft{
@@ -45,6 +49,10 @@ func (a *Agent) prepareService(ctx context.Context, t *turn, itemText, comment s
 		return mapNotFound(err)
 	}
 	intro := fmt.Sprintf("%s оформляется заявкой, ее выполнит %s, обычно до %d ч.", item.Title, item.DepartmentTitle, item.SLAHours)
+	if t.replaced {
+		intro = "Обновил карточку, старую убрал. " + intro
+	}
+	intro = droppedNote(t) + intro
 	if t.circle != nil && t.circle.Mentor != nil {
 		intro += fmt.Sprintf(" Наставника (%s) я предупрежу.", t.circle.Mentor.Name)
 	}

@@ -8,3 +8,5 @@ backend/coverage/
 .DS_Store
 frontend/coverage/
 coverage/
+
+scripts/llm-check.log

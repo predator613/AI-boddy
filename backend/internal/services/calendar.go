@@ -42,7 +42,11 @@ type AnswerInput struct {
 }
 
 // Рабочий день в календаре заканчивается в 18:00 по Москве: позже записи не ставим.
-const workdayEndMin = 18 * 60
+// Рабочее окно календаря стажера: пн–пт с 10:00 до 18:00 по Москве.
+const (
+	workdayStartMin = 10 * 60
+	workdayEndMin   = 18 * 60
+)
 
 // maxCalendarSpan – самый длинный запрошенный период.
 const maxCalendarSpan = 93 * 24 * time.Hour
@@ -116,6 +120,12 @@ func (s *Calendar) CreateEntry(ctx context.Context, viewerID string, in EntryInp
 	}
 	start := in.StartsAt.In(moscow)
 	end := start.Add(time.Duration(in.DurationMin) * time.Minute)
+	if wd := start.Weekday(); wd == time.Saturday || wd == time.Sunday {
+		return nil, invalid("Записи добавляются только в будни")
+	}
+	if start.Hour()*60+start.Minute() < workdayStartMin {
+		return nil, invalid("Запись должна начинаться не раньше 10:00")
+	}
 	if end.Format(time.DateOnly) != start.Format(time.DateOnly) || end.Hour()*60+end.Minute() > workdayEndMin {
 		return nil, invalid("Запись должна закончиться не позже 18:00")
 	}
