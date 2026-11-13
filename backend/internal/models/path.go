@@ -30,6 +30,7 @@ type StageTemplate struct {
 	Title       string             `json:"title"`
 	Color       string             `json:"color"`
 	Tip         string             `json:"tip"`
+	Period      string             `json:"period"` // «неделя 1», «месяцы 1–2»; пусто – не задан
 	Suggestions []string           `json:"suggestions"`
 	Tasks       []TaskTemplate     `json:"tasks"`
 	Resources   []ResourceTemplate `json:"resources"`
@@ -144,6 +145,7 @@ type StageView struct {
 	Title       string         `json:"title"`
 	Color       string         `json:"color"`
 	Tip         string         `json:"tip"`
+	Period      *string        `json:"period"`
 	Status      string         `json:"status"`
 	DoneCount   int            `json:"doneCount"`
 	TotalCount  int            `json:"totalCount"`

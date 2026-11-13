@@ -103,6 +103,8 @@ type turn struct {
 	draft   *models.Request
 	circle  *models.Circle   // наставник, руководитель, команда – для подстановки в статьи и промпт
 	next    *models.NextStep // следующая задача «Моего пути»
+	// actionTask – задача пути, с которой пришла кнопка «Сделать с AI-buddy» (для заявок в отдел).
+	actionTask *string
 	// replaced – старая карточка заменена новой (стажер поменял поля), dropped – убрана карточка другой заявки.
 	replaced bool
 	dropped  string
@@ -151,7 +153,7 @@ func (a *Agent) Confirm(ctx context.Context, viewerID, actionID string) (*models
 	order := integrations.Order{
 		Kind: q.Type, RequestNumber: q.Number, Requester: t.viewer.Login,
 		Service: q.ServiceCode, Project: deref(q.ProjectTitle), AccessLevel: q.Level, Justification: q.Justification,
-		Auto: q.Type == "access" && q.ApproverKind == "auto", Title: RequestTitle(q),
+		Auto: (q.Type == "access" && q.ApproverKind == "auto") || q.ItemCode == chatsItem, Title: RequestTitle(q),
 	}
 	if q.Approver != nil {
 		order.Approver = q.Approver.Name
@@ -197,6 +199,12 @@ func (a *Agent) Confirm(ctx context.Context, viewerID, actionID string) (*models
 		mood = "happy"
 	default:
 		text = fmt.Sprintf("Готово: %s выдан сразу, согласование не нужно.", lowerFirst(RequestTitle(q)))
+		if q.Type == "other" {
+			text = fmt.Sprintf("Готово: заявка №%d «%s» выполнена сразу.", q.Number, RequestTitle(q))
+			if q.ItemCode == chatsItem {
+				text = "Готово: добавил тебя в чат команды, чат стажеров и канал дежурств. Закрытые чаты подтвердит наставник."
+			}
+		}
 		if q.TaskID != nil {
 			text += " Пункт на «Моем пути» закрыт."
 		}
@@ -495,7 +503,10 @@ func (a *Agent) runAction(ctx context.Context, t *turn, act models.Action, taskI
 	case "leave_request":
 		return a.prepareLeave(ctx, t, t.question, p["type"], taskID)
 	case "ask_buddy":
-		return a.runModel(ctx, t, first(p["question"], t.question))
+		return a.runModel(ctx, t, first(p["prompt"], first(p["question"], t.question)))
+	case "join_chats":
+		t.actionTask = taskID
+		return a.prepareService(ctx, t, chatsItem, "")
 	case "open_article":
 		id := p["articleId"]
 		return a.say(ctx, t, "text", "Открой статью из справочника, там все по шагам.", "calm", &sayOpts{article: &id})

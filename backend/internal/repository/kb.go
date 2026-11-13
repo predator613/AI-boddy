@@ -32,7 +32,7 @@ const kbStageCode = `CASE WHEN st.team_id = $1::uuid THEN to_char(st.position, '
 // и руководитель команды: у другого наставника ответ на тот же вопрос может быть другим.
 // $1 – команда пользователя, $v – его id.
 func kbVisible(v string) string {
-	return `(a.team_id IS NULL OR a.team_id = $1::uuid) AND (a.source <> 'mentor_answer'
+	return `(a.team_id IS NULL OR a.team_id = $1::uuid) AND (a.use_in_ai OR a.source NOT IN ('upload', 'link')) AND (a.source <> 'mentor_answer'
 		OR a.author_id::text = ` + v + `
 		OR a.author_id = (SELECT ip.mentor_id FROM intern_profiles ip WHERE ip.user_id::text = ` + v + `)
 		OR EXISTS (SELECT 1 FROM users lu WHERE lu.id::text = ` + v + ` AND lu.role = 'lead' AND lu.team_id = a.team_id))`

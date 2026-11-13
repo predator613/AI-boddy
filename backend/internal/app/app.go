@@ -47,6 +47,7 @@ type Services struct {
 	Requests *services.Requests // и страница «Заявки», и синхронизация статусов
 	Staff    handlers.StaffService
 	Support  *services.Support // обращения в поддержку и синхронизация их статусов
+	Mentor   *services.Mentor  // кабинет наставника и воркер автоматизаций
 }
 
 // NewServices собирает сервисы поверх базы, модели и системы заявок.
@@ -79,6 +80,7 @@ func NewServices(cfg config.Config, pool *pgxpool.Pool, log *slog.Logger) (Servi
 		Requests: reqs,
 		Staff:    services.NewStaff(staff, reqStore, users, corp, log),
 		Support:  services.NewSupport(staff, users, corp, log),
+		Mentor:   services.NewMentor(repository.NewMentor(pool), users, onboarding, path, log),
 	}, nil
 }
 
@@ -117,6 +119,7 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 	peopleH := handlers.NewPeople(svc.People, log)
 	calendarH := handlers.NewCalendar(svc.Calendar, log)
 	staffH := handlers.NewStaff(svc.Staff, svc.Support, log)
+	mentorH := handlers.NewMentor(svc.Mentor, log)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", handlers.Health)
@@ -192,6 +195,10 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 			r.Get("/mentor/interns/{internId}/checklist", staffH.Checklist)
 			r.Post("/mentor/interns/{internId}/checklist/{itemId}", staffH.MarkChecklist)
 
+			// Кабинет наставника: статистика, переписка, материалы, расписание, автоматизации;
+			// переписка стажера с наставником.
+			mentorH.Routes(r)
+
 			// Справочник.
 			r.Get("/kb", kbH.Get)
 			r.Get("/kb/search", kbH.Search)
@@ -243,6 +250,7 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, ready chan<- 
 	if cfg.RequestSync > 0 {
 		go svc.Requests.Run(syncCtx, cfg.RequestSync)
 		go svc.Support.Run(syncCtx, cfg.RequestSync)
+		go svc.Mentor.Run(syncCtx, time.Minute)
 	}
 	log.Info("assistant ready", "llm", cfg.LLMProvider, "requestService", withDefault(cfg.MockServicesURL, "in-process mock"))
 

@@ -277,6 +277,10 @@ func RequestFields(q *models.Request) []models.Field {
 		}
 		add("Тип", q.LeaveTypeTitle)
 		add("Комментарий", q.LeaveComment)
+	} else if q.Type == "other" && q.ItemCode == chatsItem {
+		add("Чаты", "чат команды, чат стажеров")
+		add("Каналы", "дежурства, алерты")
+		add("Закрытые", "подтвердит наставник")
 	} else if q.Type == "other" {
 		add("Что нужно", q.ItemTitle)
 		add("Комментарий", q.ItemComment)

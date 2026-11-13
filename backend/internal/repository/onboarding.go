@@ -292,12 +292,12 @@ func (r *Onboarding) CreateStage(ctx context.Context, st models.StageTemplate) (
 	var id string
 	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
-			INSERT INTO onboarding_stages (team_id, position, title, color, tip)
+			INSERT INTO onboarding_stages (team_id, position, title, color, tip, period)
 			VALUES ($1::uuid,
 			        COALESCE((SELECT max(position) FROM onboarding_stages WHERE team_id = $1::uuid), 0) + 1,
-			        $2, $3, $4)
+			        $2, $3, $4, $5)
 			RETURNING id::text`,
-			st.TeamID, st.Title, st.Color, st.Tip).Scan(&id)
+			st.TeamID, st.Title, st.Color, st.Tip, st.Period).Scan(&id)
 		if err != nil {
 			return err
 		}
@@ -313,9 +313,9 @@ func (r *Onboarding) CreateStage(ctx context.Context, st models.StageTemplate) (
 func (r *Onboarding) UpdateStage(ctx context.Context, st models.StageTemplate) (*models.StageTemplate, error) {
 	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
 		if err := execOne(tx.Exec(ctx, `
-			UPDATE onboarding_stages SET position = $2, title = $3, color = $4, tip = $5
+			UPDATE onboarding_stages SET position = $2, title = $3, color = $4, tip = $5, period = $6
 			WHERE id::text = $1`,
-			st.ID, st.Position, st.Title, st.Color, st.Tip)); err != nil {
+			st.ID, st.Position, st.Title, st.Color, st.Tip, st.Period)); err != nil {
 			return err
 		}
 		return replaceSuggestions(ctx, tx, st.ID, st.Suggestions)
@@ -410,7 +410,7 @@ func (r *Onboarding) DeleteResource(ctx context.Context, id string) error {
 // ---------- сканеры ----------
 
 // Подсказки этапа собираются из stage_suggestions в массив по порядку.
-const stageCols = `s.id::text, s.team_id::text, s.position, s.title, s.color, s.tip,
+const stageCols = `s.id::text, s.team_id::text, s.position, s.title, s.color, s.tip, s.period,
 	ARRAY(SELECT q.text FROM stage_suggestions q WHERE q.stage_id = s.id ORDER BY q.position)`
 
 // Действие задачи хранится строкой task_actions; фронту отдается прежний формат {kind, payload}.
@@ -418,7 +418,8 @@ const taskSelect = `
 	SELECT t.id::text, t.stage_id::text, t.position, t.title, t.note, t.due_day, a.kind,
 	       CASE WHEN a.kind IS NULL THEN NULL ELSE jsonb_strip_nulls(jsonb_build_object(
 	           'service', a.service_code, 'role', a.service_role, 'project', a.project_code,
-	           'type', a.leave_type, 'question', a.question, 'articleId', a.article_id::text)) END`
+	           'type', a.leave_type, 'question', a.question, 'articleId', a.article_id::text,
+	           'prompt', CASE WHEN a.kind = 'ask_buddy' THEN a.question END)) END`
 
 const taskFrom = taskSelect + `
 	FROM onboarding_tasks t
@@ -438,7 +439,7 @@ const resourceSelect = `
 
 func scanStage(row pgx.Row) (models.StageTemplate, error) {
 	var s models.StageTemplate
-	err := row.Scan(&s.ID, &s.TeamID, &s.Position, &s.Title, &s.Color, &s.Tip, &s.Suggestions)
+	err := row.Scan(&s.ID, &s.TeamID, &s.Position, &s.Title, &s.Color, &s.Tip, &s.Period, &s.Suggestions)
 	if s.Suggestions == nil {
 		s.Suggestions = []string{}
 	}
@@ -478,6 +479,7 @@ type actionPayload struct {
 	Group     *string `json:"group"`
 	Type      *string `json:"type"`
 	Question  *string `json:"question"`
+	Prompt    *string `json:"prompt"` // готовый текст запроса для ask_buddy, то же, что question
 	ArticleID *string `json:"articleId"`
 }
 
@@ -508,6 +510,9 @@ func replaceAction(ctx context.Context, tx pgx.Tx, taskID string, a *models.Acti
 		if err := json.Unmarshal(a.Payload, &p); err != nil {
 			return ErrInvalidReference
 		}
+	}
+	if p.Question == nil {
+		p.Question = p.Prompt
 	}
 	if p.Project == nil && p.Group != nil {
 		if code, ok := legacyGroups[*p.Group]; ok {

@@ -43,7 +43,7 @@ func (a *Agent) prepareService(ctx context.Context, t *turn, itemText, comment s
 		return err
 	}
 	q, err := a.reqs.CreateServiceDraft(ctx, models.ServiceDraft{
-		RequesterID: t.viewer.ID, Item: item.Code, Comment: clip(strings.TrimSpace(comment), 500),
+		RequesterID: t.viewer.ID, Item: item.Code, Comment: clip(strings.TrimSpace(comment), 500), TaskID: t.actionTask,
 	})
 	if err != nil {
 		return mapNotFound(err)
@@ -63,8 +63,15 @@ func (a *Agent) prepareService(ctx context.Context, t *turn, itemText, comment s
 	if err := a.say(ctx, t, "text", a.phrase(ctx, t, intro), "calm", &sayOpts{article: source}); err != nil {
 		return err
 	}
-	return a.say(ctx, t, "confirm", "Отправить заявку?", "mentor", &sayOpts{request: q})
+	title := "Отправить заявку?"
+	if item.Code == chatsItem {
+		title = "Добавить в чаты и каналы?"
+	}
+	return a.say(ctx, t, "confirm", title, "mentor", &sayOpts{request: q})
 }
+
+// chatsItem – заявка «добавить в чаты и каналы» (действие join_chats у задачи пути): выполняется сразу.
+const chatsItem = "team_chats"
 
 // catalogHelp – что можно заказать через помощника, по отделам.
 func (a *Agent) catalogHelp(ctx context.Context, t *turn) error {
