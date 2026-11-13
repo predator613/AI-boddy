@@ -20,11 +20,14 @@ import { Marker, PageHeader } from '../components/PageHeader'
 import { Page } from '../components/Page'
 import {
   BUDDY_TEAM_CARD,
+  CURATOR_CARD,
   DEPARTMENT_STYLE,
   FAQ,
+  FAQ_LEAD,
   FAQ_STAFF,
   PERSON_CARDS,
   PROBLEM_TYPES,
+  PROBLEM_TYPES_LEAD,
   PROBLEM_TYPES_STAFF,
 } from '../content/support'
 import { useInterns } from '../hooks/usePath'
@@ -45,8 +48,10 @@ export function SupportPage() {
   const role = useAuthStore((s) => s.user?.role)
   // Наставнику – свои вопросы: про стажеров, доступы и работу AI-buddy.
   const staff = role !== 'intern'
-  const faq = staff ? FAQ_STAFF : FAQ
-  const types = staff ? PROBLEM_TYPES_STAFF : PROBLEM_TYPES
+  // Руководителю – только технические сбои: согласования, цели, уведомления.
+  const lead = role === 'lead'
+  const faq = lead ? FAQ_LEAD : staff ? FAQ_STAFF : FAQ
+  const types = lead ? PROBLEM_TYPES_LEAD : staff ? PROBLEM_TYPES_STAFF : PROBLEM_TYPES
   const interns = useInterns({ enabled: staff })
   const [sent, setSent] = useState(false)
   const form = useForm<Problem>({
@@ -69,7 +74,7 @@ export function SupportPage() {
           },
           ...(data.lead ? [{ id: 'lead', name: data.lead.name, ...PERSON_CARDS.lead }] : []),
         ].map((c) => ({ ...c, initials: c.name.slice(0, 1) }))
-      : staff && data?.lead
+      : staff && !lead && data?.lead
         ? [
             {
               id: 'lead',
@@ -88,7 +93,12 @@ export function SupportPage() {
     initials: DEPARTMENT_STYLE[d.code]?.initials ?? d.title.slice(0, 2),
     bg: DEPARTMENT_STYLE[d.code]?.bg ?? '#FFFFFF',
   }))
-  const contacts = [...people, ...(staff ? [BUDDY_TEAM_CARD] : []), ...departments]
+  const contacts = [
+    ...people,
+    ...(lead ? [] : [CURATOR_CARD]),
+    ...(staff ? [BUDDY_TEAM_CARD] : []),
+    ...departments,
+  ]
 
   return (
     <Page maxWidth={1240}>
@@ -101,9 +111,13 @@ export function SupportPage() {
           <Mascot mood="mentor" size={120} glow />
           <div style={{ flex: '1 1 320px' }}>
             <PageHeader
-              overline={staff ? 'Поддержка наставника' : 'Поддержка'}
+              overline={lead || !staff ? 'Поддержка' : 'Поддержка наставника'}
               title={
-                staff ? (
+                lead ? (
+                  <>
+                    Что-то <Marker color="#965EEB">не работает?</Marker>
+                  </>
+                ) : staff ? (
                   <>
                     Нужна помощь <Marker color="#965EEB">со стажерами?</Marker>
                   </>
@@ -115,9 +129,11 @@ export function SupportPage() {
               }
             />
             <Text c="ink.5" mt="sm" maw={600}>
-              {staff
-                ? 'Здесь вопросы про наставничество, доступы стажеров и работу AI-buddy. Вопросы самих стажеров приходят в «Сообщения».'
-                : 'AI-buddy разгружает наставника, но не заменяет его. Если вопрос сложный или ответ показался неверным, напиши человеку напрямую.'}
+              {lead
+                ? 'Здесь можно сообщить о техническом сбое: не согласуется заявка, не сохраняются цели, не приходят уведомления.'
+                : staff
+                  ? 'Здесь вопросы про наставничество, доступы стажеров и работу AI-buddy. Вопросы самих стажеров приходят в «Сообщения».'
+                  : 'AI-buddy разгружает наставника, но не заменяет его. Если вопрос сложный или ответ показался неверным, напиши человеку напрямую.'}
             </Text>
           </div>
         </Paper>
@@ -191,9 +207,11 @@ export function SupportPage() {
           <Paper radius="lg" p="lg" style={{ flex: '1 1 320px', minWidth: 0 }}>
             <Title order={2}>Сообщить о проблеме</Title>
             <Text size="sm" c="ink.5" mt={6} mb="md">
-              {staff
-                ? 'Например, AI-buddy дал стажеру неверный ответ или не сработала автоматизация.'
-                : 'Например, если AI-buddy ответил неверно или не сработала заявка.'}
+              {lead
+                ? 'Например, не согласуется заявка или не сохраняются цели стажера.'
+                : staff
+                  ? 'Например, AI-buddy дал стажеру неверный ответ или не сработала автоматизация.'
+                  : 'Например, если AI-buddy ответил неверно или не сработала заявка.'}
             </Text>
             {sent ? (
               <Alert
@@ -248,15 +266,17 @@ export function SupportPage() {
                     key={form.key('details')}
                     {...form.getInputProps('details')}
                   />
-                  <Checkbox
-                    label={
-                      staff
-                        ? 'Приложить диалог стажера с AI-buddy'
-                        : 'Приложить последний диалог с AI-buddy'
-                    }
-                    key={form.key('attachDialog')}
-                    {...form.getInputProps('attachDialog', { type: 'checkbox' })}
-                  />
+                  {!lead && (
+                    <Checkbox
+                      label={
+                        staff
+                          ? 'Приложить диалог стажера с AI-buddy'
+                          : 'Приложить последний диалог с AI-buddy'
+                      }
+                      key={form.key('attachDialog')}
+                      {...form.getInputProps('attachDialog', { type: 'checkbox' })}
+                    />
+                  )}
                   <Button type="submit" color="ink">
                     Отправить
                   </Button>

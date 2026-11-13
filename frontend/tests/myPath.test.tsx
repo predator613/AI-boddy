@@ -59,9 +59,9 @@ describe('Мой путь', () => {
     expect(await screen.findByText('Статус доступов')).toBeInTheDocument()
   })
 
-  it('«Сделать с AI-buddy» открывает чат с заявкой, после подтверждения она видна в заявках', async () => {
+  it('«Подать заявку» открывает чат с заявкой, после подтверждения она видна в заявках', async () => {
     const router = renderApp('/')
-    await userEvent.click(await screen.findByRole('button', { name: 'Сделать с AI-buddy' }, T))
+    await userEvent.click(await screen.findByRole('button', { name: 'Подать заявку' }, T))
     expect(router.state.location.pathname).toBe('/chat')
     expect(await screen.findByText('Создать заявку на доступ?', {}, T)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Подтвердить' }))
@@ -69,6 +69,20 @@ describe('Мой путь', () => {
     await userEvent.click(screen.getByRole('link', { name: 'Открыть заявку' }))
     expect(await screen.findByRole('heading', { name: 'Заявки' })).toBeInTheDocument()
     expect((await screen.findAllByText('Доступ к GitLab', {}, T)).length).toBeGreaterThan(0)
+  })
+
+  it('перед заявкой можно свериться с наставником, заявка на доступ видна как заявка в Jira', async () => {
+    const router = renderApp('/')
+    await userEvent.click(await screen.findByRole('button', { name: 'Подать заявку' }, T))
+    await screen.findByText('Создать заявку на доступ?', {}, T)
+    await userEvent.click(screen.getByRole('button', { name: /Сверься с наставником/ }))
+    expect(router.state.location.pathname).toBe('/mentor')
+    const field = await screen.findByLabelText('Сообщение наставнику', {}, T)
+    expect((field as HTMLTextAreaElement).value).toMatch(/^Хочу подать заявку «.+Все верно\?$/)
+    await router.navigate({ to: '/requests' })
+    const detail = await screen.findByRole('complementary', { name: 'Детали заявки' }, T)
+    expect(detail).toHaveTextContent('в Jira')
+    expect(detail).toHaveTextContent('Jira Service Desk · ACCESS-1038')
   })
 
   it('вопрос из панели помощника уходит в чат', async () => {

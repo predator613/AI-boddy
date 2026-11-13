@@ -24,7 +24,9 @@ function HomePage() {
   return (
     <MyPathPage
       stage={stage ?? null}
-      onStage={(code) => navigate({ search: code ? { stage: code } : {}, replace: true })}
+      onStage={(code) =>
+        navigate({ search: code ? { stage: code } : {}, replace: true, resetScroll: false })
+      }
     />
   )
 }

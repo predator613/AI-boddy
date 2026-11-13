@@ -10,6 +10,7 @@ import {
 } from '@mantine/core'
 import { IconArrowLeft, IconArrowRight } from '@tabler/icons-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import {
   cancelAction,
@@ -64,6 +65,7 @@ interface ChatPageProps {
 export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
   const user = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [text, setText] = useState('')
   const [lastFailed, setLastFailed] = useState<{
     text: string
@@ -276,6 +278,7 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
                   setText('Измени в заявке: ')
                   requestAnimationFrame(() => inputRef.current?.focus())
                 }}
+                onAskMentor={(q) => navigate({ to: '/mentor', search: { q } })}
               />
             ))}
             {!openId && send.isPending && <ThinkingBubble />}

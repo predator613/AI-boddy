@@ -57,7 +57,7 @@ export function NextStepCard({ step, onAsk, onOpenStage }: NextStepCardProps) {
         <Group gap={8}>
           {step.action && (
             <Button color="ink" onClick={onAsk}>
-              Сделать с AI-buddy
+              {step.action.kind === 'access_request' ? 'Подать заявку' : 'Сделать с AI-buddy'}
             </Button>
           )}
           <Button variant="outline" color="ink" onClick={onOpenStage}>

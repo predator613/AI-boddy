@@ -35,6 +35,16 @@ export const Decision = z.discriminatedUnion('decision', [
   }),
 ])
 
+// GET /api/mentor/metrics – польза AI-buddy для наставника за последние 7 дней.
+export const MentorMetrics = z.object({
+  answeredByBuddy: z.number(), // вопросов стажеров закрыто без наставника
+  escalated: z.number(), // вопросов передано наставнику
+  hoursSaved: z.number(), // оценка: answeredByBuddy × minutesPerQuestion / 60
+  minutesPerQuestion: z.number(),
+  accessHours: z.number().nullable(), // среднее время от заявки до выданного доступа
+  onTimePercent: z.number().nullable(), // доля задач стажеров, закрытых в срок
+})
+export type TMentorMetrics = z.infer<typeof MentorMetrics>
 export type TFeed = z.infer<typeof Feed>
 export type TFeedItem = z.infer<typeof FeedItem>
 export type TApproval = z.infer<typeof Approval>

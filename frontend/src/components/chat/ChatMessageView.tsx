@@ -1,6 +1,7 @@
-import { Anchor, Button, Group, Paper, Stack, Text } from '@mantine/core'
+import { Anchor, Button, Group, Paper, Stack, Text, UnstyledButton } from '@mantine/core'
 import { IconBook2, IconCheck } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
+import { mentorCheckText } from '../../lib/jira'
 import type { TChatMessage } from '../../schemas/assistant'
 import { Mascot } from '../Mascot'
 import { StatusTag } from '../StatusTag'
@@ -10,6 +11,8 @@ interface ChatMessageViewProps {
   onConfirm?: (actionId: string) => void
   onCancel?: (actionId: string) => void
   onEdit?: () => void
+  /** «Свериться с наставником» перед отправкой заявки: открыть чат с наставником с готовым текстом. */
+  onAskMentor?: (text: string) => void
   busy?: boolean
 }
 
@@ -25,6 +28,7 @@ export function ChatMessageView({
   onConfirm,
   onCancel,
   onEdit,
+  onAskMentor,
   busy,
 }: ChatMessageViewProps) {
   // Заявка уже выполнена или одобрена – обещать «напишу позже» незачем.
@@ -114,6 +118,16 @@ export function ChatMessageView({
                 >
                   Отмена
                 </Button>
+                {onAskMentor && (
+                  <UnstyledButton
+                    onClick={() =>
+                      onAskMentor(mentorCheckText(m.confirm!.title, m.confirm!.fields))
+                    }
+                    style={{ flexBasis: '100%', fontSize: 13, color: '#5C5C5C' }}
+                  >
+                    Не уверен? <u>Сверься с наставником</u>
+                  </UnstyledButton>
+                )}
               </Group>
             ) : (
               <Text size="sm" c="ink.5">

@@ -65,6 +65,7 @@ const seedApprovals = (): TApproval[] => [
       { label: 'Уровень прав', value: 'Developer: код, ветки, merge request' },
       { label: 'Зачем', value: 'первая задача, цель «Пройти путь задачи до релиза»' },
       { label: 'Оформил', value: 'AI-buddy, стажер подтвердила' },
+      { label: 'Почему ты', value: 'ты владелец проекта, заявка ACCESS-1042 в Jira' },
     ],
     createdAt: ago(90),
     status: 'waiting',
@@ -80,6 +81,7 @@ const seedApprovals = (): TApproval[] => [
       { label: 'Стенд', value: 'test-auth, только чтение' },
       { label: 'Зачем', value: 'проверять изменения до релиза' },
       { label: 'Оформил', value: 'AI-buddy, стажер подтвердила' },
+      { label: 'Почему ты', value: 'ты владелец стенда, заявка ACCESS-1039 в Jira' },
     ],
     createdAt: ago(60 * 24 * 5),
     status: 'waiting',
@@ -243,6 +245,19 @@ export const leadHandlers = [
     await wait()
     if (roleOf(request) === 'intern') return err(403, 'forbidden', 'forbidden')
     return HttpResponse.json({ items: feed, unread: feed.filter((f) => !f.read).length })
+  }),
+
+  http.get(`${API_URL}/api/mentor/metrics`, async ({ request }) => {
+    await wait()
+    if (roleOf(request) === 'intern') return err(403, 'forbidden', 'forbidden')
+    return HttpResponse.json({
+      answeredByBuddy: 14,
+      escalated: 3,
+      hoursSaved: 2.8,
+      minutesPerQuestion: 12,
+      accessHours: 6,
+      onTimePercent: 82,
+    })
   }),
 
   http.post(`${API_URL}/api/mentor/feed/read`, async () => {

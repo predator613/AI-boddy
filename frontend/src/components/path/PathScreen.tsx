@@ -124,7 +124,7 @@ export function PathScreen({
                       onAsk({ id: step.taskId, title: step.title, action: step.action })
                     }
                   >
-                    Сделать с AI-buddy
+                    {step.action.kind === 'access_request' ? 'Подать заявку' : 'Сделать с AI-buddy'}
                   </Button>
                 )}
                 <Button

@@ -11,6 +11,9 @@ export const staffKeys = {
 export const useFeed = () =>
   useQuery({ queryKey: staffKeys.feed, queryFn: api.getFeed, refetchInterval: 30_000 })
 
+export const useMentorMetrics = () =>
+  useQuery({ queryKey: ['mentor', 'metrics'], queryFn: api.getMentorMetrics })
+
 export function useMarkFeedRead() {
   const qc = useQueryClient()
   return useMutation({

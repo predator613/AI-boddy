@@ -17,7 +17,7 @@ describe('Заявки', () => {
     const list = await screen.findByRole('list', { name: 'Список заявок' }, T)
     expect(within(list).getAllByRole('listitem')).toHaveLength(4)
     expect(screen.getByRole('complementary', { name: 'Детали заявки' })).toHaveTextContent(
-      'Заявка №1038',
+      'Заявка ACCESS-1038',
     )
 
     await userEvent.click(screen.getByRole('tab', { name: /Отклонены/ }))

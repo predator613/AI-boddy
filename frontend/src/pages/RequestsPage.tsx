@@ -1,4 +1,4 @@
-import { Button, Group, Paper, Stack, Text, UnstyledButton } from '@mantine/core'
+import { Anchor, Button, Group, Paper, Stack, Text, UnstyledButton } from '@mantine/core'
 import { IconCalendar, IconFileText, IconKey, IconPlus } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
@@ -8,6 +8,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Page } from '../components/Page'
 import { ErrorBlock, LoadingBlocks } from '../components/QueryState'
 import { StatusTag } from '../components/StatusTag'
+import { JIRA, jiraKey, requestRef } from '../lib/jira'
 import type { TRequestItem, TRequestStatus } from '../schemas/assistant'
 
 const REQUEST_STATUS: Record<TRequestStatus, { label: string; bg: string }> = {
@@ -97,7 +98,7 @@ export function RequestsPage({
           </>
         )}
         <Text size="xs" c="ink.5">
-          Заявки уходят в имитацию корпоративных сервисов. Данные синтетические.
+          Доступы и заявки в отделы уходят в {JIRA} (в демо это имитация), отгулы – руководителю.
         </Text>
       </Stack>
       {query.data && query.data.length > 0 && (
@@ -169,7 +170,7 @@ function RequestList({
                   {r.title}
                 </Text>
                 <Text size="sm" c="ink.5">
-                  №{r.number} · {formatDate(r.createdAt)} · {VIA[r.via]}
+                  {requestRef(r)} · {formatDate(r.createdAt)} · {VIA[r.via]}
                 </Text>
               </span>
               <StatusTag bg={s.bg}>{s.label}</StatusTag>
@@ -183,6 +184,7 @@ function RequestList({
 
 function RequestDetail({ item }: { item: TRequestItem }) {
   const s = REQUEST_STATUS[item.status]
+  const key = jiraKey(item)
   return (
     <Paper
       component="aside"
@@ -200,7 +202,7 @@ function RequestDetail({ item }: { item: TRequestItem }) {
     >
       <Group justify="space-between">
         <Text size="sm" c="ink.5">
-          Заявка №{item.number}
+          Заявка {requestRef(item)}
         </Text>
         <StatusTag bg={s.bg} size="md">
           {s.label}
@@ -209,6 +211,20 @@ function RequestDetail({ item }: { item: TRequestItem }) {
       <Text fz={26} fw={500} lh={1.1} style={{ letterSpacing: '-0.02em' }}>
         {item.title}
       </Text>
+      {key && (
+        <Group gap={8}>
+          <StatusTag bg="#E7F1FB">в Jira</StatusTag>
+          {item.external?.url ? (
+            <Anchor href={item.external.url} target="_blank" rel="noreferrer" size="sm" c="ink.9">
+              Открыть {key} в {JIRA}
+            </Anchor>
+          ) : (
+            <Text size="sm" c="ink.5">
+              {JIRA} · {key}
+            </Text>
+          )}
+        </Group>
+      )}
       <dl
         style={{
           display: 'grid',
@@ -287,7 +303,7 @@ function RequestDetail({ item }: { item: TRequestItem }) {
       )}
       <Button
         renderRoot={(p) => (
-          <Link {...p} to="/chat" search={{ q: `Расскажи про заявку №${item.number}` }} />
+          <Link {...p} to="/chat" search={{ q: `Расскажи про заявку ${requestRef(item)}` }} />
         )}
         variant="outline"
         color="ink"

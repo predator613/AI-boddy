@@ -43,11 +43,12 @@ function initialRequests(): TRequestItem[] {
       fields: [
         { label: 'Сервис', value: 'Тестовый стенд' },
         { label: 'Роль', value: 'чтение' },
-        { label: 'Согласует', value: 'Олег, руководитель' },
+        { label: 'Куда ушла', value: 'Jira Service Desk, команда доступов' },
       ],
       history: [
         { title: 'Создана AI-buddy', at: '9 нояб, 11:05', state: 'done' },
-        { title: 'Ждет решения Олега', at: 'обычно до 1 рабочего дня', state: 'now' },
+        { title: 'Передана в Jira Service Desk', at: '9 нояб, 11:05', state: 'done' },
+        { title: 'Ждет команду доступов', at: 'обычно до 1 рабочего дня', state: 'now' },
       ],
       rejectReason: null,
     },

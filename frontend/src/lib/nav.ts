@@ -52,11 +52,12 @@ export function navItems(role: User['role']): NavItem[] {
       SUPPORT,
     ]
   }
-  // Руководитель: только цели стажеров и согласования заявок.
+  // Руководитель: цели стажеров, согласования заявок и поддержка на случай сбоев.
   if (role === 'lead') {
     return [
       { to: '/', label: 'Цели стажеров', icon: IconTarget },
       { to: '/approvals', label: 'Согласования', icon: IconChecklist },
+      SUPPORT,
     ]
   }
   // Наставник: кабинет наставника.

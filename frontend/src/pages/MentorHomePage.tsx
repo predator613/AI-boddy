@@ -1,4 +1,4 @@
-import { Button, Checkbox, Popover, Text, UnstyledButton } from '@mantine/core'
+import { Button, Checkbox, Collapse, Popover, Text, UnstyledButton } from '@mantine/core'
 import { IconBell, IconChevronDown } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -9,14 +9,20 @@ import { ErrorBlock, LoadingBlocks } from '../components/QueryState'
 import { useInternGoals } from '../hooks/useGoals'
 import { useThreads } from '../hooks/useMentor'
 import { useInternPath, useInterns, useSetInternTaskStatus } from '../hooks/usePath'
-import { useChecklist, useFeed, useMarkFeedRead, useToggleChecklist } from '../hooks/useStaff'
+import {
+  useChecklist,
+  useFeed,
+  useMarkFeedRead,
+  useMentorMetrics,
+  useToggleChecklist,
+} from '../hooks/useStaff'
 import type { TChecklistItem } from '../schemas/staff'
 import type { TGoalsView } from '../schemas/goals'
 import type { TInternSummary, TPathView, TTaskView } from '../schemas/path'
 import type { TThreadSummary } from '../schemas/mentor'
 import { useAuthStore } from '../store/authStore'
 import css from './MentorHomePage.module.css'
-import { DAY, DOT, buildTodos, glass, type Todo } from '../lib/mentorHome'
+import { DAY, DOT, buildTodos, glass, plural, type Todo } from '../lib/mentorHome'
 
 // Главная наставника: стажеры – стеклянные полосы. На полосе метки «что от тебя нужно»,
 // по клику полоса раскрывается: дела с одной кнопкой, задачи этапа, цели.
@@ -50,16 +56,21 @@ export function MentorHomePage() {
           aria-labelledby="my-interns"
           style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
         >
-          <Text
-            component="h2"
-            id="my-interns"
-            fz={22}
-            fw={500}
-            m={0}
-            style={{ letterSpacing: '-0.02em' }}
+          <div
+            style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 16px' }}
           >
-            Мои стажеры
-          </Text>
+            <Text
+              component="h2"
+              id="my-interns"
+              fz={22}
+              fw={500}
+              m={0}
+              style={{ letterSpacing: '-0.02em' }}
+            >
+              Мои стажеры
+            </Text>
+            <BuddyMetrics />
+          </div>
           {interns.isPending && <LoadingBlocks label="Загрузка стажеров" />}
           {interns.isError && (
             <ErrorBlock error={interns.error} onRetry={() => interns.refetch()} />
@@ -155,7 +166,8 @@ function InternRow({ intern: i, colors, thread, open, onToggle }: RowProps) {
           }}
         />
       </UnstyledButton>
-      {open && (
+      {/* Панель сворачивается плавно: страница не прыгает вверх при закрытии карточки. */}
+      <Collapse expanded={open} transitionDuration={280}>
         <InternPanel
           intern={i}
           todos={todos}
@@ -164,7 +176,7 @@ function InternRow({ intern: i, colors, thread, open, onToggle }: RowProps) {
           checklist={checklist.data?.items ?? []}
           chatId={thread?.internId ?? i.id}
         />
-      )}
+      </Collapse>
     </div>
   )
 }
@@ -392,6 +404,63 @@ function timeLabel(iso: string, now = new Date()) {
 }
 
 /** Колокольчик: кто что поменял – стажеры, руководитель, AI-buddy. */
+// Польза AI-buddy одной тихой строкой; подробности и способ подсчета – по клику.
+function BuddyMetrics() {
+  const m = useMentorMetrics().data
+  if (!m) return null
+  const hours = String(Math.round(m.hoursSaved * 10) / 10).replace('.', ',')
+  const total = m.answeredByBuddy + m.escalated
+  const rows: [string, string][] = [
+    ['Вопросов закрыто без тебя', `${m.answeredByBuddy} из ${total}`],
+    ['Передано тебе', String(m.escalated)],
+    ['Сэкономлено времени', `около ${hours} ч`],
+    ...(m.accessHours === null
+      ? []
+      : ([['От заявки до доступа', `в среднем ${m.accessHours} ч`]] as [string, string][])),
+    ...(m.onTimePercent === null
+      ? []
+      : ([['Задач стажеров в срок', `${m.onTimePercent}%`]] as [string, string][])),
+  ]
+  return (
+    <Popover position="bottom-start" width={340} shadow="md" radius={16}>
+      <Popover.Target>
+        <UnstyledButton
+          aria-label="Польза AI-buddy за неделю"
+          style={{ fontSize: 13, color: '#5C5C5C', borderBottom: '1px dashed #B0B0B0' }}
+        >
+          за неделю AI-buddy закрыл {m.answeredByBuddy}{' '}
+          {plural(m.answeredByBuddy, 'вопрос', 'вопроса', 'вопросов')} без тебя, это около {hours} ч
+        </UnstyledButton>
+      </Popover.Target>
+      <Popover.Dropdown p={16}>
+        <Text fw={500} mb={10}>
+          Польза AI-buddy за 7 дней
+        </Text>
+        <dl
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr auto',
+            gap: '8px 16px',
+            margin: 0,
+            fontSize: 14,
+          }}
+        >
+          {rows.map(([k, v]) => (
+            <div key={k} style={{ display: 'contents' }}>
+              <dt style={{ color: '#5C5C5C' }}>{k}</dt>
+              <dd style={{ margin: 0, fontWeight: 500 }}>{v}</dd>
+            </div>
+          ))}
+        </dl>
+        <Text size="xs" c="ink.5" mt={12}>
+          Вопрос закрыт, если стажер не переспросил тебя в течение дня. Один вопрос считаем за{' '}
+          {m.minutesPerQuestion} минут наставника.
+        </Text>
+      </Popover.Dropdown>
+    </Popover>
+  )
+}
+
 function FeedBell() {
   const feed = useFeed()
   const read = useMarkFeedRead()

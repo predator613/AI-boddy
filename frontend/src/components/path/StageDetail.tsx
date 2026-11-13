@@ -146,7 +146,9 @@ export function StageDetail({
                   <Group gap={8} mt={10} ml={38}>
                     {onAsk && t.action && (
                       <Button size="sm" color="ink" onClick={() => onAsk(t)}>
-                        Сделать с AI-buddy
+                        {t.action.kind === 'access_request'
+                          ? 'Подать заявку'
+                          : 'Сделать с AI-buddy'}
                       </Button>
                     )}
                     {onComplete && (

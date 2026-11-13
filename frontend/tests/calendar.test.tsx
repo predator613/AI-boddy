@@ -141,7 +141,7 @@ describe('вид нового «Моего пути»', () => {
       [{ tasks: [{ status: 'done' }, { status: 'todo' }, { status: 'waiting' }] }] as never,
       6,
     )
-    expect(colors).toEqual(['#04E061', '#04E061', '#E4E4E4', '#E4E4E4', '#00AAFF', '#00AAFF'])
+    expect(colors).toEqual(['#04E061', '#04E061', '#00AAFF', '#00AAFF', '#E4E4E4', '#E4E4E4'])
     expect(tickColors([], 3)).toEqual(['#E4E4E4', '#E4E4E4', '#E4E4E4'])
     expect(stageWindow(4, 1)).toEqual([0, 4])
     expect(stageWindow(6, 4)).toEqual([1, 5])

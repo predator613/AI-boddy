@@ -19,6 +19,10 @@ export const RequestItem = z.object({
     z.object({ title: z.string(), at: z.string(), state: z.enum(['done', 'now', 'rejected']) }),
   ),
   rejectReason: z.string().nullable(),
+  // Заявка во внешнем сервисе заявок (Jira Service Desk): ключ и ссылка на карточку.
+  external: z
+    .object({ system: z.string(), key: z.string(), url: z.string().nullable() })
+    .nullish(),
 })
 
 export const ChatMessage = z.object({

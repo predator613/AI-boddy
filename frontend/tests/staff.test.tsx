@@ -219,3 +219,45 @@ describe('руководитель: согласования', () => {
     expect(await screen.findByRole('heading', { name: 'Привет, Игорь!' }, T)).toBeInTheDocument()
   })
 })
+
+describe('правки после проверки на стенде', () => {
+  it('настройки у каждого аккаунта свои', async () => {
+    const { useSettingsStore } = await import('../src/store/settingsStore')
+    loginAs('intern_anna')
+    await waitFor(() => expect(useSettingsStore.getState().answerStyle).toBe('normal'))
+    useSettingsStore.getState().setAnswerStyle('detailed')
+    loginAs('mentor_igor')
+    await waitFor(() => expect(useSettingsStore.getState().answerStyle).toBe('normal'))
+    useSettingsStore.getState().setAnswerStyle('short')
+    loginAs('intern_anna')
+    await waitFor(() => expect(useSettingsStore.getState().answerStyle).toBe('detailed'))
+    loginAs('mentor_igor')
+    await waitFor(() => expect(useSettingsStore.getState().answerStyle).toBe('short'))
+  })
+
+  it('руководитель видит поддержку по техническим сбоям', async () => {
+    loginAs('lead_oleg')
+    renderApp('/support')
+    expect(await screen.findByText('не работает?', {}, T)).toBeInTheDocument()
+    expect(screen.getAllByText('Не сохраняются цели стажера').length).toBeGreaterThan(0)
+    expect(screen.getByRole('link', { name: 'Поддержка' })).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Приложить диалог/)).not.toBeInTheDocument()
+  })
+
+  it('наставник видит пользу AI-buddy одной строкой, подробности по клику', async () => {
+    loginAs('mentor_igor')
+    renderApp('/')
+    const line = await screen.findByRole('button', { name: 'Польза AI-buddy за неделю' }, T)
+    expect(line).toHaveTextContent('закрыл 14 вопросов без тебя, это около 2,8 ч')
+    await userEvent.click(line)
+    expect(await screen.findByText('14 из 17')).toBeInTheDocument()
+    expect(screen.getByText('в среднем 6 ч')).toBeInTheDocument()
+    expect(screen.getByText('82%')).toBeInTheDocument()
+  })
+
+  it('куратор стажировки есть в контактах стажера', async () => {
+    loginAs('intern_anna')
+    renderApp('/support')
+    expect(await screen.findByText('Куратор стажировки', {}, T)).toBeInTheDocument()
+  })
+})

@@ -1,9 +1,18 @@
 // API ленты изменений наставника и согласований руководителя (docs/api-lead-feed.md).
 import { z } from 'zod'
 import { apiFetch, apiRequest } from './client'
-import { Approval, Decision, Feed, MentorChecklist, type TDecision } from '../schemas/staff'
+import {
+  Approval,
+  Decision,
+  Feed,
+  MentorChecklist,
+  MentorMetrics,
+  type TDecision,
+} from '../schemas/staff'
 
 export const getFeed = () => apiRequest('/api/mentor/feed', Feed)
+
+export const getMentorMetrics = () => apiRequest('/api/mentor/metrics', MentorMetrics)
 
 export const markFeedRead = () => apiFetch('/api/mentor/feed/read', { method: 'POST' })
 

@@ -24,7 +24,11 @@ export function glassBackground(color: string): string {
 
 /** Цвета штрихов кольца: каждой задаче достается поровну штрихов из count. */
 export function tickColors(stages: Pick<TStageView, 'tasks'>[], count = 60): string[] {
-  const statuses = stages.flatMap((s) => s.tasks.map((t) => t.status))
+  // Кольцо читается как шкала: сначала готовые задачи, потом те, что в работе, потом остальные.
+  const order = (st: string) => (st === 'done' ? 0 : st === 'todo' ? 2 : 1)
+  const statuses = stages
+    .flatMap((s) => s.tasks.map((t) => t.status))
+    .sort((a, b) => order(a) - order(b))
   if (statuses.length === 0) return Array.from({ length: count }, () => '#E4E4E4')
   return Array.from({ length: count }, (_, i) => {
     const st = statuses[Math.floor((i * statuses.length) / count)]!

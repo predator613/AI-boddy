@@ -19,11 +19,11 @@ const QUICK = ['Можно перенести 1:1?', 'Посмотришь мо�
 // Чат стажера с наставником: ответы на вопросы, которые AI-buddy передал наставнику,
 // и карточки изменений (план, материалы, встречи). Шапка и поле ввода закреплены,
 // прокручивается только лента – как в мессенджере.
-export function MentorChatPage() {
+export function MentorChatPage({ initialDraft = '' }: { initialDraft?: string }) {
   const thread = useMyMentorThread()
   const send = useSendToMentor()
   const ack = useAckUpdate()
-  const [draft, setDraft] = useState('')
+  const [draft, setDraft] = useState(initialDraft)
   const [onlyUpdates, setOnlyUpdates] = useState(false)
   const [allMaterials, setAllMaterials] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
