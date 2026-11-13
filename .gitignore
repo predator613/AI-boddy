@@ -10,3 +10,6 @@ frontend/coverage/
 coverage/
 
 scripts/llm-check.log
+
+# любые файлы с ключами и настройками окружения
+*.env
