@@ -10,7 +10,7 @@ import { resetCalendarMock, resetMentorMocks } from '../src/mocks/mentorData'
 import { resetConsoleMock } from '../src/mocks/consoleData'
 import { useToastStore } from '../src/store/toastStore'
 import { usePlanLogStore } from '../src/store/planLogStore'
-import { resetLeadMocks } from '../src/mocks/leadData'
+import { resetLeadMocks, resetSupportMocks } from '../src/mocks/leadData'
 import { resetGoalsMock } from '../src/mocks/goalsData'
 
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
@@ -22,6 +22,7 @@ afterEach(() => {
   useSettingsStore.getState().reset()
   resetPathMock()
   resetPendingMocks()
+  resetSupportMocks()
   resetMentorMocks()
   resetCalendarMock()
   resetConsoleMock()

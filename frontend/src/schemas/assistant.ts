@@ -4,6 +4,12 @@ import { Action } from './path'
 
 export const Field = z.object({ label: z.string(), value: z.string() })
 
+// Заявка во внешнем сервисе заявок (Jira Service Desk): ключ и ссылка на карточку.
+// null – заявки там нет (отгул, демо-данные); поля нет – старый backend, ключ собирается по номеру.
+export const ExternalRef = z
+  .object({ system: z.string(), key: z.string(), url: z.string().nullable() })
+  .nullish()
+
 export const RequestStatus = z.enum(['waiting', 'approved', 'done', 'rejected'])
 
 export const RequestItem = z.object({
@@ -19,10 +25,7 @@ export const RequestItem = z.object({
     z.object({ title: z.string(), at: z.string(), state: z.enum(['done', 'now', 'rejected']) }),
   ),
   rejectReason: z.string().nullable(),
-  // Заявка во внешнем сервисе заявок (Jira Service Desk): ключ и ссылка на карточку.
-  external: z
-    .object({ system: z.string(), key: z.string(), url: z.string().nullable() })
-    .nullish(),
+  external: ExternalRef,
 })
 
 export const ChatMessage = z.object({
@@ -40,7 +43,13 @@ export const ChatMessage = z.object({
     })
     .nullable(),
   result: z
-    .object({ requestId: z.string(), number: z.string(), title: z.string(), status: RequestStatus })
+    .object({
+      requestId: z.string(),
+      number: z.string(),
+      title: z.string(),
+      status: RequestStatus,
+      external: ExternalRef,
+    })
     .nullable(),
   mood: z.enum(['calm', 'happy', 'think', 'mentor', 'sad']),
 })

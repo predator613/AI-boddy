@@ -8,9 +8,11 @@ const PREFIX = { access: 'ACCESS', other: 'SD' } as const
 
 type Ref = Pick<TRequestItem, 'kind' | 'number' | 'external'>
 
-/** Ключ заявки в Jira: из backend (external.key) или по номеру, пока backend его не отдает. */
+/** Ключ заявки в Jira: из backend (external.key). null от backend – заявки в Jira нет.
+ * Если поля нет совсем (режим без backend), ключ собирается из вида и номера. */
 export function jiraKey(r: Ref): string | null {
   if (r.external) return r.external.key
+  if (r.external === null) return null
   return r.kind === 'leave' ? null : `${PREFIX[r.kind]}-${r.number}`
 }
 

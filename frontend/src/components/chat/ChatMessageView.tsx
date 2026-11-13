@@ -164,7 +164,9 @@ export function ChatMessageView({
               <IconCheck size={15} stroke={3} aria-hidden="true" />
             </span>
             <Text fz={18} fw={500}>
-              {finished ? 'Готово' : `Заявка №${m.result.number} создана`}
+              {finished
+                ? 'Готово'
+                : `Заявка ${m.result.external?.key ?? `№${m.result.number}`} создана`}
             </Text>
           </Group>
           <Text size="sm">
@@ -180,6 +182,17 @@ export function ChatMessageView({
           >
             Открыть заявку
           </Button>
+          {m.result.external?.url && (
+            <Anchor
+              href={m.result.external.url}
+              target="_blank"
+              rel="noreferrer"
+              size="sm"
+              c="ink.9"
+            >
+              {m.result.external.key} в {m.result.external.system}
+            </Anchor>
+          )}
         </div>
       ) : (
         <div

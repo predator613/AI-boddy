@@ -145,3 +145,42 @@ describe('история диалогов', () => {
     expect(within(side).queryByRole('button', { name: /Отгул/ })).not.toBeInTheDocument()
   })
 })
+
+describe('карточка «Заявка создана» с ключом Jira', () => {
+  it('показывает ключ и ссылку из backend', async () => {
+    const { ChatMessageView } = await import('../src/components/chat/ChatMessageView')
+    const { renderWithProviders } = await import('./test-utils')
+    const { RouterProvider, createMemoryHistory, createRootRoute, createRouter } =
+      await import('@tanstack/react-router')
+    const msg = {
+      id: 'm1',
+      role: 'assistant' as const,
+      kind: 'result' as const,
+      text: '',
+      source: null,
+      confirm: null,
+      mood: 'happy' as const,
+      result: {
+        requestId: 'r1',
+        number: '1042',
+        title: 'Доступ к GitLab',
+        status: 'waiting' as const,
+        external: {
+          system: 'Jira Service Desk',
+          key: 'ACCESS-8001',
+          url: 'http://localhost:8090/browse/ACCESS-8001',
+        },
+      },
+    }
+    const router = createRouter({
+      routeTree: createRootRoute({ component: () => <ChatMessageView message={msg} /> }),
+      history: createMemoryHistory(),
+    })
+    renderWithProviders(<RouterProvider router={router} />)
+    expect(await screen.findByText('Заявка ACCESS-8001 создана')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'ACCESS-8001 в Jira Service Desk' })).toHaveAttribute(
+      'href',
+      'http://localhost:8090/browse/ACCESS-8001',
+    )
+  })
+})

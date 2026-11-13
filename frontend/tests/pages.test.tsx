@@ -103,9 +103,30 @@ describe('Поддержка', () => {
     expect(await screen.findByText('Опиши подробнее, хотя бы пару слов')).toBeInTheDocument()
     await userEvent.type(screen.getByLabelText('Подробности'), 'Помощник перепутал сроки')
     await userEvent.click(screen.getByRole('button', { name: 'Отправить' }))
-    expect(await screen.findByText(/Сообщение отправлено/)).toBeInTheDocument()
+    expect(await screen.findByText(/Обращение SUP-8001 принято/, {}, T)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Написать еще' }))
     expect(screen.getByLabelText('Подробности')).toBeInTheDocument()
+    // обращение видно в свернутом списке
+    await userEvent.click(screen.getByRole('button', { name: /Мои обращения · 1/ }))
+    const list = await screen.findByRole('list', { name: 'Мои обращения' }, T)
+    expect(list).toHaveTextContent('SUP-8001')
+    expect(list).toHaveTextContent('принято')
+  })
+
+  it('ошибку сервиса поддержки видно в форме', async () => {
+    server.use(
+      http.post(`${API_URL}/api/support/tickets`, () =>
+        HttpResponse.json(
+          { error: { code: 'unavailable', message: 'Сервис заявок недоступен' } },
+          { status: 503 },
+        ),
+      ),
+    )
+    loginAs('intern_anna')
+    renderApp('/support')
+    await userEvent.type(await screen.findByLabelText('Подробности', {}, T), 'Не создалась заявка')
+    await userEvent.click(screen.getByRole('button', { name: 'Отправить' }))
+    expect(await screen.findByRole('alert', {}, T)).toBeInTheDocument()
   })
 
   it('стажер без наставника видит, что наставник пока не назначен', async () => {

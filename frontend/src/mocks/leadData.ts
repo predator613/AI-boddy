@@ -5,6 +5,7 @@
 import { HttpResponse, delay, http } from 'msw'
 import { API_URL } from '../api/client'
 import type { TApproval, TChecklistItem, TFeedItem } from '../schemas/staff'
+import type { TSupportTicket } from '../schemas/support'
 import { mockToken, mockUsers } from './data'
 
 const wait = () => delay(import.meta.env.MODE === 'test' ? 10 : 200)
@@ -281,6 +282,38 @@ export const leadHandlers = [
     }
     approvals = approvals.map((x) => (x.id === a.id ? next : x))
     return HttpResponse.json(next)
+  }),
+]
+
+// Обращения в поддержку (docs/api-support.md): в backend есть, мок – для режима без backend и тестов.
+let tickets: TSupportTicket[] = []
+let ticketSeq = 8000
+export const resetSupportMocks = () => {
+  tickets = []
+  ticketSeq = 8000
+}
+
+export const supportHandlers = [
+  http.get(`${API_URL}/api/support/tickets`, async () => {
+    await wait()
+    return HttpResponse.json(tickets)
+  }),
+  http.post(`${API_URL}/api/support/tickets`, async ({ request }) => {
+    await wait()
+    const body = (await request.json().catch(() => null)) as Partial<TSupportTicket> | null
+    if (!body?.type || !body.details?.trim())
+      return err(400, 'validation_error', 'Опиши, что случилось')
+    const t: TSupportTicket = {
+      id: `sup-${++ticketSeq}`,
+      number: `SUP-${ticketSeq}`,
+      type: body.type,
+      details: body.details,
+      status: 'new',
+      createdAt: new Date().toISOString(),
+      answer: null,
+    }
+    tickets = [t, ...tickets]
+    return HttpResponse.json(t, { status: 201 })
   }),
 ]
 

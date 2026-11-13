@@ -260,4 +260,18 @@ describe('правки после проверки на стенде', () => {
     renderApp('/support')
     expect(await screen.findByText('Куратор стажировки', {}, T)).toBeInTheDocument()
   })
+
+  it('null в external значит «не в Jira»: показывается обычный номер', async () => {
+    const { jiraKey, requestRef } = await import('../src/lib/jira')
+    expect(jiraKey({ kind: 'access', number: '7', external: null })).toBeNull()
+    expect(requestRef({ kind: 'access', number: '7', external: null })).toBe('№7')
+    expect(requestRef({ kind: 'access', number: '7' })).toBe('ACCESS-7')
+    expect(
+      requestRef({
+        kind: 'access',
+        number: '7',
+        external: { system: 'J', key: 'ACCESS-8001', url: null },
+      }),
+    ).toBe('ACCESS-8001')
+  })
 })

@@ -3,17 +3,20 @@ import {
   Alert,
   Button,
   Checkbox,
+  Collapse,
   Paper,
   Select,
   SimpleGrid,
   Stack,
   Text,
   Textarea,
+  UnstyledButton,
   Title,
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { zod4Resolver } from 'mantine-form-zod-resolver'
 import { useState } from 'react'
+import { IconChevronDown } from '@tabler/icons-react'
 import { z } from 'zod'
 import { Mascot } from '../components/Mascot'
 import { Marker, PageHeader } from '../components/PageHeader'
@@ -34,11 +37,15 @@ import { useInterns } from '../hooks/usePath'
 import { getContacts } from '../api/people'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../store/authStore'
+import { useCreateTicket, useTickets } from '../hooks/useSupport'
+import { errorText } from '../lib/errors'
+import { StatusTag } from '../components/StatusTag'
+import type { TSupportTicket } from '../schemas/support'
 
 const ProblemSchema = z.object({
   type: z.string().min(1, 'Выбери, что случилось'),
   intern: z.string(),
-  details: z.string().trim().min(10, 'Опиши подробнее, хотя бы пару слов').max(1000),
+  details: z.string().trim().min(10, 'Опиши подробнее, хотя бы пару слов').max(2000),
   attachDialog: z.boolean(),
 })
 type Problem = z.infer<typeof ProblemSchema>
@@ -53,7 +60,8 @@ export function SupportPage() {
   const faq = lead ? FAQ_LEAD : staff ? FAQ_STAFF : FAQ
   const types = lead ? PROBLEM_TYPES_LEAD : staff ? PROBLEM_TYPES_STAFF : PROBLEM_TYPES
   const interns = useInterns({ enabled: staff })
-  const [sent, setSent] = useState(false)
+  const create = useCreateTicket()
+  const sent = create.data ?? null
   const form = useForm<Problem>({
     mode: 'uncontrolled',
     initialValues: { type: types[0], intern: '', details: '', attachDialog: true },
@@ -220,7 +228,7 @@ export function SupportPage() {
                 role="status"
                 icon={<Mascot size={24} mood="happy" />}
               >
-                Спасибо! Сообщение отправлено, ответ придет сюда и в чат команды.
+                Обращение {sent.number} принято. Ответ придет в уведомления и в список ниже.
                 <div>
                   <Button
                     mt="sm"
@@ -229,7 +237,7 @@ export function SupportPage() {
                     color="ink"
                     onClick={() => {
                       form.reset()
-                      setSent(false)
+                      create.reset()
                     }}
                   >
                     Написать еще
@@ -237,7 +245,17 @@ export function SupportPage() {
                 </div>
               </Alert>
             ) : (
-              <form noValidate onSubmit={form.onSubmit(() => setSent(true))}>
+              <form
+                noValidate
+                onSubmit={form.onSubmit((v) =>
+                  create.mutate({
+                    type: v.type,
+                    details: v.details,
+                    internId: v.intern || null,
+                    attachDialog: lead ? false : v.attachDialog,
+                  }),
+                )}
+              >
                 <Stack gap="sm">
                   <Select
                     label="Что случилось"
@@ -277,12 +295,18 @@ export function SupportPage() {
                       {...form.getInputProps('attachDialog', { type: 'checkbox' })}
                     />
                   )}
-                  <Button type="submit" color="ink">
+                  {create.isError && (
+                    <Alert color="red" variant="light" role="alert">
+                      {errorText(create.error)}
+                    </Alert>
+                  )}
+                  <Button type="submit" color="ink" loading={create.isPending}>
                     Отправить
                   </Button>
                 </Stack>
               </form>
             )}
+            <MyTickets />
           </Paper>
         </div>
         <Text size="xs" c="ink.5">
@@ -290,5 +314,61 @@ export function SupportPage() {
         </Text>
       </Stack>
     </Page>
+  )
+}
+
+const TICKET_STATUS: Record<TSupportTicket['status'], { label: string; bg: string }> = {
+  new: { label: 'принято', bg: '#F4F4F4' },
+  in_progress: { label: 'в работе', bg: '#BADAFB' },
+  done: { label: 'решено', bg: '#C9FFBF' },
+}
+
+// Мои обращения: свернуты в одну строку, чтобы не перегружать страницу.
+function MyTickets() {
+  const tickets = useTickets()
+  const [open, setOpen] = useState(false)
+  const list = tickets.data ?? []
+  if (list.length === 0) return null
+  const active = list.filter((t) => t.status !== 'done').length
+  return (
+    <div style={{ marginTop: 20, borderTop: '1px solid #D6D6D6', paddingTop: 14 }}>
+      <UnstyledButton
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}
+      >
+        Мои обращения · {list.length}
+        {active > 0 && <span style={{ color: '#5C5C5C' }}>, в работе {active}</span>}
+        <IconChevronDown
+          size={16}
+          aria-hidden="true"
+          style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}
+        />
+      </UnstyledButton>
+      <Collapse expanded={open}>
+        <ul
+          aria-label="Мои обращения"
+          style={{ listStyle: 'none', margin: '12px 0 0', padding: 0 }}
+        >
+          {list.map((t) => (
+            <li key={t.id} style={{ padding: '10px 0', borderTop: '1px solid #EDEDED' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Text size="sm" fw={500} style={{ flex: 1, minWidth: 0 }}>
+                  {t.number} · {t.type}
+                </Text>
+                <StatusTag bg={TICKET_STATUS[t.status].bg}>
+                  {TICKET_STATUS[t.status].label}
+                </StatusTag>
+              </div>
+              {t.answer && (
+                <Text size="sm" c="ink.5" mt={4}>
+                  Ответ: {t.answer}
+                </Text>
+              )}
+            </li>
+          ))}
+        </ul>
+      </Collapse>
+    </div>
   )
 }
