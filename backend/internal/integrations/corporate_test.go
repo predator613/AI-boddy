@@ -40,7 +40,7 @@ func TestHTTPClientWithMockServices(t *testing.T) {
 	_, err = c.Submit(ctx, integrations.Order{Kind: "vacation"})
 	assert.Error(t, err)
 
-	rej, err := store.Decide(auto.Ref, false, " ")
+	rej, err := store.Resolve(auto.Ref, false, " ")
 	require.NoError(t, err)
 	assert.Equal(t, "Отклонено согласующим", rej.Reason)
 

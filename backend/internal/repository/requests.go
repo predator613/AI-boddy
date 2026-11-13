@@ -214,7 +214,13 @@ func (r *Requests) OpenServiceRequest(ctx context.Context, requesterID, item str
 // Notify – уведомление пользователю (колокольчик), например наставнику о заявке стажера.
 func (r *Requests) Notify(ctx context.Context, userID, kind, text, link string, requestID *string) error {
 	_, err := r.db.Exec(ctx, `
-		INSERT INTO notifications (user_id, kind, text, link, request_id) VALUES ($1::uuid, $2, $3, $4, $5::uuid)`,
+		INSERT INTO notifications (user_id, kind, text, link, request_id, actor_id, actor_kind, actor_name)
+		SELECT $1::uuid, $2, $3, $4, $5::uuid, u.id,
+		       CASE WHEN u.id IS NULL THEN 'buddy' WHEN u.role = 'intern' THEN 'intern' ELSE 'other' END,
+		       COALESCE(u.name, 'AI-buddy')
+		FROM (SELECT 1) x
+		LEFT JOIN requests q ON q.id = $5::uuid
+		LEFT JOIN users u ON u.id = q.requester_id`,
 		userID, kind, text, link, requestID)
 	return err
 }
@@ -330,7 +336,8 @@ func (r *Requests) Cancel(ctx context.Context, id, actorID string) error {
 
 // ApplyDecision – решение внешней системы: статус, история, задача пути, уведомление и сообщение
 // помощника в чат стажера. Возвращает false, если заявка уже не ждала решения.
-func (r *Requests) ApplyDecision(ctx context.Context, id, status string, reason *string, taskNote, notice string) (bool, error) {
+// actorID – согласующий, если решение принято в AI-buddy; nil – решил сервис заявок.
+func (r *Requests) ApplyDecision(ctx context.Context, id, status string, reason *string, taskNote, notice string, actorID *string) (bool, error) {
 	changed := false
 	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
 		var requester string
@@ -350,7 +357,11 @@ func (r *Requests) ApplyDecision(ctx context.Context, id, status string, reason 
 		if reason != nil {
 			note = *reason
 		}
-		if err := addEvent(ctx, tx, id, status, "service", nil, note); err != nil {
+		actorKind := "service"
+		if actorID != nil {
+			actorKind = "user"
+		}
+		if err := addEvent(ctx, tx, id, status, actorKind, actorID, note); err != nil {
 			return err
 		}
 		if err := updateTask(ctx, tx, requester, taskID, status, taskNote); err != nil {

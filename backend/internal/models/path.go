@@ -161,6 +161,16 @@ type TaskView struct {
 	IsNext  bool    `json:"isNext"`
 	DueDate *string `json:"dueDate"`
 	Action  *Action `json:"action"`
+	// Details – подробности для раскрытия по клику; null – показываются только note и срок.
+	Details *TaskDetails `json:"details"`
+}
+
+// TaskDetails – о чем задача, кто поможет, когда она готова и в какую цель стажировки идет.
+type TaskDetails struct {
+	About    string  `json:"about"`
+	Helper   string  `json:"helper"`
+	DoneWhen string  `json:"doneWhen"`
+	Goal     *string `json:"goal"`
 }
 
 // ResourceView – карточка боковой панели с уже посчитанным тегом.

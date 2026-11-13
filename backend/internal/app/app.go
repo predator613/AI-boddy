@@ -23,6 +23,7 @@ import (
 	"ai-buddy/backend/internal/llm"
 	"ai-buddy/backend/internal/middleware"
 	"ai-buddy/backend/internal/mockservices"
+	"ai-buddy/backend/internal/models"
 	"ai-buddy/backend/internal/repository"
 	"ai-buddy/backend/internal/services"
 	"ai-buddy/backend/migrations"
@@ -44,6 +45,8 @@ type Services struct {
 	People   handlers.PeopleService
 	Calendar handlers.CalendarService
 	Requests *services.Requests // и страница «Заявки», и синхронизация статусов
+	Staff    handlers.StaffService
+	Support  *services.Support // обращения в поддержку и синхронизация их статусов
 }
 
 // NewServices собирает сервисы поверх базы, модели и системы заявок.
@@ -60,18 +63,33 @@ func NewServices(cfg config.Config, pool *pgxpool.Pool, log *slog.Logger) (Servi
 	reqStore := repository.NewRequests(pool)
 	kb := repository.NewKB(pool)
 	people := repository.NewPeople(pool)
-	reqs := services.NewRequests(reqStore, users, corp, log)
-	path := services.NewPath(repository.NewOnboarding(pool), users)
+	staff := repository.NewStaff(pool)
+	onboarding := repository.NewOnboarding(pool)
+	services.SetJiraURL(cfg.MockServicesPublicURL)
+	reqs := services.NewRequests(reqStore, users, corp, log).WithFeed(staff)
+	path := services.NewPath(onboarding, users).WithExtras(pathExtras{onboarding, people}).WithFeed(staff, log)
 	return Services{
 		Auth:     services.NewAuth(users, cfg.JWTSecret, cfg.JWTTTL),
 		Path:     path,
 		KB:       services.NewKB(kb, users, people),
-		Goals:    services.NewGoals(repository.NewGoals(pool), users),
+		Goals:    services.NewGoals(repository.NewGoals(pool), users).WithFeed(staff, log),
 		Chat:     services.NewAgent(repository.NewChat(pool), reqStore, kb, users, people, corp, model, cfg.LLMTimeout, log).WithPath(path),
 		People:   services.NewPeople(people),
 		Calendar: services.NewCalendar(repository.NewCalendar(pool), users, people),
 		Requests: reqs,
+		Staff:    services.NewStaff(staff, reqStore, users, corp, log),
+		Support:  services.NewSupport(staff, users, corp, log),
 	}, nil
+}
+
+// pathExtras – подробности задач и люди вокруг стажера для «Моего пути».
+type pathExtras struct {
+	*repository.Onboarding
+	people *repository.People
+}
+
+func (p pathExtras) Circle(ctx context.Context, userID string) (*models.Circle, error) {
+	return p.people.Circle(ctx, userID)
 }
 
 // NewRouter описывает все маршруты API.
@@ -98,6 +116,7 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 	chatH := handlers.NewChat(svc.Chat, svc.Requests, log)
 	peopleH := handlers.NewPeople(svc.People, log)
 	calendarH := handlers.NewCalendar(svc.Calendar, log)
+	staffH := handlers.NewStaff(svc.Staff, svc.Support, log)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", handlers.Health)
@@ -155,6 +174,24 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 			r.Delete("/me/calendar/entries/{id}", calendarH.DeleteEntry)
 			r.Post("/me/calendar/events/{meetingId}/answer", calendarH.Answer)
 
+			// Конспект встреч стажера.
+			r.Get("/me/notes", staffH.Notes)
+			r.Put("/me/notes/{eventId}", staffH.SaveNote)
+
+			// Обращения в поддержку (любая роль).
+			r.Post("/support/tickets", staffH.CreateTicket)
+			r.Get("/support/tickets", staffH.Tickets)
+
+			// Согласования: заявки стажеров, где пользователь – согласующий.
+			r.Get("/approvals", staffH.Approvals)
+			r.Post("/approvals/{id}", staffH.Decide)
+
+			// Кабинет наставника: лента (колокольчик) и чек-лист по стажеру.
+			r.Get("/mentor/feed", staffH.Feed)
+			r.Post("/mentor/feed/read", staffH.ReadFeed)
+			r.Get("/mentor/interns/{internId}/checklist", staffH.Checklist)
+			r.Post("/mentor/interns/{internId}/checklist/{itemId}", staffH.MarkChecklist)
+
 			// Справочник.
 			r.Get("/kb", kbH.Get)
 			r.Get("/kb/search", kbH.Search)
@@ -205,6 +242,7 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, ready chan<- 
 	defer stopSync()
 	if cfg.RequestSync > 0 {
 		go svc.Requests.Run(syncCtx, cfg.RequestSync)
+		go svc.Support.Run(syncCtx, cfg.RequestSync)
 	}
 	log.Info("assistant ready", "llm", cfg.LLMProvider, "requestService", withDefault(cfg.MockServicesURL, "in-process mock"))
 

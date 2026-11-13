@@ -33,7 +33,7 @@ type RequestStore interface {
 	Notify(ctx context.Context, userID, kind, text, link string, requestID *string) error
 	Submit(ctx context.Context, id, actorID, status, externalRef, taskNote string) error
 	Cancel(ctx context.Context, id, actorID string) error
-	ApplyDecision(ctx context.Context, id, status string, reason *string, taskNote, notice string) (bool, error)
+	ApplyDecision(ctx context.Context, id, status string, reason *string, taskNote, notice string, actorID *string) (bool, error)
 	Get(ctx context.Context, id string) (*models.Request, error)
 	ListByRequester(ctx context.Context, requesterID string) ([]*models.Request, error)
 	Waiting(ctx context.Context, limit int) ([]*models.Request, error)
@@ -47,6 +47,13 @@ type Requests struct {
 	corp  integrations.Corporate
 	log   *slog.Logger
 	now   func() time.Time
+	feed  FeedWriter
+}
+
+// WithFeed подключает ленту наставника: в нее пишутся решения сервиса заявок.
+func (s *Requests) WithFeed(w FeedWriter) *Requests {
+	s.feed = w
+	return s
 }
 
 // NewRequests создает сервис заявок.
@@ -106,12 +113,21 @@ func (s *Requests) SyncOnce(ctx context.Context) (int, error) {
 			r := t.Reason
 			reason = &r
 		}
-		applied, err := s.store.ApplyDecision(ctx, q.ID, status, reason, taskNote(q, status, t.Reason), decisionNotice(q, status, t.Reason))
+		applied, err := s.store.ApplyDecision(ctx, q.ID, status, reason, taskNote(q, status, t.Reason), decisionNotice(q, status, t.Reason), nil)
 		if err != nil {
 			return changed, err
 		}
 		if applied {
 			changed++
+			word := "выполнена"
+			if status == "rejected" {
+				word = "отклонена"
+			}
+			pushFeed(ctx, s.feed, s.log, q.RequesterID, models.Notice{
+				Kind: "requests", Link: "/interns/" + q.RequesterID, RequestID: &q.ID,
+				Text:      fmt.Sprintf("Заявка стажера «%s» %s", RequestTitle(q), word),
+				ActorKind: "other", ActorName: integrations.JiraName,
+			})
 		}
 	}
 	return changed, nil
@@ -190,15 +206,46 @@ func taskNote(q *models.Request, status, reason string) string {
 	return ""
 }
 
-// approverText – «Олег, владелец проекта», «Кирилл, DevOps».
+// accessTeam – кто решает обычные доступы.
+const accessTeam = integrations.JiraName + ", команда доступов"
+
+// viaService – заявку на доступ решает сервис заявок, а не человек: обычные доступы (devops) и те,
+// у кого согласующий-человек не нашелся.
+func viaService(q *models.Request) bool {
+	return q.Type == "access" && q.ApproverKind != "auto" && (q.ApproverKind == "devops" || q.Approver == nil)
+}
+
+// jiraURL – адрес карточек заявок для браузера (MOCK_SERVICES_PUBLIC_URL); пусто – ссылок нет.
+var jiraURL string
+
+// SetJiraURL задает адрес карточек заявок.
+func SetJiraURL(base string) { jiraURL = strings.TrimRight(base, "/") }
+
+// External – заявка в Jira Service Desk. Отгулы остаются у руководителя, у них ссылки нет.
+func External(q *models.Request) *models.ExternalRef {
+	if q.ExternalRef == nil || *q.ExternalRef == "" || q.Type == "leave" {
+		return nil
+	}
+	e := &models.ExternalRef{System: integrations.JiraName, Key: *q.ExternalRef}
+	if jiraURL != "" {
+		u := jiraURL + "/browse/" + *q.ExternalRef
+		e.URL = &u
+	}
+	return e
+}
+
+// approverText – «Олег, владелец проекта», «Jira Service Desk, команда доступов».
 func approverText(q *models.Request) string {
 	if q.ApproverKind == "department" {
 		return q.DepartmentTitle
 	}
+	if viaService(q) {
+		return accessTeam
+	}
 	if q.ApproverKind == "auto" || q.Approver == nil {
 		return "выдается автоматически"
 	}
-	role := map[string]string{"lead": "руководитель", "project_owner": "владелец проекта", "devops": "DevOps"}[q.ApproverKind]
+	role := map[string]string{"lead": "руководитель", "project_owner": "владелец проекта"}[q.ApproverKind]
 	if q.Type == "leave" {
 		role = "руководитель"
 	}
@@ -251,6 +298,12 @@ func RequestFields(q *models.Request) []models.Field {
 	if q.ApproverKind == "auto" && q.Type == "access" {
 		label = "Согласование"
 	}
+	if viaService(q) {
+		label = "Куда ушла"
+		if q.Status == "done" {
+			label = "Выполнил"
+		}
+	}
 	if q.Type == "other" {
 		label = "Исполняет"
 		if q.Status == "done" {
@@ -266,7 +319,7 @@ func RequestItem(q *models.Request, events []models.RequestEvent, now time.Time)
 	item := models.RequestItem{
 		ID: q.ID, Number: fmt.Sprint(q.Number), Kind: q.Type, Title: RequestTitle(q),
 		Status: q.Status, CreatedAt: q.CreatedAt, Via: q.Via, Fields: RequestFields(q),
-		RejectReason: q.RejectReason, History: []models.HistoryEntry{},
+		RejectReason: q.RejectReason, History: []models.HistoryEntry{}, External: External(q),
 	}
 	for _, e := range events {
 		h := models.HistoryEntry{At: stamp(e.At), State: "done"}
@@ -289,6 +342,9 @@ func RequestItem(q *models.Request, events []models.RequestEvent, now time.Time)
 			h.Title = "Создана"
 		}
 		item.History = append(item.History, h)
+		if e.Status == "waiting" && item.External != nil {
+			item.History = append(item.History, models.HistoryEntry{Title: "Передана в " + integrations.JiraName, At: h.At, State: "done"})
+		}
 	}
 	if q.Status == "waiting" {
 		at := fmt.Sprintf("обычно до %d ч", q.SLAHours)

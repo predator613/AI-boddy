@@ -97,6 +97,31 @@ func (r *Onboarding) ListStages(ctx context.Context, teamID string) ([]models.St
 	return stages, nil
 }
 
+// TaskDetails – подробности задач команды для стажера: описание, кто поможет, когда готово и цель
+// стажировки, в шагах которой есть задача.
+func (r *Onboarding) TaskDetails(ctx context.Context, teamID, internID string) (map[string]models.TaskDetails, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT t.id::text, t.about, t.helper, t.done_when,
+		       (SELECT g.title FROM goal_steps gs JOIN intern_goals g ON g.id = gs.goal_id
+		        WHERE gs.task_id = t.id AND g.intern_id::text = $2 ORDER BY g.position LIMIT 1)
+		FROM onboarding_tasks t JOIN onboarding_stages s ON s.id = t.stage_id
+		WHERE s.team_id::text = $1`, teamID, internID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]models.TaskDetails{}
+	for rows.Next() {
+		var id string
+		var d models.TaskDetails
+		if err := rows.Scan(&id, &d.About, &d.Helper, &d.DoneWhen, &d.Goal); err != nil {
+			return nil, err
+		}
+		out[id] = d
+	}
+	return out, rows.Err()
+}
+
 // GetProgress возвращает личные статусы задач стажера: task_id → статус.
 func (r *Onboarding) GetProgress(ctx context.Context, internID string) (map[string]models.TaskProgress, error) {
 	rows, err := r.db.Query(ctx,

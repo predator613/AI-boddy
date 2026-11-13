@@ -190,7 +190,7 @@ func TestAccessScenarioEndToEnd(t *testing.T) {
 
 	// 3. Согласующий одобрил: доступ выдан, пункт пути закрыт, стажер получил сообщение.
 	ref := externalRef(t, e, res.RequestID)
-	_, err = e.store.Decide(ref, true, "")
+	_, err = e.store.Resolve(ref, true, "")
 	require.NoError(t, err)
 	n, err = e.svc.Requests.SyncOnce(context.Background())
 	require.NoError(t, err)
@@ -231,7 +231,7 @@ func TestAccessRejectedAndAuto(t *testing.T) {
 	card := confirmOf(t, msgs)
 	var r models.ChatReply
 	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/chat/actions/"+card.ActionID+"/confirm", nil, &r))
-	_, err := e.store.Decide(externalRef(t, e, r.Messages[0].Result.RequestID), false, "Сначала пройди инструктаж по безопасности")
+	_, err := e.store.Resolve(externalRef(t, e, r.Messages[0].Result.RequestID), false, "Сначала пройди инструктаж по безопасности")
 	require.NoError(t, err)
 	_, err = e.svc.Requests.SyncOnce(context.Background())
 	require.NoError(t, err)
@@ -287,7 +287,7 @@ func TestAssistantAnswersAndLimits(t *testing.T) {
 
 	// Заявка на стенд уже есть (демо-данные) – дубль не создается.
 	msgs = e.say("intern_anna", map[string]any{"text": "получить доступ к тестовому стенду"})
-	assert.Contains(t, msgs[0].Text, "№1038 уже на согласовании: Кирилл, DevOps")
+	assert.Contains(t, msgs[0].Text, "№1038 уже на согласовании: Jira Service Desk, команда доступов")
 
 	// Непонятный сервис.
 	msgs = e.say("intern_anna", map[string]any{"text": "дай доступ к холодильнику"})
@@ -295,7 +295,7 @@ func TestAssistantAnswersAndLimits(t *testing.T) {
 
 	// Статус заявок.
 	msgs = e.say("intern_anna", map[string]any{"text": "какой статус моих заявок?"})
-	assert.Contains(t, msgs[0].Text, "№1038 Доступ к тестовому стенду – на согласовании (Кирилл, DevOps)")
+	assert.Contains(t, msgs[0].Text, "№1038 Доступ к тестовому стенду – на согласовании (Jira Service Desk, команда доступов)")
 	msgs = e.say("intern_anna", map[string]any{"text": "что с заявкой №1027"})
 	assert.Contains(t, msgs[0].Text, "отклонена")
 	assert.NotContains(t, msgs[0].Text, "1038")
@@ -359,7 +359,7 @@ func TestLeaveRequestAndCancel(t *testing.T) {
 	var r models.ChatReply
 	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/chat/actions/"+card.ActionID+"/confirm", nil, &r))
 	assert.Equal(t, "waiting", r.Messages[0].Result.Status)
-	_, err := e.store.Decide(externalRef(t, e, r.Messages[0].Result.RequestID), true, "")
+	_, err := e.store.Resolve(externalRef(t, e, r.Messages[0].Result.RequestID), true, "")
 	require.NoError(t, err)
 	_, err = e.svc.Requests.SyncOnce(context.Background())
 	require.NoError(t, err)
@@ -637,7 +637,7 @@ func TestServiceRequestToDepartment(t *testing.T) {
 	assert.Contains(t, e.say("intern_anna", map[string]any{"text": "нужен ноутбук"})[0].Text, "№"+res.Number)
 
 	// Отдел выполнил заявку.
-	_, err := e.store.Decide(ref, true, "")
+	_, err := e.store.Resolve(ref, true, "")
 	require.NoError(t, err)
 	_, err = e.svc.Requests.SyncOnce(context.Background())
 	require.NoError(t, err)

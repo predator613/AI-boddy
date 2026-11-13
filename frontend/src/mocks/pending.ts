@@ -1,4 +1,4 @@
-import { leadHandlers } from './leadData'
+import { leadPendingHandlers } from './leadData'
 // Имитация чата с помощником и заявок для полного режима без backend (npm run dev:mock) и тестов.
 // Backend эти эндпоинты уже реализует (docs/api-chat-requests.md), поэтому вместе с настоящим
 // backend перехватываются только pendingHandlers внизу файла – то, чего в backend еще нет.
@@ -603,4 +603,4 @@ export const assistantHandlers = [
 // (main.tsx, VITE_PENDING_MOCKS). Сейчас это кабинет наставника и чат стажера с наставником
 // (docs/api-mentor-console.md). Когда backend реализует ручку – удалите ее из mentorHandlers.
 // Календарь стажера backend уже отдает сам: его моки только в полном режиме (handlers.ts).
-export const pendingHandlers = [...mentorHandlers, ...leadHandlers]
+export const pendingHandlers = [...mentorHandlers, ...leadPendingHandlers]

@@ -151,8 +151,9 @@ func (r *Calendar) Answer(ctx context.Context, m MeetingRow, internID, internNam
 		}
 		if mentorID == nil || *mentorID != m.HostID || answer == "accept" {
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO notifications (user_id, kind, text, link) VALUES ($1::uuid, 'meetings', $2, '/schedule')`,
-				m.HostID, note); err != nil {
+				INSERT INTO notifications (user_id, kind, text, link, meeting_id, actor_id, actor_kind, actor_name)
+				VALUES ($1::uuid, 'meetings', $2, '/schedule', $3::uuid, $4::uuid, 'intern', $5)`,
+				m.HostID, note, m.ID, internID, internName); err != nil {
 				return err
 			}
 		}

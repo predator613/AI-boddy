@@ -116,3 +116,30 @@ func TestRequestTexts(t *testing.T) {
 	assert.Equal(t, "", deref(nil))
 	assert.Equal(t, "", first(" ", ""))
 }
+
+func TestGenitiveAndActorKind(t *testing.T) {
+	for name, want := range map[string]string{
+		"Анна": "Анны", "Лиза": "Лизы", "Ольга": "Ольги", "Дмитрий": "Дмитрия", "Игорь": "Игоря",
+		"Павел": "Павела", "Олег": "Олега", "Мария": "Марии", "Я": "Я", "Ли": "Ли",
+	} {
+		assert.Equal(t, want, genitive(name), name)
+	}
+	assert.Equal(t, "intern", actorKind(models.RoleIntern))
+	assert.Equal(t, "mentor", actorKind(models.RoleMentor))
+	assert.Equal(t, "lead", actorKind(models.RoleLead))
+	assert.Equal(t, "other", actorKind("staff"))
+}
+
+func TestExternalRef(t *testing.T) {
+	ref := "ACCESS-8001"
+	SetJiraURL("")
+	e := External(&models.Request{Type: "access", ExternalRef: &ref})
+	assert.Equal(t, "ACCESS-8001", e.Key)
+	assert.Nil(t, e.URL)
+	SetJiraURL("http://localhost:8090/")
+	defer SetJiraURL("")
+	e = External(&models.Request{Type: "other", ExternalRef: &ref})
+	assert.Equal(t, "http://localhost:8090/browse/ACCESS-8001", *e.URL)
+	assert.Nil(t, External(&models.Request{Type: "leave", ExternalRef: &ref}), "отгул остается у руководителя")
+	assert.Nil(t, External(&models.Request{Type: "access"}))
+}

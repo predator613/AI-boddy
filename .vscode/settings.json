@@ -12,5 +12,6 @@
   },
   "gopls": {
     "build.directoryFilters": ["-frontend", "-agent", "-mock-services"]
-  }
+  },
+  "python.terminal.useEnvFile": true
 }

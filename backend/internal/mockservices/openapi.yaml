@@ -46,7 +46,7 @@ components:
       type: object
       required: [kind, requester]
       properties:
-        kind: { type: string, enum: [access, leave, other], description: "other – заявка в отдел (оборудование, ИТ-поддержка, HR, бухгалтерия)" }
+        kind: { type: string, enum: [access, leave, other, support], description: "other – заявка в отдел (оборудование, ИТ-поддержка, HR, бухгалтерия), support – обращение в поддержку" }
         requestNumber: { type: integer, description: Номер заявки в AI-buddy }
         requester: { type: string }
         approver: { type: string, description: Пусто – выдается автоматически }
@@ -61,11 +61,15 @@ components:
         item: { type: string, example: laptop }
         comment: { type: string }
         auto: { type: boolean, description: Выдать без согласования }
+        manual: { type: boolean, description: Решение принимает человек в AI-buddy (владелец проекта или руководитель) }
+        title: { type: string, description: Что запрошено – заголовок карточки }
+        details: { type: string, description: Текст обращения в поддержку }
     Ticket:
       type: object
       required: [ref, status]
       properties:
-        ref: { type: string, example: ACC-8001 }
-        status: { type: string, enum: [waiting, approved, granted, rejected] }
+        ref: { type: string, example: ACCESS-8001, description: 'ACCESS – доступы, SD – отделы, HR – кадровые, SUP – поддержка' }
+        status: { type: string, enum: [waiting, approved, granted, rejected, in_progress, done] }
         reason: { type: string }
+        answer: { type: string, description: Ответ поддержки }
         decidedAt: { type: string, format: date-time }

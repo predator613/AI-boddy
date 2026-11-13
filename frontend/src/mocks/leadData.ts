@@ -1,5 +1,7 @@
 // Моки ленты изменений наставника и согласований руководителя (docs/api-lead-feed.md).
-// Этих ручек еще нет в backend, поэтому они в pendingHandlers.
+// Backend их уже реализует (лента, согласования, чек-лист, конспект), поэтому leadHandlers работают
+// только в полном режиме без backend и в тестах. В pendingHandlers остались leadPendingHandlers –
+// то, чего в backend еще нет (метрики пользы).
 import { HttpResponse, delay, http } from 'msw'
 import { API_URL } from '../api/client'
 import type { TApproval, TChecklistItem, TFeedItem } from '../schemas/staff'
@@ -247,19 +249,6 @@ export const leadHandlers = [
     return HttpResponse.json({ items: feed, unread: feed.filter((f) => !f.read).length })
   }),
 
-  http.get(`${API_URL}/api/mentor/metrics`, async ({ request }) => {
-    await wait()
-    if (roleOf(request) === 'intern') return err(403, 'forbidden', 'forbidden')
-    return HttpResponse.json({
-      answeredByBuddy: 14,
-      escalated: 3,
-      hoursSaved: 2.8,
-      minutesPerQuestion: 12,
-      accessHours: 6,
-      onTimePercent: 82,
-    })
-  }),
-
   http.post(`${API_URL}/api/mentor/feed/read`, async () => {
     await wait()
     feed = feed.map((f) => ({ ...f, read: true }))
@@ -292,5 +281,21 @@ export const leadHandlers = [
     }
     approvals = approvals.map((x) => (x.id === a.id ? next : x))
     return HttpResponse.json(next)
+  }),
+]
+
+// Еще нет в backend: перехватывается и при работе с настоящим backend (docs/api-lead-feed.md, раздел 11).
+export const leadPendingHandlers = [
+  http.get(`${API_URL}/api/mentor/metrics`, async ({ request }) => {
+    await wait()
+    if (roleOf(request) === 'intern') return err(403, 'forbidden', 'forbidden')
+    return HttpResponse.json({
+      answeredByBuddy: 14,
+      escalated: 3,
+      hoursSaved: 2.8,
+      minutesPerQuestion: 12,
+      accessHours: 6,
+      onTimePercent: 82,
+    })
   }),
 ]

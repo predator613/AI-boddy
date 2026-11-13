@@ -151,10 +151,11 @@ func (a *Agent) Confirm(ctx context.Context, viewerID, actionID string) (*models
 	order := integrations.Order{
 		Kind: q.Type, RequestNumber: q.Number, Requester: t.viewer.Login,
 		Service: q.ServiceCode, Project: deref(q.ProjectTitle), AccessLevel: q.Level, Justification: q.Justification,
-		Auto: q.Type == "access" && q.ApproverKind == "auto",
+		Auto: q.Type == "access" && q.ApproverKind == "auto", Title: RequestTitle(q),
 	}
 	if q.Approver != nil {
 		order.Approver = q.Approver.Name
+		order.Manual = !viaService(q) // решает человек в «Согласованиях»
 	}
 	if q.LeaveDate != nil {
 		order.LeaveDate = q.LeaveDate.Format(time.DateOnly)
@@ -181,7 +182,7 @@ func (a *Agent) Confirm(ctx context.Context, viewerID, actionID string) (*models
 	if err := a.reqs.Submit(ctx, q.ID, t.viewer.ID, status, ticket.Ref, note); err != nil {
 		return nil, mapNotFound(err)
 	}
-	q.Status = status
+	q.Status, q.ExternalRef = status, &ticket.Ref
 	mentorNote := a.notifyMentor(ctx, t, q)
 
 	var text, mood string
@@ -658,6 +659,8 @@ func (a *Agent) prepareAccess(ctx context.Context, t *turn, service, role, level
 	intro := fmt.Sprintf("%s согласует %s, обычно до %d ч.", svc.Title, approverText(q), svc.SLAHours)
 	if svc.ApproverKind == "auto" {
 		intro = fmt.Sprintf("%s выдается автоматически, сразу после подтверждения.", svc.Title)
+	} else if viaService(q) {
+		intro = fmt.Sprintf("Заявка на %s уйдет в %s, обычно до %d ч.", svc.Title, accessTeam, svc.SLAHours)
 	}
 	if t.replaced {
 		intro = fmt.Sprintf("Обновил карточку: уровень «%s». ", levelLabel(*chosen)) + intro
@@ -712,7 +715,7 @@ func (a *Agent) approver(ctx context.Context, u *models.User, svc *models.Servic
 			id = proj.OwnerID
 		}
 	case "devops":
-		id = svc.ApproverID
+		return nil, nil // обычные доступы решает команда доступов в сервисе заявок
 	}
 	if id != nil {
 		p, err := a.reqs.Person(ctx, *id)
@@ -1139,7 +1142,7 @@ func attachCard(msg *models.ChatMessage, q *models.Request) {
 		if status == "draft" || status == "cancelled" {
 			status = "waiting"
 		}
-		msg.Result = &models.ResultCard{RequestID: q.ID, Number: fmt.Sprint(q.Number), Title: RequestTitle(q), Status: status}
+		msg.Result = &models.ResultCard{RequestID: q.ID, Number: fmt.Sprint(q.Number), Title: RequestTitle(q), Status: status, External: External(q)}
 	}
 }
 

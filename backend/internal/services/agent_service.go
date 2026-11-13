@@ -123,6 +123,6 @@ func cleanText(s string) string {
 	s = reMDBold.ReplaceAllString(s, "$1$2")
 	s = reMDHead.ReplaceAllString(s, "")
 	s = reMDBullet.ReplaceAllString(s, "– ")
-	s = strings.ReplaceAll(s, "—", "–")
+	s = strings.NewReplacer("—", "–", "ё", "е", "Ё", "Е").Replace(s)
 	return strings.TrimSpace(s)
 }

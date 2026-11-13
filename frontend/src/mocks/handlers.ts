@@ -21,6 +21,7 @@ import {
 import { KB, assistantHandlers, pendingHandlers } from './pending'
 import { consoleHandlers } from './consoleData'
 import { calendarHandlers } from './mentorData'
+import { leadHandlers } from './leadData'
 
 const apiError = (status: number, code: string, message: string) =>
   HttpResponse.json({ error: { code, message } }, { status })
@@ -231,5 +232,6 @@ export const allHandlers = [
   ...consoleHandlers,
   ...assistantHandlers,
   ...calendarHandlers,
+  ...leadHandlers,
   ...pendingHandlers,
 ]

@@ -43,6 +43,15 @@ type ResultCard struct {
 	Number    string `json:"number"`
 	Title     string `json:"title"`
 	Status    string `json:"status"`
+	// External – заявка во внешнем сервисе (Jira Service Desk); null – ее там нет.
+	External *ExternalRef `json:"external"`
+}
+
+// ExternalRef – заявка во внешнем сервисе заявок: ключ и ссылка на карточку.
+type ExternalRef struct {
+	System string  `json:"system"`
+	Key    string  `json:"key"`
+	URL    *string `json:"url"`
 }
 
 // ChatReply – ответ на сообщение или подтверждение.
@@ -62,6 +71,7 @@ type RequestItem struct {
 	Fields       []Field        `json:"fields"`
 	History      []HistoryEntry `json:"history"`
 	RejectReason *string        `json:"rejectReason"`
+	External     *ExternalRef   `json:"external"`
 }
 
 // HistoryEntry – шаг истории заявки.

@@ -63,7 +63,7 @@ func TestGoalProgress(t *testing.T) {
 	t.Cleanup(func() {
 		_, _ = pool.Exec(context.Background(), `UPDATE intern_goals SET progress_pct = 40 WHERE id = $1`, dimaGoal2)
 		_, _ = pool.Exec(context.Background(), `DELETE FROM goal_updates WHERE goal_id = $1 AND note LIKE 'test:%'`, dimaGoal2)
-		_, _ = pool.Exec(context.Background(), `DELETE FROM notifications WHERE kind = 'goals' AND text LIKE 'Дмитрий%'`)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM notifications WHERE kind = 'goals' AND text LIKE '%Дмитрий%'`)
 	})
 
 	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodPost, "/api/goals/"+annaGoal2+"/progress",
@@ -80,7 +80,7 @@ func TestGoalProgress(t *testing.T) {
 	// Наставник получил уведомление об отметке руководителя.
 	var n int
 	require.NoError(t, pool.QueryRow(t.Context(),
-		`SELECT count(*) FROM notifications WHERE user_id = 'aaaaaaaa-0000-4000-8000-000000000002' AND kind = 'goals' AND text LIKE 'Дмитрий%45%'`).Scan(&n))
+		`SELECT count(*) FROM notifications WHERE user_id = 'aaaaaaaa-0000-4000-8000-000000000002' AND kind = 'goals' AND text LIKE 'Олег%Дмитрий%45%'`).Scan(&n))
 	assert.Equal(t, 1, n)
 
 	for name, body := range map[string]map[string]any{
@@ -195,7 +195,7 @@ func TestGoalsLifecycleForLiza(t *testing.T) {
 	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodPost, "/api/interns/"+lizaID+"/goals/agree", nil, &v))
 	require.NotNil(t, v.Agreed)
 	assert.Equal(t, "Олег", v.Agreed.By.Name)
-	assert.True(t, v.CanAgree)
+	assert.False(t, v.CanAgree, "согласованные цели повторно не согласуют")
 
 	// После согласования стажер не меняет и не удаляет цели; процент сам тоже не ставит.
 	assert.Equal(t, http.StatusForbidden, e.call("intern_liza", http.MethodPatch, "/api/goals/"+g.ID, map[string]any{"title": "Другое"}, nil))

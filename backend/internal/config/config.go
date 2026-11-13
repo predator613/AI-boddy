@@ -27,9 +27,11 @@ type Config struct {
 	LLMTimeout  time.Duration
 
 	// Система заявок: адрес mock-services. Пусто – имитация внутри backend.
-	MockServicesURL   string
-	MockDecisionDelay time.Duration // для имитации внутри backend
-	RequestSync       time.Duration // как часто забирать решения по заявкам
+	MockServicesURL string
+	// Адрес mock-services для браузера: ссылки на карточки заявок. Пусто – ссылок нет, только ключ.
+	MockServicesPublicURL string
+	MockDecisionDelay     time.Duration // для имитации внутри backend
+	RequestSync           time.Duration // как часто забирать решения по заявкам
 }
 
 // Load собирает Config. getenv передается снаружи, чтобы в тестах подставлять свои значения.
@@ -72,6 +74,7 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, errors.New("LLM_BASE_URL and LLM_MODEL are required when LLM_PROVIDER=openai_compat")
 	}
 	cfg.MockServicesURL = strings.TrimSpace(getenv("MOCK_SERVICES_URL"))
+	cfg.MockServicesPublicURL = strings.TrimRight(strings.TrimSpace(getenv("MOCK_SERVICES_PUBLIC_URL")), "/")
 	for _, d := range []struct {
 		key, def string
 		dst      *time.Duration

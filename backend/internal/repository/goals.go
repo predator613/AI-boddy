@@ -30,7 +30,7 @@ const goalSelect = `
 	           FROM goal_steps s
 	           LEFT JOIN intern_task_progress p ON p.task_id = s.task_id AND p.intern_id = g.intern_id
 	           WHERE s.goal_id = g.id HAVING count(*) > 0), g.progress_pct),
-	       g.updated_at,
+	       g.updated_at, g.competency,
 	       o.id::text, o.period, o.title,
 	       cu.id::text, cu.name,
 	       lu.author_id::text, lu.author_name, lu.progress_pct, lu.note, lu.created_at
@@ -197,13 +197,19 @@ func (r *Goals) Count(ctx context.Context, internID string) (int, error) {
 // Create добавляет цель в конец списка.
 func (r *Goals) Create(ctx context.Context, internID, by string, f models.GoalFields) (*models.Goal, error) {
 	var id string
-	err := r.db.QueryRow(ctx, `
-		INSERT INTO intern_goals (intern_id, position, title, criterion, due_week, okr_id, created_by)
-		VALUES ($1::uuid,
-		        COALESCE((SELECT max(position) FROM intern_goals WHERE intern_id = $1::uuid), 0) + 1,
-		        $2, $3, $4, $5::uuid, $6::uuid)
-		RETURNING id::text`,
-		internID, f.Title, f.Criterion, f.DueWeek, f.OKRID, by).Scan(&id)
+	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `
+			INSERT INTO intern_goals (intern_id, position, title, criterion, due_week, okr_id, created_by, competency)
+			VALUES ($1::uuid,
+			        COALESCE((SELECT max(position) FROM intern_goals WHERE intern_id = $1::uuid), 0) + 1,
+			        $2, $3, $4, $5::uuid, $6::uuid, $7)
+			RETURNING id::text`,
+			internID, f.Title, f.Criterion, f.DueWeek, f.OKRID, by, f.Competency).Scan(&id)
+		if err != nil {
+			return err
+		}
+		return replaceSteps(ctx, tx, id, f.Steps)
+	})
 	if err != nil {
 		return nil, constraintErr(err)
 	}
@@ -211,11 +217,52 @@ func (r *Goals) Create(ctx context.Context, internID, by string, f models.GoalFi
 	return g, err
 }
 
+// replaceSteps заменяет шаги цели. nil – шаги не трогаем. Шаг-задача привязывается к задаче плана
+// команды стажера по названию; без совпадения остается непривязанным (и невыполненным).
+// Отметки наставника и руководителя у шагов с прежним названием сохраняются.
+func replaceSteps(ctx context.Context, tx pgx.Tx, goalID string, steps []models.GoalStepInput) error {
+	if steps == nil {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `CREATE TEMP TABLE old_steps ON COMMIT DROP AS
+		SELECT title, source, done_at, done_by FROM goal_steps WHERE goal_id::text = $1`, goalID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM goal_steps WHERE goal_id::text = $1`, goalID); err != nil {
+		return err
+	}
+	for i, st := range steps {
+		_, err := tx.Exec(ctx, `
+			INSERT INTO goal_steps (goal_id, position, title, source, task_id, done_at, done_by)
+			SELECT g.id, $2, $3, $4,
+			       CASE WHEN $4 = 'task' THEN (
+			           SELECT t.id FROM onboarding_tasks t
+			           JOIN onboarding_stages s ON s.id = t.stage_id
+			           JOIN users u ON u.team_id = s.team_id AND u.id = g.intern_id
+			           WHERE lower(t.title) = lower($3) OR lower(t.title) LIKE '%' || lower($3) || '%'
+			           ORDER BY (lower(t.title) = lower($3)) DESC, s.position, t.position LIMIT 1) END,
+			       CASE WHEN $4 <> 'task' THEN o.done_at END, CASE WHEN $4 <> 'task' THEN o.done_by END
+			FROM intern_goals g
+			LEFT JOIN old_steps o ON o.title = $3 AND o.source = $4
+			WHERE g.id::text = $1
+			LIMIT 1`, goalID, i+1, st.Title, st.Source)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Update меняет текст, срок и OKR цели.
 func (r *Goals) Update(ctx context.Context, id string, f models.GoalFields) (*models.Goal, error) {
-	err := execOne(r.db.Exec(ctx, `
-		UPDATE intern_goals SET title = $2, criterion = $3, due_week = $4, okr_id = $5::uuid, updated_at = now()
-		WHERE id::text = $1`, id, f.Title, f.Criterion, f.DueWeek, f.OKRID))
+	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		if err := execOne(tx.Exec(ctx, `
+			UPDATE intern_goals SET title = $2, criterion = $3, due_week = $4, okr_id = $5::uuid, competency = $6, updated_at = now()
+			WHERE id::text = $1`, id, f.Title, f.Criterion, f.DueWeek, f.OKRID, f.Competency)); err != nil {
+			return err
+		}
+		return replaceSteps(ctx, tx, id, f.Steps)
+	})
 	if err != nil {
 		return nil, constraintErr(err)
 	}
@@ -254,9 +301,10 @@ func (r *Goals) SetProgress(ctx context.Context, goalID, authorID string, pct in
 			return err
 		}
 		_, err = tx.Exec(ctx, `
-			INSERT INTO notifications (user_id, kind, text, link)
-			SELECT p.mentor_id, 'goals', u.name || ' обновил(а) цель «' || $2::text || '»: ' || $3::int || '%', '/mentor'
-			FROM intern_profiles p JOIN users u ON u.id = p.user_id
+			INSERT INTO notifications (user_id, kind, text, link, actor_id, actor_kind, actor_name)
+			SELECT p.mentor_id, 'goals', a.name || ' отметил(а) прогресс по цели «' || $2::text || '» (' || u.name || '): ' || $3::int || '%', '/mentor',
+			       a.id, CASE a.role WHEN 'intern' THEN 'intern' WHEN 'lead' THEN 'lead' WHEN 'mentor' THEN 'mentor' ELSE 'other' END, a.name
+			FROM intern_profiles p JOIN users u ON u.id = p.user_id JOIN users a ON a.id::text = $4
 			WHERE p.user_id::text = $1 AND p.mentor_id IS NOT NULL AND p.mentor_id::text <> $4`,
 			internID, title, pct, authorID)
 		return err
@@ -289,7 +337,7 @@ func scanGoal(row pgx.Row) (models.Goal, string, error) {
 	var okrID, okrPeriod, okrTitle, cuID, cuName, luAuthor, luName, luNote *string
 	var luPct *int
 	var luAt *time.Time
-	err := row.Scan(&g.ID, &internID, &g.Position, &g.Title, &g.Criterion, &g.DueWeek, &g.ProgressPct, &g.UpdatedAt,
+	err := row.Scan(&g.ID, &internID, &g.Position, &g.Title, &g.Criterion, &g.DueWeek, &g.ProgressPct, &g.UpdatedAt, &g.Competency,
 		&okrID, &okrPeriod, &okrTitle, &cuID, &cuName, &luAuthor, &luName, &luPct, &luNote, &luAt)
 	if err != nil {
 		return g, "", err

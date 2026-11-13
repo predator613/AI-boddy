@@ -33,7 +33,8 @@ type Goal struct {
 	LastUpdate  *GoalNote  `json:"lastUpdate"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
 	CreatedBy   *PersonRef `json:"createdBy"`
-	Steps       []GoalStep `json:"steps"` // если шаги есть, progressPct – доля выполненных
+	Competency  *string    `json:"competency"` // компетенция из матрицы роли, «Код и ревью · L1»
+	Steps       []GoalStep `json:"steps"`      // если шаги есть, progressPct – доля выполненных
 }
 
 // GoalStep – шаг цели: задача «Моего пути» или отметка наставника либо руководителя.
@@ -67,4 +68,14 @@ type GoalFields struct {
 	Criterion string
 	DueWeek   *int
 	OKRID     *string
+	// Competency – компетенция из матрицы роли; nil – не задана.
+	Competency *string
+	// Steps – новый список шагов; nil – шаги не менять.
+	Steps []GoalStepInput
+}
+
+// GoalStepInput – шаг цели в форме.
+type GoalStepInput struct {
+	Title  string `json:"title"`
+	Source string `json:"source"`
 }

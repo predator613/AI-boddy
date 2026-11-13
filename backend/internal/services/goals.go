@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"strings"
 
 	"ai-buddy/backend/internal/models"
@@ -46,6 +48,10 @@ type GoalInput struct {
 	Criterion *string `json:"criterion"`
 	DueWeek   *int    `json:"dueWeek"`
 	OKRID     *string `json:"okrId"`
+	// Competency – компетенция; пустая строка очищает.
+	Competency *string `json:"competency"`
+	// Steps – шаги цели. В PATCH список заменяется целиком, без поля шаги не меняются.
+	Steps *[]models.GoalStepInput `json:"steps"`
 }
 
 // ProgressInput – отметка о прогрессе.
@@ -61,6 +67,14 @@ const MaxGoals = 6
 type Goals struct {
 	store GoalsStore
 	users UserLookup
+	feed  FeedWriter
+	log   *slog.Logger
+}
+
+// WithFeed подключает ленту наставника: согласование целей и подтверждение шагов руководителем.
+func (s *Goals) WithFeed(w FeedWriter, log *slog.Logger) *Goals {
+	s.feed, s.log = w, log
+	return s
 }
 
 // NewGoals создает сервис.
@@ -109,7 +123,7 @@ func (s *Goals) Update(ctx context.Context, viewerID, goalID string, in GoalInpu
 	if err := s.checkEdit(ctx, viewer, intern); err != nil {
 		return nil, err
 	}
-	cur := models.GoalFields{Title: goal.Title, Criterion: goal.Criterion, DueWeek: goal.DueWeek}
+	cur := models.GoalFields{Title: goal.Title, Criterion: goal.Criterion, DueWeek: goal.DueWeek, Competency: goal.Competency}
 	if goal.OKR != nil {
 		cur.OKRID = &goal.OKR.ID
 	}
@@ -173,7 +187,15 @@ func (s *Goals) Step(ctx context.Context, viewerID, goalID, stepID string, in St
 	if st.Source == "task" {
 		return nil, invalid("this step is done when the intern completes the task on the path")
 	}
-	return storeResult(s.store.SetStepDone(ctx, goalID, stepID, viewer.ID, *in.Done))
+	g, err := storeResult(s.store.SetStepDone(ctx, goalID, stepID, viewer.ID, *in.Done))
+	if err == nil && *in.Done && viewer.Role == models.RoleLead {
+		pushFeed(ctx, s.feed, s.log, intern.ID, models.Notice{
+			Kind: "goals", Link: "/interns/" + intern.ID,
+			Text:    fmt.Sprintf("%s подтвердил шаг «%s» у %s", viewer.Name, st.Title, genitive(intern.Name)),
+			ActorID: &viewer.ID, ActorKind: "lead", ActorName: viewer.Name,
+		})
+	}
+	return g, err
 }
 
 // Agree – руководитель согласовал цели стажера.
@@ -195,6 +217,10 @@ func (s *Goals) Agree(ctx context.Context, viewerID, internID string) (*models.G
 	if err := s.store.Agree(ctx, intern.ID, viewer.ID); err != nil {
 		return nil, mapNotFound(err)
 	}
+	pushFeed(ctx, s.feed, s.log, intern.ID, models.Notice{
+		Kind: "goals", Link: "/interns/" + intern.ID, Text: fmt.Sprintf("%s согласовал цели %s", viewer.Name, genitive(intern.Name)),
+		ActorID: &viewer.ID, ActorKind: "lead", ActorName: viewer.Name,
+	})
 	return s.build(ctx, viewer, intern)
 }
 
@@ -295,6 +321,33 @@ func (s *Goals) clean(ctx context.Context, intern *models.User, cur models.GoalF
 	case f.DueWeek != nil && (*f.DueWeek < 1 || *f.DueWeek > 52):
 		return f, invalid("dueWeek must be between 1 and 52")
 	}
+	if in.Competency != nil {
+		c := strings.TrimSpace(*in.Competency)
+		if len([]rune(c)) > 80 {
+			return f, invalid("competency is too long (max 80)")
+		}
+		f.Competency = nil
+		if c != "" {
+			f.Competency = &c
+		}
+	}
+	f.Steps = nil
+	if in.Steps != nil {
+		if len(*in.Steps) > 8 {
+			return f, invalid("max 8 steps")
+		}
+		f.Steps = []models.GoalStepInput{}
+		for _, st := range *in.Steps {
+			st.Title = strings.TrimSpace(st.Title)
+			if st.Title == "" || len([]rune(st.Title)) > 120 {
+				return f, invalid("step title is required (max 120)")
+			}
+			if st.Source != "task" && st.Source != "mentor" && st.Source != "lead" {
+				return f, invalid("step source must be task, mentor or lead")
+			}
+			f.Steps = append(f.Steps, st)
+		}
+	}
 	if in.OKRID != nil {
 		id := strings.TrimSpace(*in.OKRID)
 		if id == "" {
@@ -335,6 +388,6 @@ func (s *Goals) build(ctx context.Context, viewer, intern *models.User) (*models
 	if v.CanEdit, err = s.canEdit(ctx, viewer, intern); err != nil {
 		return nil, err
 	}
-	v.CanAgree = viewer.Role == models.RoleLead && len(v.Goals) > 0
+	v.CanAgree = viewer.Role == models.RoleLead && len(v.Goals) > 0 && v.Agreed == nil
 	return v, nil
 }

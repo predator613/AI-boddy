@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -43,6 +45,27 @@ type Path struct {
 	store OnboardingStore
 	users UserLookup
 	now   func() time.Time
+	extra PathExtras
+	feed  FeedWriter
+	log   *slog.Logger
+}
+
+// PathExtras – необязательные данные «Моего пути»: подробности задач и люди вокруг стажера.
+type PathExtras interface {
+	TaskDetails(ctx context.Context, teamID, internID string) (map[string]models.TaskDetails, error)
+	Circle(ctx context.Context, userID string) (*models.Circle, error)
+}
+
+// WithExtras подключает подробности задач (кто поможет, когда готово, цель).
+func (s *Path) WithExtras(x PathExtras) *Path {
+	s.extra = x
+	return s
+}
+
+// WithFeed подключает ленту наставника: в нее пишется закрытие задач стажером.
+func (s *Path) WithFeed(w FeedWriter, log *slog.Logger) *Path {
+	s.feed, s.log = w, log
+	return s
 }
 
 // NewPath создает сервис.
@@ -80,6 +103,12 @@ func (s *Path) CompleteTask(ctx context.Context, viewerID, taskID string) (*mode
 	}
 	if err := s.store.SetTaskStatus(ctx, viewer.ID, taskID, models.TaskDone, nil, viewer.ID); err != nil {
 		return nil, err
+	}
+	if task, _, err := s.store.GetTask(ctx, taskID); err == nil {
+		pushFeed(ctx, s.feed, s.log, viewer.ID, models.Notice{
+			Kind: "tasks", Link: "/interns/" + viewer.ID, Text: fmt.Sprintf("%s закрыл(а) задачу «%s»", viewer.Name, task.Title),
+			ActorID: &viewer.ID, ActorKind: "intern", ActorName: viewer.Name,
+		})
 	}
 	return s.buildFor(ctx, viewer)
 }
@@ -269,5 +298,37 @@ func (s *Path) buildFor(ctx context.Context, intern *models.User) (*models.PathV
 		return nil, err
 	}
 	v := buildPath(in)
+	if err := s.addDetails(ctx, intern, &v); err != nil {
+		return nil, err
+	}
 	return &v, nil
+}
+
+// addDetails дополняет задачи подробностями; имена наставника и руководителя подставляются из связей.
+func (s *Path) addDetails(ctx context.Context, intern *models.User, v *models.PathView) error {
+	if s.extra == nil {
+		return nil
+	}
+	details, err := s.extra.TaskDetails(ctx, intern.TeamID, intern.ID)
+	if err != nil {
+		return err
+	}
+	circle, err := s.extra.Circle(ctx, intern.ID)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return err
+	}
+	for i := range v.Stages {
+		for j := range v.Stages[i].Tasks {
+			t := &v.Stages[i].Tasks[j]
+			d, ok := details[t.ID]
+			if !ok || (d.About == "" && d.Helper == "" && d.DoneWhen == "" && d.Goal == nil) {
+				continue
+			}
+			d.About = personalize(circle, intern.Name, d.About)
+			d.Helper = personalize(circle, intern.Name, d.Helper)
+			d.DoneWhen = personalize(circle, intern.Name, d.DoneWhen)
+			t.Details = &d
+		}
+	}
+	return nil
 }
