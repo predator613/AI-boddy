@@ -58,7 +58,7 @@ func buildPath(in pathInput) models.PathView {
 	for i, st := range in.Stages {
 		code := fmt.Sprintf("%02d", i+1)
 		sv := models.StageView{
-			ID: st.ID, Code: code, Title: st.Title, Color: st.Color, Tip: st.Tip,
+			ID: st.ID, Code: code, Title: st.Title, Color: st.Color, Tip: st.Tip, Period: nonEmpty(st.Period),
 			Suggestions: nonNil(st.Suggestions), Tasks: make([]models.TaskView, 0, len(st.Tasks)),
 			Resources: make([]models.ResourceView, 0, len(st.Resources)),
 		}
@@ -207,4 +207,12 @@ func nonNil[T any](s []T) []T {
 		return []T{}
 	}
 	return s
+}
+
+// nonEmpty – nil для пустой строки.
+func nonEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

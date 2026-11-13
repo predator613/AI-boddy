@@ -232,8 +232,8 @@ func (r *Requests) CreateServiceDraft(ctx context.Context, d models.ServiceDraft
 	var id string
 	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `
-			INSERT INTO requests (type, requester_id, status, via) VALUES ('other', $1::uuid, 'draft', 'buddy')
-			RETURNING id::text`, d.RequesterID).Scan(&id); err != nil {
+			INSERT INTO requests (type, requester_id, status, via, task_id) VALUES ('other', $1::uuid, 'draft', 'buddy', $2::uuid)
+			RETURNING id::text`, d.RequesterID, d.TaskID).Scan(&id); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `

@@ -20,8 +20,8 @@ import {
 } from './pathData'
 import { KB, assistantHandlers, pendingHandlers } from './pending'
 import { consoleHandlers } from './consoleData'
-import { calendarHandlers } from './mentorData'
-import { leadHandlers, supportHandlers } from './leadData'
+import { calendarHandlers, mentorHandlers } from './mentorData'
+import { leadHandlers, leadPendingHandlers, supportHandlers } from './leadData'
 
 const apiError = (status: number, code: string, message: string) =>
   HttpResponse.json({ error: { code, message } }, { status })
@@ -234,5 +234,7 @@ export const allHandlers = [
   ...calendarHandlers,
   ...leadHandlers,
   ...supportHandlers,
+  ...leadPendingHandlers,
+  ...mentorHandlers,
   ...pendingHandlers,
 ]

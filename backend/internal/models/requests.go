@@ -76,6 +76,7 @@ type ServiceDraft struct {
 	RequesterID string
 	Item        string
 	Comment     string
+	TaskID      *string // задача пути, которую закроет заявка
 }
 
 // Department – отдел компании и что у него можно заказать.

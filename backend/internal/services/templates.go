@@ -34,6 +34,7 @@ type StageInput struct {
 	Title       string   `json:"title"`
 	Color       string   `json:"color"`
 	Tip         string   `json:"tip"`
+	Period      string   `json:"period"` // «неделя 1», «месяцы 1–2»
 	Suggestions []string `json:"suggestions"`
 	Position    int      `json:"position"` // учитывается только при изменении
 }
@@ -275,7 +276,10 @@ func (s *Path) editableTask(ctx context.Context, viewerID, taskID string) (*mode
 func cleanStage(in StageInput) (models.StageTemplate, error) {
 	st := models.StageTemplate{
 		Title: strings.TrimSpace(in.Title), Color: strings.TrimSpace(in.Color), Tip: strings.TrimSpace(in.Tip),
-		Suggestions: []string{},
+		Period: strings.TrimSpace(in.Period), Suggestions: []string{},
+	}
+	if len([]rune(st.Period)) > 40 {
+		return st, invalid("period is too long (max 40)")
 	}
 	if st.Color == "" {
 		st.Color = "#C9FFBF"
