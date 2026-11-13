@@ -41,6 +41,7 @@ function seed(): TStageTemplate[] {
     title,
     color,
     tip: '',
+    period: '',
     suggestions: [],
     tasks,
     resources: [],
@@ -125,6 +126,7 @@ export const consoleHandlers = [
       title,
       color: String(b.color ?? '#C9FFBF'),
       tip: String(b.tip ?? ''),
+      period: String(b.period ?? ''),
       suggestions: [],
       tasks: [],
       resources: [],
@@ -141,6 +143,7 @@ export const consoleHandlers = [
       title: String(b.title ?? s.title),
       color: String(b.color ?? s.color),
       tip: String(b.tip ?? s.tip),
+      period: String(b.period ?? s.period),
     }
     const others = stages.filter((x) => x.id !== s.id)
     const pos = Math.min(Math.max(Number(b.position ?? s.position), 1), stages.length)

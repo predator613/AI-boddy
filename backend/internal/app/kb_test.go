@@ -91,7 +91,7 @@ func TestKnowledgePersonalized(t *testing.T) {
 	}
 	anna := article("intern_anna", backendOnlyArticle)
 	assert.Contains(t, anna.Body, "Наставник (Игорь)")
-	assert.Contains(t, anna.Body, "Руководитель команды (Олег)")
+	assert.Contains(t, anna.Body, "Руководитель команды (Артемий)")
 
 	pavel := article("intern_pavel", frontendOnlyArticle)
 	assert.Contains(t, pavel.Body, "(Нина)")
@@ -105,7 +105,7 @@ func TestKnowledgePersonalized(t *testing.T) {
 	require.Equal(t, http.StatusOK, e.call("intern_pavel", http.MethodGet, "/api/kb/search?q="+url.QueryEscape("кто согласует отгул"), nil, &res))
 	for _, m := range res.Results {
 		assert.NotContains(t, m.Snippet, "{{")
-		assert.NotContains(t, m.Snippet, "Олег")
+		assert.NotContains(t, m.Snippet, "Артемий")
 	}
 
 	// Контакты для «Поддержки»: свои люди и отделы.
@@ -114,7 +114,7 @@ func TestKnowledgePersonalized(t *testing.T) {
 	require.NotNil(t, c.Mentor)
 	assert.Equal(t, "Игорь", c.Mentor.Name)
 	require.NotNil(t, c.Lead)
-	assert.Equal(t, "Олег", c.Lead.Name)
+	assert.Equal(t, "Артемий", c.Lead.Name)
 	assert.Equal(t, "Backend", c.Team)
 	require.Len(t, c.Departments, 4)
 	assert.Equal(t, "Отдел оборудования", c.Departments[0].Title)

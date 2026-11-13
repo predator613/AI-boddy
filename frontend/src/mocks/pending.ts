@@ -61,11 +61,11 @@ function initialRequests(): TRequestItem[] {
       fields: [
         { label: 'Дата', value: '14 ноября, пятница' },
         { label: 'Тип', value: 'отгул' },
-        { label: 'Согласовал', value: 'Олег, руководитель' },
+        { label: 'Согласовал', value: 'Артемий, руководитель' },
       ],
       history: [
         { title: 'Создана AI-buddy', at: '6 нояб, 16:40', state: 'done' },
-        { title: 'Одобрена Олегом', at: '7 нояб, 10:12', state: 'done' },
+        { title: 'Одобрена Артемием', at: '7 нояб, 10:12', state: 'done' },
       ],
       rejectReason: null,
     },
@@ -80,7 +80,7 @@ function initialRequests(): TRequestItem[] {
       fields: [
         { label: 'Сервис', value: 'Логи продакшена' },
         { label: 'Роль', value: 'чтение' },
-        { label: 'Решение', value: 'Олег, руководитель' },
+        { label: 'Решение', value: 'Артемий, руководитель' },
       ],
       history: [
         { title: 'Создана AI-buddy', at: '4 нояб, 15:30', state: 'done' },
@@ -161,7 +161,7 @@ function seedDialogs(): PastDialog[] {
       updatedAt: daysAgo(3),
       messages: [
         m('dl-1', 'user', 'Хочу взять отгул 14 ноября'),
-        m('dl-2', 'assistant', 'Заявка на отгул создана, Олег ее одобрил.'),
+        m('dl-2', 'assistant', 'Заявка на отгул создана, Артемий ее одобрил.'),
       ],
     },
   ]
@@ -198,7 +198,7 @@ function accessConfirm(payload: Payload, taskId: string | null): TChatMessage[] 
     label: 'Роль',
     value: ROLES[String(payload.role)] ?? String(payload.role ?? 'по умолчанию'),
   })
-  fields.push({ label: 'Согласует', value: 'Олег, руководитель' })
+  fields.push({ label: 'Согласует', value: 'Артемий, руководитель' })
   const actionId = id('act')
   actions.set(actionId, { kind: 'access', title: `Доступ к ${service}`, fields, taskId })
   return [
@@ -219,7 +219,7 @@ function leaveConfirm(): TChatMessage[] {
   const fields = [
     { label: 'Дата', value: '14 ноября, пятница' },
     { label: 'Тип', value: 'отгул' },
-    { label: 'Согласует', value: 'Олег, руководитель' },
+    { label: 'Согласует', value: 'Артемий, руководитель' },
   ]
   const actionId = id('act')
   actions.set(actionId, { kind: 'leave', title: 'Отгул 14 ноября', fields, taskId: null })
@@ -298,7 +298,7 @@ export function agentReply(
   if (/согласован|ждать/.test(t)) {
     return [
       msg({
-        text: 'Обычно доступ согласуют за один рабочий день. Если дольше, я сам напомню Олегу.',
+        text: 'Обычно доступ согласуют за один рабочий день. Если дольше, я сам напомню Артемию.',
         source: { title: 'Доступы и сервисы → Сколько ждать согласования', articleId: 'a-wait' },
       }),
     ]
@@ -523,7 +523,7 @@ export const assistantHandlers = [
           ? [{ title: 'Выполнено AI-buddy', at: 'только что', state: 'done' }]
           : [
               { title: 'Создана AI-buddy', at: 'только что', state: 'done' },
-              { title: 'Ждет решения Олега', at: 'обычно до 1 рабочего дня', state: 'now' },
+              { title: 'Ждет решения Артемия', at: 'обычно до 1 рабочего дня', state: 'now' },
             ],
       rejectReason: null,
     }

@@ -93,7 +93,7 @@ export type TGoalInput = z.input<typeof GoalInput>
 export type TGoalPatch = z.input<typeof GoalPatch>
 export type TProgressInput = z.input<typeof ProgressInput>
 
-/** Имя в творительном падеже для подписи «с Олегом», «с Ниной», «с Игорем». */
+/** Имя в творительном падеже для подписи «с Артемием», «с Ниной», «с Игорем». */
 export function withName(name: string): string {
   const last = name.slice(-1)
   if (last === 'ь' || last === 'й') return `${name.slice(0, -1)}ем`
@@ -103,7 +103,7 @@ export function withName(name: string): string {
   return name
 }
 
-/** Подпись бейджа: «согласованы с Олегом 4 нояб · от OKR команды». */
+/** Подпись бейджа: «согласованы с Артемием 4 нояб · от OKR команды». */
 export function agreedLabel(view: TGoalsView): string {
   if (!view.agreed) return 'еще не согласованы с руководителем'
   const date = new Date(view.agreed.at)

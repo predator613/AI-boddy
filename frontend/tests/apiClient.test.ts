@@ -81,7 +81,7 @@ describe('api/auth', () => {
   it('login возвращает токен и пользователя', async () => {
     const res = await login({ login: 'intern_anna', password: 'demo123' })
     expect(res.token).toBe(mockToken('intern_anna'))
-    expect(res.user.name).toBe('Анна')
+    expect(res.user.name).toBe('Мария')
   })
 
   it('getMe возвращает пользователя по токену', async () => {

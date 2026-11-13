@@ -13,9 +13,9 @@ describe('authStore', () => {
 
   it('setUser обновляет только пользователя', () => {
     useAuthStore.getState().setAuth('t-1', anna)
-    useAuthStore.getState().setUser({ ...anna, name: 'Анна Н.' })
+    useAuthStore.getState().setUser({ ...anna, name: 'Мария Н.' })
     expect(useAuthStore.getState().token).toBe('t-1')
-    expect(useAuthStore.getState().user?.name).toBe('Анна Н.')
+    expect(useAuthStore.getState().user?.name).toBe('Мария Н.')
   })
 
   it('logout очищает токен и пользователя', () => {

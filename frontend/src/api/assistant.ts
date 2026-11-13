@@ -1,3 +1,4 @@
+import { useSettingsStore } from '../store/settingsStore'
 import { z } from 'zod'
 import { apiRequest } from './client'
 import {
@@ -12,9 +13,10 @@ import {
 
 /** POST /api/chat/messages – отправить сообщение помощнику (можно с действием из задачи). */
 export function sendMessage(input: TSendMessageInput) {
+  const style = useSettingsStore.getState().answerStyle
   return apiRequest('/api/chat/messages', ChatReply, {
     method: 'POST',
-    body: SendMessageInput.parse(input),
+    body: SendMessageInput.parse({ style, ...input }),
   })
 }
 

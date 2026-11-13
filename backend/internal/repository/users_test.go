@@ -32,7 +32,7 @@ func TestGetByLogin(t *testing.T) {
 	repo := newRepo(t)
 	u, err := repo.GetByLogin(context.Background(), "intern_anna")
 	require.NoError(t, err)
-	assert.Equal(t, "Анна", u.Name)
+	assert.Equal(t, "Мария", u.Name)
 	assert.Equal(t, "intern", u.Role)
 	assert.Equal(t, "Backend", u.TeamName)
 	require.NotNil(t, u.MentorID)
@@ -40,7 +40,7 @@ func TestGetByLogin(t *testing.T) {
 
 	igor, err := repo.GetByLogin(context.Background(), "mentor_igor")
 	require.NoError(t, err)
-	assert.Equal(t, igor.ID, *u.MentorID, "Анна закреплена за Игорем")
+	assert.Equal(t, igor.ID, *u.MentorID, "Мария закреплена за Игорем")
 	assert.Nil(t, igor.MentorID)
 
 	_, err = repo.GetByLogin(context.Background(), "nobody")

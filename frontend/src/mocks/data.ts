@@ -7,7 +7,7 @@ export const mockUsers: User[] = [
   {
     id: '11111111-1111-4111-8111-111111111111',
     login: 'intern_anna',
-    name: 'Анна',
+    name: 'Мария',
     role: 'intern',
     teamId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     teamName: 'Backend',
@@ -25,7 +25,7 @@ export const mockUsers: User[] = [
   {
     id: '33333333-3333-4333-8333-333333333333',
     login: 'lead_oleg',
-    name: 'Олег',
+    name: 'Артемий',
     role: 'lead',
     teamId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     teamName: 'Backend',

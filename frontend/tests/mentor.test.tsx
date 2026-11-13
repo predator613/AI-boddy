@@ -24,7 +24,7 @@ describe('меню по ролям', () => {
   it('стажера не пускает в разделы наставника, а наставника – в чат стажера', async () => {
     loginAs('intern_anna')
     const router = renderApp('/plan')
-    await screen.findByRole('heading', { name: 'Привет, Анна!' }, T)
+    await screen.findByRole('heading', { name: 'Привет, Мария!' }, T)
     expect(router.state.location.pathname).toBe('/')
     expect(screen.getByRole('link', { name: 'Чат с наставником' })).toBeInTheDocument()
   })
@@ -42,7 +42,7 @@ describe('колокольчик наставника', () => {
     loginAs('mentor_igor')
     renderApp('/')
     await userEvent.click(await screen.findByRole('button', { name: 'Уведомления, новых: 3' }, T))
-    expect(await screen.findByText('Олег согласовал цели Анны', {}, T)).toBeInTheDocument()
+    expect(await screen.findByText('Артемий согласовал цели Марии', {}, T)).toBeInTheDocument()
     await userEvent.click(await screen.findByText('Прочитать все', {}, T))
     expect(
       await screen.findByRole('button', { name: 'Уведомления, новых: 0' }, T),
@@ -55,7 +55,7 @@ describe('чат стажера с наставником', () => {
     loginAs('intern_anna')
     renderApp('/mentor')
     expect(await screen.findByRole('heading', { name: 'Игорь' }, T)).toBeInTheDocument()
-    expect(screen.getByText(/AI-buddy передал Игорю вопрос про роль в GitLab/)).toBeInTheDocument()
+    expect(screen.getByText(/Какую роль просить в GitLab/)).toBeInTheDocument()
     expect(screen.getByText('Правила код-ревью команды')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Отметить прочитанным' }))
     expect(await screen.findByText('Прочитано', {}, T)).toBeInTheDocument()
@@ -116,12 +116,16 @@ describe('сообщения наставника', () => {
   it('открывает тред, отмечает прочитанным и отвечает с добавлением в справочник', async () => {
     loginAs('mentor_igor')
     const router = renderApp('/inbox')
-    expect(await screen.findByRole('button', { name: 'Анна, новых: 2' }, T)).toBeInTheDocument()
-    expect(await screen.findByRole('log', { name: 'Переписка с Анна' }, T)).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Мария, новых: 2' }, T)).toBeInTheDocument()
+    expect(await screen.findByRole('log', { name: 'Переписка с Мария' }, T)).toBeInTheDocument()
     await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'Анна, новых: 2' })).not.toBeInTheDocument(),
+      expect(screen.queryByRole('button', { name: 'Мария, новых: 2' })).not.toBeInTheDocument(),
     )
     expect(screen.getByText('Стажер еще не открыл')).toBeInTheDocument()
+    // вопрос, который передал AI-buddy, подписан и подсказывает, что делать
+    const handoffs = screen.getAllByLabelText('Вопрос, переданный AI-buddy')
+    expect(handoffs[0]).toHaveTextContent('AI-buddy передал вопрос стажера')
+    expect(handoffs[0]).toHaveTextContent('Ответь ниже')
 
     await userEvent.click(screen.getByRole('button', { name: 'Обсудим на 1:1' }))
     await userEvent.click(screen.getByLabelText(/Добавить ответ в справочник/))
@@ -219,6 +223,7 @@ describe('план адаптации', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Этап' }))
     const dialog = await screen.findByRole('dialog', {}, T)
     await userEvent.type(within(dialog).getByLabelText('Название этапа'), 'Итоги стажировки')
+    await userEvent.type(within(dialog).getByLabelText('Когда проходит'), 'конец стажировки')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Цвет розовый' }))
     expect(within(dialog).getByRole('button', { name: 'Цвет розовый' })).toHaveAttribute(
       'aria-pressed',
@@ -227,10 +232,14 @@ describe('план адаптации', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Добавить этап' }))
     expect(
       await screen.findByRole('region', { name: 'Этап Итоги стажировки' }, T),
-    ).toBeInTheDocument()
+    ).toHaveTextContent('конец стажировки')
 
     await userEvent.click(screen.getByRole('button', { name: 'Сдвинуть «Итоги стажировки» левее' }))
     expect(await toastText(/перемещен/)).toBeInTheDocument()
+    // при перемещении срок этапа не теряется
+    expect(screen.getByRole('region', { name: 'Этап Итоги стажировки' })).toHaveTextContent(
+      'конец стажировки',
+    )
     await userEvent.click(
       screen.getByRole('button', { name: 'Сдвинуть «Знакомство с командой» правее' }),
     )
@@ -339,15 +348,15 @@ describe('расписание', () => {
   it('переносит и отменяет встречу, стажер видит изменения в чате', async () => {
     loginAs('mentor_igor')
     renderApp('/schedule')
-    await userEvent.click(await screen.findByRole('button', { name: /^1:1 с Анной, чт 15:00/ }, T))
-    expect(screen.getByText('С кем: Анна')).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', { name: /^1:1 с Марией, чт 15:00/ }, T))
+    expect(screen.getByText('С кем: Мария')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Перенести на час' }))
-    expect(await toastText(/Анна: встреча перенесена на 16:00/)).toBeInTheDocument()
+    expect(await toastText(/Мария: встреча перенесена на 16:00/)).toBeInTheDocument()
     expect(
-      await screen.findByRole('button', { name: /^1:1 с Анной, чт 16:00/ }, T),
+      await screen.findByRole('button', { name: /^1:1 с Марией, чт 16:00/ }, T),
     ).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Отменить' }))
-    expect(await toastText(/отменена, Анна получит уведомление/)).toBeInTheDocument()
+    expect(await toastText(/отменена, Мария получит уведомление/)).toBeInTheDocument()
     expect(screen.getByText(/Выбери встречу в календаре/)).toBeInTheDocument()
   })
 

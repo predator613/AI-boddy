@@ -21,15 +21,15 @@ function roleOf(request: Request) {
 const seedFeed = (): TFeedItem[] => [
   {
     id: 'f1',
-    actor: { name: 'Олег', kind: 'lead' },
-    text: 'Олег согласовал цели Анны',
+    actor: { name: 'Артемий', kind: 'lead' },
+    text: 'Артемий согласовал цели Марии',
     at: ago(25),
     read: false,
   },
   {
     id: 'f2',
-    actor: { name: 'Анна', kind: 'intern' },
-    text: 'Анна приняла приглашение на 1:1 в четверг',
+    actor: { name: 'Мария', kind: 'intern' },
+    text: 'Мария приняла приглашение на 1:1 в четверг',
     at: ago(50),
     read: false,
   },
@@ -43,7 +43,7 @@ const seedFeed = (): TFeedItem[] => [
   {
     id: 'f4',
     actor: { name: 'Кирилл', kind: 'other' },
-    text: 'Кирилл (DevOps) взял в работу тестовый стенд для Анны',
+    text: 'Кирилл (DevOps) взял в работу тестовый стенд для Марии',
     at: ago(60 * 22),
     read: true,
   },
@@ -61,7 +61,7 @@ const seedApprovals = (): TApproval[] => [
     id: 'ap-1',
     number: '1042',
     internId: 'u-anna',
-    internName: 'Анна',
+    internName: 'Мария',
     title: 'Доступ к GitLab',
     fields: [
       { label: 'Проект', value: 'backend/auth-service' },
@@ -78,7 +78,7 @@ const seedApprovals = (): TApproval[] => [
     id: 'ap-2',
     number: '1039',
     internId: 'u-anna',
-    internName: 'Анна',
+    internName: 'Мария',
     title: 'Доступ к тестовому стенду',
     fields: [
       { label: 'Стенд', value: 'test-auth, только чтение' },
@@ -184,7 +184,7 @@ const seedNotes = () =>
       'ce-intro',
       {
         eventId: 'ce-intro',
-        text: 'Команда: 6 человек, стендап в 11:00. Вопросы по коду – Игорю, по доступам – Олегу.',
+        text: 'Команда: 6 человек, стендап в 11:00. Вопросы по коду – Игорю, по доступам – Артемию.',
         updatedAt: ago(60 * 48),
       },
     ],

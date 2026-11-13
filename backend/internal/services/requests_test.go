@@ -65,13 +65,13 @@ func TestRequestTexts(t *testing.T) {
 		ID: "1", Number: 1042, Type: "access", Status: "waiting", Via: "buddy",
 		ServiceTitle: "GitLab", RequestTitle: "Доступ к GitLab", RoleTitle: "Developer", LevelTitle: "редактирование",
 		ProjectTitle: &proj, Justification: "Для задачи", ApproverKind: "project_owner", SLAHours: 24,
-		Approver:  &models.PersonRef{ID: "o", Name: "Олег"},
+		Approver:  &models.PersonRef{ID: "o", Name: "Артемий"},
 		CreatedAt: time.Now().Add(-30 * time.Hour),
 	}
 	item := RequestItem(q, []models.RequestEvent{
 		{Status: "draft"}, {Status: "waiting", At: time.Now()},
 	}, time.Now())
-	assert.Equal(t, "Олег, владелец проекта", item.Fields[len(item.Fields)-1].Value)
+	assert.Equal(t, "Артемий, владелец проекта", item.Fields[len(item.Fields)-1].Value)
 	assert.Len(t, item.History, 2)
 	assert.Equal(t, "Создана AI-buddy", item.History[0].Title)
 	assert.Equal(t, "дольше обычного, AI-buddy напомнит", item.History[1].At)
@@ -85,11 +85,11 @@ func TestRequestTexts(t *testing.T) {
 
 	day := time.Date(2026, 11, 13, 0, 0, 0, 0, moscow)
 	leave := &models.Request{Number: 7, Type: "leave", Status: "approved", Via: "manual", LeaveDate: &day,
-		LeaveTypeTitle: "отгул", LeaveComment: "к врачу", Approver: &models.PersonRef{Name: "Олег"}}
+		LeaveTypeTitle: "отгул", LeaveComment: "к врачу", Approver: &models.PersonRef{Name: "Артемий"}}
 	item = RequestItem(leave, []models.RequestEvent{{Status: "waiting"}, {Status: "approved"}, {Status: "done"}}, time.Now())
 	assert.Equal(t, "Отгул 13 ноября", item.Title)
 	assert.Equal(t, "13 ноября, пятница", item.Fields[0].Value)
-	assert.Equal(t, "Олег, руководитель", item.Fields[len(item.Fields)-1].Value)
+	assert.Equal(t, "Артемий, руководитель", item.Fields[len(item.Fields)-1].Value)
 	assert.Equal(t, []string{"Создана вручную", "Одобрена", "Выполнена"}, []string{item.History[0].Title, item.History[1].Title, item.History[2].Title})
 	assert.Contains(t, decisionNotice(leave, "approved", ""), "согласован")
 	assert.Contains(t, decisionNotice(q, "rejected", "нет"), "отклонена: нет")

@@ -128,39 +128,49 @@ export function ProfilePage() {
             ))}
           </Paper>
 
-          <Paper radius="lg" p="lg">
-            <Title order={2} mb="md">
-              Помощник
-            </Title>
-            <Text size="sm" mb={8}>
-              Как отвечать
-            </Text>
-            <SegmentedControl
-              fullWidth
-              aria-label="Подробность ответов"
-              value={answerStyle}
-              onChange={(v) => setAnswerStyle(v as AnswerStyle)}
-              data={[
-                { value: 'short', label: 'Коротко' },
-                { value: 'normal', label: 'Обычно' },
-                { value: 'detailed', label: 'Подробно' },
-              ]}
-            />
-            <Group
-              justify="space-between"
-              mt="lg"
-              pt="md"
-              style={{ borderTop: '1px solid #D6D6D6' }}
-            >
-              <div>
-                <Text size="15px">Язык</Text>
-                <Text size="xs" c="ink.5">
-                  интерфейса и ответов
-                </Text>
-              </div>
-              <Text size="sm">Русский</Text>
-            </Group>
-          </Paper>
+          {/* Чат с AI-buddy есть только у стажера: наставнику и руководителю настройка ни на что не влияет. */}
+          {user?.role === 'intern' && (
+            <Paper radius="lg" p="lg">
+              <Title order={2} mb="md">
+                Помощник
+              </Title>
+              <Text size="sm" mb={8}>
+                Как отвечать
+              </Text>
+              <SegmentedControl
+                fullWidth
+                aria-label="Подробность ответов"
+                value={answerStyle}
+                onChange={(v) => setAnswerStyle(v as AnswerStyle)}
+                data={[
+                  { value: 'short', label: 'Коротко' },
+                  { value: 'normal', label: 'Обычно' },
+                  { value: 'detailed', label: 'Подробно' },
+                ]}
+              />
+              <Text size="xs" c="ink.5" mt={6}>
+                {answerStyle === 'short'
+                  ? 'AI-buddy отвечает в 1–2 предложениях, без списков.'
+                  : answerStyle === 'detailed'
+                    ? 'AI-buddy объясняет причины и расписывает шаги.'
+                    : 'AI-buddy отвечает в 2–6 предложениях, шаги списком, если нужно.'}
+              </Text>
+              <Group
+                justify="space-between"
+                mt="lg"
+                pt="md"
+                style={{ borderTop: '1px solid #D6D6D6' }}
+              >
+                <div>
+                  <Text size="15px">Язык</Text>
+                  <Text size="xs" c="ink.5">
+                    интерфейса и ответов
+                  </Text>
+                </div>
+                <Text size="sm">Русский</Text>
+              </Group>
+            </Paper>
+          )}
         </SimpleGrid>
 
         {user?.role === 'mentor' && <AutomationsPanel />}

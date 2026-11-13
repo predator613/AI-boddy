@@ -234,7 +234,7 @@ func External(q *models.Request) *models.ExternalRef {
 	return e
 }
 
-// approverText – «Олег, владелец проекта», «Jira Service Desk, команда доступов».
+// approverText – «Артемий, владелец проекта», «Jira Service Desk, команда доступов».
 func approverText(q *models.Request) string {
 	if q.ApproverKind == "department" {
 		return q.DepartmentTitle

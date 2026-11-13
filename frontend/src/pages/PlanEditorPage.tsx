@@ -61,6 +61,7 @@ export function PlanEditorPage() {
         title: s.title,
         color: s.color,
         tip: s.tip,
+        period: s.period,
         suggestions: s.suggestions,
         position: s.position + dir,
       },
@@ -152,6 +153,11 @@ export function PlanEditorPage() {
                   <Group justify="space-between" align="baseline" wrap="nowrap">
                     <Text fz={17} fw={500} lh={1.15}>
                       {s.title}
+                      {s.period && (
+                        <Text component="span" size="xs" fw={400} c="ink.5" ml={6}>
+                          {s.period}
+                        </Text>
+                      )}
                     </Text>
                     <Text size="xs" style={{ whiteSpace: 'nowrap' }}>
                       {plural(tasks.length)}

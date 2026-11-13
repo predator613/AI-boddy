@@ -404,11 +404,13 @@ function timeLabel(iso: string, now = new Date()) {
 }
 
 /** Колокольчик: кто что поменял – стажеры, руководитель, AI-buddy. */
+const fmtHours = (h: number) => String(Math.round(h * 10) / 10).replace('.', ',')
+
 // Польза AI-buddy одной тихой строкой; подробности и способ подсчета – по клику.
 function BuddyMetrics() {
   const m = useMentorMetrics().data
   if (!m) return null
-  const hours = String(Math.round(m.hoursSaved * 10) / 10).replace('.', ',')
+  const hours = fmtHours(m.hoursSaved)
   const total = m.answeredByBuddy + m.escalated
   const rows: [string, string][] = [
     ['Вопросов закрыто без тебя', `${m.answeredByBuddy} из ${total}`],
@@ -416,7 +418,10 @@ function BuddyMetrics() {
     ['Сэкономлено времени', `около ${hours} ч`],
     ...(m.accessHours === null
       ? []
-      : ([['От заявки до доступа', `в среднем ${m.accessHours} ч`]] as [string, string][])),
+      : ([['От заявки до доступа', `в среднем ${fmtHours(m.accessHours)} ч`]] as [
+          string,
+          string,
+        ][])),
     ...(m.onTimePercent === null
       ? []
       : ([['Задач стажеров в срок', `${m.onTimePercent}%`]] as [string, string][])),

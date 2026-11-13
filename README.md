@@ -43,11 +43,11 @@ LLM_PROJECT=<ID каталога, только для Yandex AI Studio>
 
 | Логин | Имя | Роль | Команда |
 |---|---|---|---|
-| intern_anna | Анна | стажер, 2-я неделя, этап «Доступы», цели согласованы | Backend |
+| intern_anna | Мария | стажер, 2-я неделя, этап «Доступы», цели согласованы | Backend |
 | intern_dima | Дмитрий | стажер, 6-я неделя, этап «Первые задачи», есть просрочка | Backend |
 | intern_liza | Лиза | стажер, 1-я неделя, цели еще не согласованы | Backend |
-| mentor_igor | Игорь | наставник Анны, Дмитрия и Лизы | Backend |
-| lead_oleg | Олег | руководитель, согласует цели и GitLab backend/auth-service | Backend |
+| mentor_igor | Игорь | наставник Марии, Дмитрия и Лизы | Backend |
+| lead_oleg | Артемий | руководитель, согласует цели и GitLab backend/auth-service | Backend |
 | intern_pavel | Павел | стажер без наставника | Frontend |
 | lead_nina | Нина | руководитель | Frontend |
 
@@ -65,7 +65,7 @@ curl -X POST http://localhost:8080/api/auth/login -H "Content-Type: application/
 # 3. текущий пользователь (подставить token из ответа)
 curl http://localhost:8080/api/auth/me -H "Authorization: Bearer <token>"
 
-# 4. цели Анны и отметка прогресса
+# 4. цели Марии и отметка прогресса
 curl http://localhost:8080/api/goals -H "Authorization: Bearer <token>"
 curl -X POST http://localhost:8080/api/goals/f3000000-0000-4000-8000-000000000002/progress -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d "{\"progressPct\":35}"
 

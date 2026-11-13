@@ -18,7 +18,7 @@ import (
 
 const (
 	igorID  = "aaaaaaaa-0000-4000-8000-000000000002"
-	reviewM = annaOneOnOne // «1:1 с наставником» – встреча Анны
+	reviewM = annaOneOnOne // «1:1 с наставником» – встреча Марии
 )
 
 func integrationsOrder(kind string) integrations.Order {
@@ -97,7 +97,7 @@ func TestApprovalsFlow(t *testing.T) {
 	ap := list[0]
 	assert.Equal(t, res.RequestID, ap.ID, "ожидающая заявка – первой")
 	assert.Equal(t, "waiting", ap.Status)
-	assert.Equal(t, "Анна", ap.InternName)
+	assert.Equal(t, "Мария", ap.InternName)
 	assert.Equal(t, "Доступ к GitLab", ap.Title)
 	f := fieldsMap(ap.Fields)
 	assert.Contains(t, f["Уровень прав"], "Developer")
@@ -143,8 +143,8 @@ func TestApprovalsFlow(t *testing.T) {
 	// Лента наставника: решение руководителя.
 	feed := feedOf(t, e, "mentor_igor")
 	assert.Equal(t, before+1, feed.Unread)
-	assert.Equal(t, "Олег согласовал заявку Анны «Доступ к GitLab»", feed.Items[0].Text)
-	assert.Equal(t, models.Actor{Name: "Олег", Kind: "lead"}, feed.Items[0].Actor)
+	assert.Equal(t, "Артемий согласовал заявку Марии «Доступ к GitLab»", feed.Items[0].Text)
+	assert.Equal(t, models.Actor{Name: "Артемий", Kind: "lead"}, feed.Items[0].Actor)
 	assert.False(t, feed.Items[0].Read)
 
 	// Отказ с причиной: отгул остается у руководителя, причина видна стажеру.
@@ -160,7 +160,7 @@ func TestApprovalsFlow(t *testing.T) {
 	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/requests", nil, &reqs))
 	assert.Equal(t, "rejected", reqs[0].Status)
 	assert.Equal(t, "В этот день релиз", *reqs[0].RejectReason)
-	assert.Equal(t, "Олег отклонил заявку Анны «Отгул 20 ноября»", feedOf(t, e, "mentor_igor").Items[0].Text)
+	assert.Equal(t, "Артемий отклонил заявку Марии «Отгул 20 ноября»", feedOf(t, e, "mentor_igor").Items[0].Text)
 }
 
 // Обычные доступы решает команда доступов в Jira: руководителю они не приходят.
@@ -238,9 +238,9 @@ func TestMentorFeed(t *testing.T) {
 		map[string]any{"answer": "accept"}, nil))
 	feed = feedOf(t, e, "mentor_igor")
 	assert.Equal(t, before+2, feed.Unread)
-	assert.Equal(t, "Анна придет на «1:1 с наставником»", feed.Items[0].Text)
-	assert.Equal(t, models.Actor{Name: "Анна", Kind: "intern"}, feed.Items[0].Actor)
-	assert.Equal(t, "Анна закрыл(а) задачу «Получить доступ к GitLab»", feed.Items[1].Text)
+	assert.Equal(t, "Мария придет на «1:1 с наставником»", feed.Items[0].Text)
+	assert.Equal(t, models.Actor{Name: "Мария", Kind: "intern"}, feed.Items[0].Actor)
+	assert.Equal(t, "Мария закрыл(а) задачу «Получить доступ к GitLab»", feed.Items[1].Text)
 
 	// Наставнику не пишем о его собственных действиях; у стажера без наставника запись некуда класть.
 	require.Equal(t, http.StatusOK, e.call("intern_pavel", http.MethodPost, "/api/path/tasks/b7000000-0000-4000-8000-000000001102/complete", nil, nil))
@@ -378,7 +378,7 @@ func TestSupportTickets(t *testing.T) {
 	// Наставник пишет про своего стажера; про чужого – нельзя.
 	var mt models.SupportTicket
 	require.Equal(t, http.StatusCreated, e.call("mentor_igor", http.MethodPost, "/api/support/tickets",
-		map[string]any{"type": "Не согласуется заявка", "details": "Заявка Анны висит", "internId": annaID, "attachDialog": true}, &mt))
+		map[string]any{"type": "Не согласуется заявка", "details": "Заявка Марии висит", "internId": annaID, "attachDialog": true}, &mt))
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, "/api/support/tickets",
 		map[string]any{"type": "Другое", "details": "x", "internId": pavelID}, nil))
 	require.Equal(t, http.StatusCreated, e.call("lead_oleg", http.MethodPost, "/api/support/tickets",
@@ -447,7 +447,7 @@ func TestTaskDetails(t *testing.T) {
 	task := taskStatus(t, e, gitlabTask)
 	require.NotNil(t, task.Details)
 	assert.Contains(t, task.Details.About, "GitLab")
-	assert.Contains(t, task.Details.Helper, "Олег")
+	assert.Contains(t, task.Details.Helper, "Артемий")
 	assert.NotContains(t, task.Details.Helper, "{{")
 	assert.NotEmpty(t, task.Details.DoneWhen)
 	require.NotNil(t, task.Details.Goal)
@@ -523,5 +523,5 @@ func TestGoalStepsAndCompetency(t *testing.T) {
 		"steps": []map[string]any{{"title": "Демо команде", "source": "lead"}},
 	}, &g))
 	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodPost, "/api/goals/"+g.ID+"/steps/"+g.Steps[0].ID, map[string]any{"done": true}, &g))
-	assert.Equal(t, "Олег подтвердил шаг «Демо команде» у Лизы", feedOf(t, e, "mentor_igor").Items[0].Text)
+	assert.Equal(t, "Артемий подтвердил шаг «Демо команде» у Лизы", feedOf(t, e, "mentor_igor").Items[0].Text)
 }

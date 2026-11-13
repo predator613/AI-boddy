@@ -158,6 +158,8 @@ export const StageTemplate = z.object({
   title: z.string(),
   color: z.string(),
   tip: z.string(),
+  // Когда проходит этап: «неделя 1», «месяцы 1–2»; пусто – не задан.
+  period: z.string().default(''),
   suggestions: z.array(z.string()),
   tasks: z.array(TaskTemplate).optional(),
   resources: z.array(ResourceTemplate).optional(),
@@ -171,6 +173,7 @@ export const StageInput = z.object({
     .regex(/^#[0-9A-Fa-f]{6}$/, 'Цвет в формате #RRGGBB')
     .default('#C9FFBF'),
   tip: z.string().max(300).default(''),
+  period: z.string().trim().max(40).default(''),
   suggestions: z.array(z.string().max(80)).max(6).default([]),
   position: z.number().int().min(1).optional(),
 })

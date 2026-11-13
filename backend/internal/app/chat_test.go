@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -51,7 +52,7 @@ func newChatEnv(t *testing.T, llmURL string) *chatEnv {
 	_, err = database.Migrate(ctx, pool, migrations.FS)
 	require.NoError(t, err)
 
-	// Снимок прогресса Анны и метка времени: после теста все возвращаем как было.
+	// Снимок прогресса Марии и метка времени: после теста все возвращаем как было.
 	start := time.Now()
 	var snapshot []byte
 	require.NoError(t, pool.QueryRow(ctx, `
@@ -145,7 +146,7 @@ func TestAccessScenarioEndToEnd(t *testing.T) {
 		"Проект":       "backend / auth-service",
 		"Уровень прав": "редактирование (Developer)",
 		"Обоснование":  "Нужен для задачи «Получить доступ к GitLab»",
-		"Согласует":    "Олег, владелец проекта",
+		"Согласует":    "Артемий, владелец проекта",
 	}, fieldsMap(card.Fields))
 
 	// Черновик не виден на странице «Заявки» и ничего не меняет в пути.
@@ -186,7 +187,7 @@ func TestAccessScenarioEndToEnd(t *testing.T) {
 	require.Equal(t, res.Number, list[0].Number)
 	assert.Equal(t, "waiting", list[0].Status)
 	assert.Equal(t, "now", list[0].History[len(list[0].History)-1].State)
-	assert.Contains(t, list[0].History[len(list[0].History)-1].Title, "Олег, владелец проекта")
+	assert.Contains(t, list[0].History[len(list[0].History)-1].Title, "Артемий, владелец проекта")
 
 	// 3. Согласующий одобрил: доступ выдан, пункт пути закрыт, стажер получил сообщение.
 	ref := externalRef(t, e, res.RequestID)
@@ -199,7 +200,7 @@ func TestAccessScenarioEndToEnd(t *testing.T) {
 	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/requests", nil, &list))
 	assert.Equal(t, "done", list[0].Status)
 	assert.Equal(t, "Доступ выдан", list[0].History[len(list[0].History)-1].Title)
-	assert.Equal(t, "Олег, владелец проекта", fieldsMap(list[0].Fields)["Согласовал"])
+	assert.Equal(t, "Артемий, владелец проекта", fieldsMap(list[0].Fields)["Согласовал"])
 	assert.Equal(t, "done", taskStatus(t, e, gitlabTask).Status)
 
 	var hist models.ChatReply
@@ -302,13 +303,15 @@ func TestAssistantAnswersAndLimits(t *testing.T) {
 
 	// Передать вопрос наставнику.
 	msgs = e.say("intern_anna", map[string]any{"text": "передай наставнику: можно брать задачи из чужого спринта?"})
-	assert.Contains(t, msgs[0].Text, "Игорь ответит")
+	assert.Contains(t, msgs[0].Text, "Передать Игорю вопрос в таком виде?\n«можно брать задачи из чужого спринта?»", "сначала показываем, что уйдет")
+	msgs = e.say("intern_anna", map[string]any{"text": "да"})
+	assert.Contains(t, msgs[0].Text, "Передал Игорю вопрос: «можно брать задачи из чужого спринта?»")
 	pool := testPool(t)
 	var n int
 	require.NoError(t, pool.QueryRow(context.Background(), `
 		SELECT count(*) FROM handoffs h JOIN messages m ON m.id = h.forwarded_id
-		WHERE m.text LIKE '%чужого спринта%'`).Scan(&n))
-	assert.Equal(t, 1, n)
+		WHERE m.text = 'можно брать задачи из чужого спринта?'`).Scan(&n))
+	assert.Equal(t, 1, n, "наставнику уходит сам вопрос, без «передай наставнику:»")
 
 	// Ответ по статье и действие «открыть статью».
 	msgs = e.say("intern_anna", map[string]any{
@@ -352,7 +355,7 @@ func TestLeaveRequestAndCancel(t *testing.T) {
 	f := fieldsMap(card.Fields)
 	assert.True(t, strings.HasPrefix(f["Дата"], fmt.Sprintf("%d ", workday.Day())), f["Дата"])
 	assert.Equal(t, "отгул за свой счет", f["Тип"])
-	assert.Equal(t, "Олег, руководитель", f["Согласует"])
+	assert.Equal(t, "Артемий, руководитель", f["Согласует"])
 	require.NotNil(t, msgs[0].Source)
 	assert.Contains(t, msgs[0].Source.Title, "отгул")
 
@@ -446,7 +449,7 @@ func TestMentorAnswerVisibility(t *testing.T) {
 	assert.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/kb/articles/"+article, nil, nil))
 	assert.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodGet, "/api/kb/articles/"+article, nil, nil))
 
-	// Ответ другого наставника той же команды Анна не видит, руководитель – видит.
+	// Ответ другого наставника той же команды Мария не видит, руководитель – видит.
 	_, err := pool.Exec(context.Background(), `
 		INSERT INTO users (id, login, password_hash, name, role, team_id)
 		VALUES ($1, 'mentor_test_other', 'x', 'Петр', 'mentor', '11111111-1111-4111-8111-111111111111')`, otherMentor)
@@ -477,7 +480,7 @@ func TestNextStepUsesChatState(t *testing.T) {
 	next := e.say("intern_anna", map[string]any{"text": "что делать сейчас?"})
 	require.Len(t, next, 1)
 	assert.Contains(t, next[0].Text, "Подтвердить")
-	assert.Contains(t, next[0].Text, "Олег")
+	assert.Contains(t, next[0].Text, "Артемий")
 	assert.Nil(t, next[0].Confirm)
 
 	// Повторная просьба, пока карточка не подтверждена, вторую карточку не создает.
@@ -509,7 +512,7 @@ func TestAssistantIntents(t *testing.T) {
 	who := e.say("intern_anna", map[string]any{"text": "Кто мой наставник?"})
 	require.Len(t, who, 1)
 	assert.Contains(t, who[0].Text, "Игорь")
-	assert.Contains(t, who[0].Text, "Олег")
+	assert.Contains(t, who[0].Text, "Артемий")
 	assert.Contains(t, who[0].Text, "Чат с наставником")
 	pavelWho := e.say("intern_pavel", map[string]any{"text": "кто у меня руководитель"})
 	assert.Contains(t, pavelWho[0].Text, "не назначили")
@@ -552,15 +555,22 @@ func TestAssistantIntents(t *testing.T) {
 	assert.Contains(t, list[0].Text, "№")
 
 	handoff := e.say("intern_anna", map[string]any{"text": "Хочу поговорить с наставником"})
-	assert.Contains(t, handoff[0].Text, "Игорь")
+	assert.Contains(t, handoff[0].Text, "Игорю")
 	assert.Equal(t, "mentor", handoff[0].Mood)
+
+	// Оборудование без предмета: помощник спрашивает, что именно, и перечисляет каталог отдела.
+	help := e.say("intern_anna", map[string]any{"text": "нужна заявка на оборудование"})
+	assert.Contains(t, help[0].Text, "ноутбук")
+	assert.Contains(t, help[0].Text, "другое оборудование")
+	dock := confirmOf(t, e.say("intern_anna", map[string]any{"text": "нужна док-станция"}))
+	assert.Equal(t, "Другое оборудование", fieldsMap(dock.Fields)["Что нужно"])
 }
 
 // С настоящей моделью: в запрос уходят история и неподтвержденная карточка, пояснение к карточке
 // формулирует модель, но без фактов backend ее текст отбрасывается.
 func TestModelGetsHistoryAndDraft(t *testing.T) {
 	var bodies []string
-	paraphrase := "Доступ к GitLab согласует Олег, обычно до 24 ч."
+	paraphrase := "Доступ к GitLab согласует Артемий, обычно до 24 ч."
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
 		body := string(raw)
@@ -597,7 +607,7 @@ func TestModelGetsHistoryAndDraft(t *testing.T) {
 	// Пересказ с чужими фактами не проходит: остается текст backend.
 	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/chat/actions/"+confirmOf(t, msgs).ActionID+"/cancel", nil, nil))
 	msgs = e.say("intern_anna", map[string]any{"text": "выдумай и оформи доступ к GitLab"})
-	assert.Contains(t, msgs[0].Text, "Олег")
+	assert.Contains(t, msgs[0].Text, "Артемий")
 	assert.NotContains(t, msgs[0].Text, "Петр")
 }
 
@@ -629,7 +639,7 @@ func TestServiceRequestToDepartment(t *testing.T) {
 	var note string
 	require.NoError(t, testPool(t).QueryRow(context.Background(), `
 		SELECT text FROM notifications WHERE user_id = 'aaaaaaaa-0000-4000-8000-000000000002' AND request_id = $1`, res.RequestID).Scan(&note))
-	assert.Contains(t, note, "Анна: заявка №"+res.Number)
+	assert.Contains(t, note, "Мария: заявка №"+res.Number)
 	ref := externalRef(t, e, res.RequestID)
 	assert.True(t, strings.HasPrefix(ref, "SD-"), ref)
 
@@ -808,6 +818,7 @@ func TestChatDialogsHistory(t *testing.T) {
 
 	// Диалог с передачей наставнику.
 	e.say("intern_anna", map[string]any{"text": "передай наставнику: как попасть на демо?"})
+	e.say("intern_anna", map[string]any{"text": "да"})
 	reset()
 	assert.Equal(t, "handoff", dialogs("intern_anna")[1].Kind)
 	assert.Equal(t, "Передано наставнику", dialogs("intern_anna")[1].Preview)
@@ -819,4 +830,116 @@ func TestChatDialogsHistory(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, e.call("intern_pavel", http.MethodGet, "/api/chat/dialogs/"+past.ID+"/messages", nil, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("intern_anna", http.MethodGet, "/api/chat/dialogs/missing/messages", nil, nil))
 	assert.Equal(t, http.StatusForbidden, e.call("mentor_igor", http.MethodGet, "/api/chat/dialogs", nil, nil))
+}
+
+// Модель пишет «передал» или «создам заявку», но инструмент не вызывает. Помощник не должен
+// обманывать: вопрос уходит наставнику на самом деле, а заявка готовится повторным вызовом модели.
+func TestModelClaimsActionWithoutTool(t *testing.T) {
+	var mu sync.Mutex
+	var bodies []string
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body := string(raw)
+		mu.Lock()
+		bodies = append(bodies, body)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		text := func(s string) {
+			out, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": s}}}})
+			_, _ = w.Write(out)
+		}
+		var req struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		last := req.Messages[len(req.Messages)-1]
+		lastUser := ""
+		for _, m := range req.Messages {
+			if m.Role == "user" {
+				lastUser = m.Content
+			}
+		}
+		switch {
+		case strings.Contains(body, "Перескажи"):
+			text("ok")
+		case strings.Contains(body, "Сформулируй вопрос стажера"):
+			text("В справочнике этого нет, могу передать наставнику.") // плохой ответ модели – отбрасывается
+		case last.Role == "system" && strings.Contains(lastUser, "GitLab"):
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c2","type":"function","function":{"name":"prepare_access_request","arguments":"{\\"resource\\":\\"GitLab\\",\\"access_level\\":\\"read\\"}"}}]}}]}`))
+		case last.Role == "system":
+			text("Я передал наставнику твой вопрос.")
+		case strings.Contains(lastUser, "GitLab"):
+			text("Сейчас создам заявку на доступ к GitLab, после этого подтвердишь ее.")
+		case strings.Contains(lastUser, "работать месяц из другого"):
+			text("В справочнике этого нет. Могу передать вопрос наставнику?")
+		default:
+			text("Я передал наставнику Игорю твой вопрос, он ответит здесь же.")
+		}
+	}))
+	defer fake.Close()
+	e := newChatEnv(t, fake.URL)
+	pool := testPool(t)
+	forwarded := func() []string {
+		rows, err := pool.Query(context.Background(), `
+			SELECT m.text FROM handoffs h JOIN messages m ON m.id = h.forwarded_id
+			WHERE m.created_at > now() - interval '1 minute' ORDER BY m.created_at`)
+		require.NoError(t, err)
+		defer rows.Close()
+		var out []string
+		for rows.Next() {
+			var s string
+			require.NoError(t, rows.Scan(&s))
+			out = append(out, s)
+		}
+		return out
+	}
+
+	lastOf := func(l []string) string {
+		require.NotEmpty(t, l)
+		return l[len(l)-1]
+	}
+
+	// 1. Помощник предлагает передать, стажер отвечает «давай» – сначала видит формулировку, потом «да».
+	e.say("intern_anna", map[string]any{"text": "можно ли работать месяц из другого города?"})
+	msgs := e.say("intern_anna", map[string]any{"text": "давай"})
+	assert.Contains(t, msgs[0].Text, "в таком виде?\n«можно ли работать месяц из другого города?»")
+	assert.Empty(t, forwarded(), "без согласия ничего не уходит")
+	msgs = e.say("intern_anna", map[string]any{"text": "да"})
+	assert.Contains(t, msgs[0].Text, "Передал Игорю вопрос")
+	assert.Equal(t, []string{"можно ли работать месяц из другого города?"}, forwarded())
+
+	// 1б. «ну что?» вопросом не считается; на «нет» ничего не уходит.
+	e.say("intern_anna", map[string]any{"text": "можно ли работать месяц из другого города летом?"})
+	msgs = e.say("intern_anna", map[string]any{"text": "ну что?"})
+	assert.Contains(t, msgs[0].Text, "«можно ли работать месяц из другого города летом?»")
+	msgs = e.say("intern_anna", map[string]any{"text": "нет"})
+	assert.Contains(t, msgs[0].Text, "не передаю")
+	assert.Len(t, forwarded(), 1)
+
+	// 2. Точная формулировка в кавычках – согласие сразу.
+	e.say("intern_anna", map[string]any{"text": `передай ему вопрос "почему у меня заявка об отгуле на согласовании"`})
+	assert.Equal(t, "почему у меня заявка об отгуле на согласовании", lastOf(forwarded()))
+
+	// 3. Модель пишет «передал» без инструмента – вместо этого предложение; стажер правит формулировку.
+	msgs = e.say("intern_anna", map[string]any{"text": "как мне сдать отчет о практике в вуз"})
+	assert.Contains(t, msgs[0].Text, "в таком виде")
+	msgs = e.say("intern_anna", map[string]any{"text": "лучше так: Как оформить отчет о практике для вуза?"})
+	assert.Contains(t, msgs[0].Text, "«Как оформить отчет о практике для вуза?»")
+	e.say("intern_anna", map[string]any{"text": "да"})
+	assert.Equal(t, "Как оформить отчет о практике для вуза?", lastOf(forwarded()))
+
+	// 4. «Сейчас создам заявку» без инструмента: повторный вызов модели готовит карточку.
+	msgs = e.say("intern_anna", map[string]any{"text": "нужен доступ к GitLab для первого проекта"})
+	card := confirmOf(t, msgs)
+	assert.Equal(t, "GitLab", fieldsMap(card.Fields)["Ресурс"])
+
+	// 5. Стиль ответа из настроек доходит до модели.
+	e.say("intern_anna", map[string]any{"text": "что такое спринт", "style": "short"})
+	mu.Lock()
+	all := strings.Join(bodies, "\n")
+	mu.Unlock()
+	assert.Contains(t, all, "отвечать коротко")
 }

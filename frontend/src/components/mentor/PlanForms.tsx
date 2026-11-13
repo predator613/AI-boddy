@@ -133,6 +133,7 @@ export function TaskModal({
 const StageForm = z.object({
   title: z.string().trim().min(1, 'Введи название').max(80, 'Не длиннее 80 символов'),
   tip: z.string().max(300, 'Не длиннее 300 символов'),
+  period: z.string().max(40, 'Не длиннее 40 символов'),
   color: z.string(),
 })
 type TStageForm = z.infer<typeof StageForm>
@@ -147,18 +148,28 @@ interface StageModalProps {
 
 export function StageModal({ opened, busy, error, onClose, onSubmit }: StageModalProps) {
   const form = useForm<TStageForm>({
-    initialValues: { title: '', tip: '', color: SWATCHES[0]!.hex },
+    initialValues: { title: '', tip: '', period: '', color: SWATCHES[0]!.hex },
     validate: zod4Resolver(StageForm),
   })
   return (
     <Modal opened={opened} onClose={onClose} title="Новый этап" centered radius="lg">
-      <form onSubmit={form.onSubmit((v) => onSubmit({ ...v, title: v.title.trim() }))} noValidate>
+      <form
+        onSubmit={form.onSubmit((v) =>
+          onSubmit({ ...v, title: v.title.trim(), period: v.period.trim() }),
+        )}
+        noValidate
+      >
         <Stack gap="sm">
           <TextInput
             label="Название этапа"
             placeholder="Например, «Итоги стажировки»"
             data-autofocus
             {...form.getInputProps('title')}
+          />
+          <TextInput
+            label="Когда проходит"
+            placeholder="Например, «неделя 1» или «месяцы 1–2»"
+            {...form.getInputProps('period')}
           />
           <div>
             <Text size="sm" fw={500} mb={6}>

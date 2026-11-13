@@ -66,7 +66,7 @@ func TestMyPathForAnna(t *testing.T) {
 	e := newEnv(t)
 	v := e.path("intern_anna")
 
-	assert.Equal(t, "Анна", v.Intern.Name)
+	assert.Equal(t, "Мария", v.Intern.Name)
 	require.NotNil(t, v.Intern.Mentor)
 	assert.Equal(t, "Игорь", v.Intern.Mentor.Name)
 	assert.Equal(t, 24, v.Week.Total)
@@ -85,7 +85,7 @@ func TestPathPermissions(t *testing.T) {
 	e := newEnv(t)
 	var list []models.InternSummary
 
-	// Павел (другая команда) не видит Анну и консоль.
+	// Павел (другая команда) не видит Марию и консоль.
 	assert.Equal(t, http.StatusNotFound, e.call("intern_pavel", http.MethodGet, "/api/interns/"+annaID+"/path", nil, nil))
 	assert.Equal(t, http.StatusForbidden, e.call("intern_pavel", http.MethodGet, "/api/interns", nil, nil))
 	assert.Equal(t, http.StatusForbidden, e.call("intern_pavel", http.MethodGet, "/api/console/templates", nil, nil))
@@ -98,7 +98,7 @@ func TestPathPermissions(t *testing.T) {
 	assert.Equal(t, "Frontend", pv.Intern.TeamName)
 	assert.Nil(t, pv.Intern.Mentor)
 
-	// Игорь видит своих стажеров (Анна, Дмитрий, Лиза), Павла – нет.
+	// Игорь видит своих стажеров (Мария, Дмитрий, Лиза), Павла – нет.
 	require.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodGet, "/api/interns", nil, &list))
 	require.Len(t, list, 3)
 	byLogin := map[string]models.InternSummary{}
@@ -117,7 +117,7 @@ func TestPathPermissions(t *testing.T) {
 	// Стажер не может «завершить» задачу как наставник.
 	assert.Equal(t, http.StatusForbidden, e.call("mentor_igor", http.MethodPost, "/api/path/tasks/"+envTask+"/complete", nil, nil))
 
-	// Олег видит стажеров своей команды.
+	// Артемий видит стажеров своей команды.
 	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodGet, "/api/interns", nil, &list))
 	assert.Len(t, list, 3)
 
@@ -157,7 +157,7 @@ func TestInternCompletesTaskAndMentorChangesStatus(t *testing.T) {
 		map[string]any{"status": "done", "note": long + "x"}, nil))
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPut, "/api/interns/"+annaID+"/tasks/"+envTask,
 		"not an object", nil))
-	// Задача команды Frontend Анне не принадлежит.
+	// Задача команды Frontend Марии не принадлежит.
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodPut, "/api/interns/"+annaID+"/tasks/b7000000-0000-4000-8000-000000001201",
 		map[string]string{"status": "done"}, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("intern_anna", http.MethodPost, "/api/path/tasks/not-a-task/complete", nil, nil))
@@ -273,8 +273,8 @@ func TestConsoleTemplatesLifecycle(t *testing.T) {
 	// Карточка «человек» ссылается на сотрудника команды по имени; чужого имени нет – 400.
 	var person models.ResourceTemplate
 	require.Equal(t, http.StatusCreated, e.call("mentor_igor", http.MethodPost, "/api/console/stages/"+st.ID+"/resources",
-		map[string]any{"kind": "person", "name": "Олег", "note": "руководитель"}, &person))
-	assert.Equal(t, "Олег", person.Name)
+		map[string]any{"kind": "person", "name": "Артемий", "note": "руководитель"}, &person))
+	assert.Equal(t, "Артемий", person.Name)
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, "/api/console/stages/"+st.ID+"/resources",
 		map[string]any{"kind": "person", "name": "Нина"}, nil), "Нина из другой команды")
 	assert.Equal(t, http.StatusNoContent, e.call("mentor_igor", http.MethodDelete, "/api/console/resources/"+person.ID, nil, nil))
@@ -293,7 +293,7 @@ func TestConsoleTemplatesLifecycle(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, "/api/console/stages/"+st.ID+"/resources", body, nil), name)
 	}
 
-	// Анна видит новый этап с задачей и карточкой.
+	// Мария видит новый этап с задачей и карточкой.
 	v := e.path("intern_anna")
 	last := v.Stages[len(v.Stages)-1]
 	assert.Equal(t, "Итоги стажировки", last.Title)

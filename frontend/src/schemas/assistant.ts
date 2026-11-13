@@ -61,6 +61,8 @@ export const SendMessageInput = z.object({
   action: Action.nullable().default(null),
   // Задача «Моего пути», из которой пришел вопрос: backend закроет ее, когда заявка выполнится.
   taskId: z.string().nullable().optional(),
+  // «Как отвечать» из профиля: помощник подстраивает длину ответа.
+  style: z.enum(['short', 'normal', 'detailed']).optional(),
 })
 
 export const KbSection = z.object({

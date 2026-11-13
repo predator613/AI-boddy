@@ -6,7 +6,7 @@ interface ToastState {
   hide: () => void
 }
 
-// Короткое уведомление внизу экрана («Анна получит уведомление»).
+// Короткое уведомление внизу экрана («Мария получит уведомление»).
 export const useToastStore = create<ToastState>((set) => ({
   text: null,
   show: (text) => set({ text }),

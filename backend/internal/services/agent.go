@@ -55,6 +55,8 @@ type SendInput struct {
 	Text   string         `json:"text"`
 	Action *models.Action `json:"action"`
 	TaskID *string        `json:"taskId"`
+	// Style – «Как отвечать» из настроек стажера: short | normal | detailed.
+	Style string `json:"style"`
 }
 
 // Agent – помощник стажера.
@@ -108,6 +110,8 @@ type turn struct {
 	// replaced – старая карточка заменена новой (стажер поменял поля), dropped – убрана карточка другой заявки.
 	replaced bool
 	dropped  string
+	// style – «Как отвечать» из настроек стажера.
+	style string
 }
 
 // ---------- публичные методы ----------
@@ -128,7 +132,7 @@ func (a *Agent) Send(ctx context.Context, viewerID string, in SendInput) (*model
 	if err != nil {
 		return nil, err
 	}
-	t.questionID, t.question = qid, text
+	t.questionID, t.question, t.style = qid, text, in.Style
 	if err := a.loadContext(ctx, t); err != nil {
 		return nil, err
 	}
@@ -346,9 +350,24 @@ func (a *Agent) systemPrompt(t *turn) string {
 – без markdown: не используй звездочки, решетки и таблицы.
 
 Инструменты: search_kb – вопросы о работе и процессах; prepare_access_request – доступ к сервисам (GitLab, стенд, вики, трекер); prepare_service_request – заявка в отдел (техника, VPN, пароли, справки, отпуск, выплаты); prepare_leave_request – отгул; list_requests – статус заявок; handoff_to_mentor – передать вопрос наставнику.
-Заявка создается только после того, как стажер нажмет «Подтвердить» в карточке.`,
+Заявка создается только после того, как стажер нажмет «Подтвердить» в карточке.
+Никогда не пиши «передал», «создал», «подготовлю», «оформлю», если не вызываешь инструмент в этом же ответе:
+действие происходит только через инструмент. Если стажер согласился («да», «давай») на твое предложение
+оформить заявку или передать вопрос, сразу вызови нужный инструмент с данными из переписки.
+В handoff_to_mentor в поле question передавай сам вопрос стажера целиком, а не его последнюю реплику.`,
 		dayMonth(a.now().In(moscow))+", "+weekday(a.now().In(moscow)), t.viewer.Name, t.viewer.TeamName, a.peopleNote(t)) +
-		nextNote(t.next) + draftNote(t.draft)
+		nextNote(t.next) + draftNote(t.draft) + styleNote(t.style)
+}
+
+// styleNote – длина ответа по настройке «Как отвечать».
+func styleNote(style string) string {
+	switch style {
+	case "short":
+		return "\nСтажер просит отвечать коротко: 1–2 предложения, без списков."
+	case "detailed":
+		return "\nСтажер просит отвечать подробно: объясни, почему так, и распиши шаги, до 8–10 предложений."
+	}
+	return ""
 }
 
 // peopleNote – кто вокруг стажера: имена только из связей в базе.
@@ -457,9 +476,57 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 			return err
 		}
 	}
+	// Передача вопроса наставнику – без модели: стажер сначала видит, что именно уйдет, и соглашается.
+	switch intent, q := a.handoffIntent(t, text); intent {
+	case handoffSend:
+		return a.handoff(ctx, t, q)
+	case handoffOffer:
+		return a.offerHandoff(ctx, t, q)
+	case handoffDecline:
+		return a.say(ctx, t, "text", "Хорошо, не передаю. Если передумаешь, напиши «передай наставнику».", "calm", nil)
+	}
+	// «Нужно оборудование» без конкретного предмета: уточняем, что именно, по каталогу отдела.
+	if reNeed.MatchString(low) {
+		_, err := a.reqs.ResolveItem(ctx, text)
+		switch {
+		case errors.Is(err, repository.ErrNotFound) && reServiceAsk.MatchString(low):
+			if done, err := a.departmentHelp(ctx, t, low); done {
+				return err
+			}
+		case err == nil && a.isMock():
+			// без модели предмет из каталога («нужна док-станция») сразу идет в заявку
+			return a.prepareService(ctx, t, text, "")
+		}
+	}
 	msgs := append([]llm.Message{{Role: "system", Content: a.systemPrompt(t)}}, t.history...)
 	msgs = append(msgs, llm.Message{Role: "user", Content: text})
 	resp := a.ask(ctx, t, llm.Request{Messages: msgs, Tools: agentTools})
+	if len(resp.ToolCalls) == 0 && !a.isMock() && reClaim.MatchString(resp.Content) {
+		// Модель пообещала действие, но инструмент не вызвала: просим еще раз.
+		retry := append(append([]llm.Message{}, msgs...),
+			llm.Message{Role: "assistant", Content: resp.Content},
+			llm.Message{Role: "system", Content: "Ты написал о действии, но не вызвал инструмент, поэтому ничего не произошло. " +
+				"Если стажер просит заявку или передать вопрос, вызови нужный инструмент сейчас с данными из переписки. " +
+				"Если данных не хватает, задай один уточняющий вопрос и не обещай действие."})
+		resp = a.ask(ctx, t, llm.Request{Messages: retry, Tools: agentTools})
+		if len(resp.ToolCalls) == 0 && reClaim.MatchString(resp.Content) {
+			if reClaimHandoff.MatchString(resp.Content) {
+				return a.offerHandoff(ctx, t, "")
+			}
+			return a.say(ctx, t, "text", "Карточку заявки подготовить не получилось. Напиши одной фразой, что нужно, например: «доступ к GitLab на чтение» или «отгул 20 ноября».", "think", nil)
+		}
+	}
+	return a.dispatch(ctx, t, msgs, resp, text)
+}
+
+// reClaim – модель пишет, что сделала или сделает действие (передать, создать, оформить).
+var reClaim = regexp.MustCompile(`(?i)передал|передам|передаю|подготовлю|подготовил|созда(м|л|ю)|оформлю|оформил|отправлю|отправил|заявка готова|все готово|посмотрю|проверю|проверим|поищу|вернусь`)
+
+// reClaimHandoff – обещание передать вопрос человеку.
+var reClaimHandoff = regexp.MustCompile(`(?i)передал|передам|передаю`)
+
+// dispatch – ответ модели: текст или вызов инструмента.
+func (a *Agent) dispatch(ctx context.Context, t *turn, msgs []llm.Message, resp llm.Response, text string) error {
 	if len(resp.ToolCalls) == 0 {
 		if resp.Content == "" {
 			return a.noAnswer(ctx, t)
@@ -488,9 +555,204 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 	case "list_requests":
 		return a.listRequests(ctx, t, args["number"])
 	case "handoff_to_mentor":
-		return a.handoff(ctx, t)
+		return a.offerHandoff(ctx, t, args["question"])
 	}
 	return a.noAnswer(ctx, t)
+}
+
+// reHandoffAsk – стажер прямо просит передать вопрос человеку.
+var reHandoffAsk = regexp.MustCompile(`(?i)(передай|перешли|отправь|спроси)\s+(\S+\s+)?(наставник|ментор|ему|ей|игор|руководител|человек)|^передай(\s|$)|позови (наставника|человека)`)
+
+// reCommandLead – «передай наставнику:» в начале сообщения: наставнику уходит только вопрос.
+var reCommandLead = regexp.MustCompile(`(?i)^(пожалуйста,?\s*)?(передай|перешли|отправь|спроси)\s+(у\s+)?(наставник\S*|ментор\S*|ему|ей|игор\S*|руководител\S*)\s*(вопрос\S*)?\s*[:,–-]?\s*`)
+
+// reAgree – короткое согласие на предложение помощника.
+var reAgree = regexp.MustCompile(`(?i)^(да|давай|ок|окей|ага|угу|конечно|хорошо|передай|го|можно|да,? передай|давай передай)[.!)\s]*$`)
+
+// reQuoted – вопрос в кавычках: «…» или "…".
+var reQuoted = regexp.MustCompile(`[«"“]([^»"”]{3,})[»"”]`)
+
+// Что делать с передачей вопроса наставнику.
+const (
+	handoffNone    = iota
+	handoffOffer   // показать, что уйдет, и спросить согласие
+	handoffSend    // стажер согласился или сам дал точную формулировку в кавычках
+	handoffDecline // стажер отказался
+)
+
+// offerMarker – по этой фразе в ответе помощника видно, что стажеру предложена формулировка.
+const offerMarker = "в таком виде"
+
+// reDecline – отказ от предложения передать.
+var reDecline = regexp.MustCompile(`(?i)^(нет|не надо|не нужно|не передавай|не стоит|отмена|передумал[а]?)[.!)\s]*$`)
+
+// reReword – стажер правит предложенную формулировку: «лучше так: …», «напиши: …».
+var reReword = regexp.MustCompile(`(?i)^(нет,?\s*)?(лучше|напиши|исправь|поправь|переформулируй|давай|вот)(\s+так)?(\s|:|,|$)[\s:,–-]*`)
+
+// handoffIntent – нужно ли передать вопрос без модели и какой именно вопрос.
+func (a *Agent) handoffIntent(t *turn, text string) (int, string) {
+	text = strings.TrimSpace(text)
+	var last llm.Message
+	if len(t.history) > 0 {
+		last = t.history[len(t.history)-1]
+	}
+	offered := last.Role == "assistant" && strings.Contains(last.Content, offerMarker)
+	if offered {
+		switch {
+		case reAgree.MatchString(text):
+			if m := reQuoted.FindStringSubmatch(last.Content); m != nil {
+				return handoffSend, strings.TrimSpace(m[1])
+			}
+		case reDecline.MatchString(text):
+			return handoffDecline, ""
+		case reReword.MatchString(text):
+			q := strings.TrimSpace(reReword.ReplaceAllString(text, ""))
+			if m := reQuoted.FindStringSubmatch(q); m != nil {
+				q = m[1]
+			}
+			if len(strings.Fields(q)) >= 3 {
+				return handoffOffer, "«" + strings.Trim(q, "«»\" ") + "»"
+			}
+		}
+	}
+	if reHandoffAsk.MatchString(text) {
+		// Точная формулировка в кавычках – это и есть согласие на текст.
+		if m := reQuoted.FindStringSubmatch(text); m != nil {
+			return handoffSend, strings.TrimSpace(m[1])
+		}
+		return handoffOffer, ""
+	}
+	if reAgree.MatchString(text) && last.Role == "assistant" {
+		low := strings.ToLower(last.Content)
+		if strings.Contains(low, "передать") && !strings.Contains(low, "[карточка") {
+			return handoffOffer, ""
+		}
+	}
+	return handoffNone, ""
+}
+
+// offerHandoff – показать стажеру, в каком виде вопрос уйдет наставнику, и дождаться «да».
+// Вопрос в «кавычках» (правка стажера) берется как есть, иначе модель приводит его к рабочему виду.
+func (a *Agent) offerHandoff(ctx context.Context, t *turn, fromModel string) error {
+	name := "наставнику"
+	if t.circle != nil && t.circle.Mentor != nil {
+		name = nameDative(t.circle.Mentor.Name)
+	} else if t.viewer.MentorID == nil {
+		if lead, err := a.reqs.TeamLead(ctx, t.viewer.TeamID); err == nil {
+			name = nameDative(lead.Name)
+		}
+	}
+	var q string
+	if strings.HasPrefix(fromModel, "«") {
+		q = strings.Trim(fromModel, "«»")
+	} else {
+		q = a.formalQuestion(ctx, t, handoffQuestion(t, fromModel))
+	}
+	return a.say(ctx, t, "text", fmt.Sprintf(
+		"Передать %s вопрос %s?\n«%s»\nНапиши «да», «нет» или поправь формулировку: «лучше так: …».",
+		name, offerMarker, clip(q, 400)), "mentor", nil)
+}
+
+// formalQuestion – вопрос наставнику в рабочем виде: вежливо, по делу, без сленга.
+// Если модель недоступна или ответ странный, остается вопрос стажера как есть.
+func (a *Agent) formalQuestion(ctx context.Context, t *turn, raw string) string {
+	if a.isMock() || strings.TrimSpace(raw) == "" {
+		return raw
+	}
+	var context []string
+	for _, m := range t.history {
+		if m.Role == "user" && !isCommand(m.Content) && !reReword.MatchString(m.Content) {
+			context = append(context, m.Content)
+		}
+	}
+	if len(context) > 3 {
+		context = context[len(context)-3:]
+	}
+	resp := a.ask(ctx, t, llm.Request{Messages: []llm.Message{
+		{Role: "system", Content: `Сформулируй вопрос стажера наставнику: вежливо, по делу, от первого лица, 1–2 предложения,
+без приветствия, подписи и сленга. Сохрани смысл, ничего не добавляй от себя. Верни только текст вопроса без кавычек.`},
+		{Role: "user", Content: "Последние сообщения стажера: " + strings.Join(context, " | ") + "\nВопрос: " + raw},
+	}})
+	out := strings.Trim(strings.TrimSpace(cleanText(resp.Content)), "«»\"")
+	// модель иногда отвечает на вопрос вместо того, чтобы переформулировать: тогда оставляем вопрос стажера
+	if out == "" || len([]rune(out)) > 400 || len(resp.ToolCalls) > 0 || reClaim.MatchString(out) ||
+		reNotQuestion.MatchString(out) {
+		return raw
+	}
+	return out
+}
+
+// reNotQuestion – признак, что модель ответила стажеру, а не переформулировала его вопрос.
+var reNotQuestion = regexp.MustCompile(`(?i)справочник|передать|наставник`)
+
+// reServiceAsk – стажеру что-то нужно от отдела (оборудование, ИТ, HR, бухгалтерия).
+var reServiceAsk = regexp.MustCompile(`оборудован|техник|железо|ит-поддержк|it-поддержк|айти|hr-поддержк|кадр|бухгалтер`)
+
+// reNeed – просьба что-то получить, а не вопрос «как устроено».
+var reNeed = regexp.MustCompile(`нужн|заказ|оформ|заявк|получить|выда|сломал|не работает`)
+
+// departmentHelp – предмет не назван: перечисляем, что можно заказать в нужном отделе.
+func (a *Agent) departmentHelp(ctx context.Context, t *turn, low string) (bool, error) {
+	code := ""
+	switch {
+	case regexp.MustCompile(`оборудован|техник|железо`).MatchString(low):
+		code = "equipment"
+	case regexp.MustCompile(`ит-поддержк|it-поддержк|айти`).MatchString(low):
+		code = "it_support"
+	case regexp.MustCompile(`hr-поддержк|кадр`).MatchString(low):
+		code = "hr"
+	case regexp.MustCompile(`бухгалтер`).MatchString(low):
+		code = "accounting"
+	}
+	deps, err := a.people.Departments(ctx)
+	if err != nil {
+		return true, err
+	}
+	for _, d := range deps {
+		if d.Code == code {
+			return true, a.say(ctx, t, "text", fmt.Sprintf(
+				"Что именно нужно? В «%s» можно заказать: %s. Напиши, например, «нужен монитор», и я подготовлю заявку.",
+				d.Title, strings.ToLower(d.Items)), "think", nil)
+		}
+	}
+	return false, nil
+}
+
+// handoffQuestion – что отправить наставнику: вопрос от модели, вопрос в кавычках или последний
+// содержательный вопрос стажера. Короткие «давай», «да», «передай наставнику» вопросом не считаются.
+func handoffQuestion(t *turn, fromModel string) string {
+	if q := strings.TrimSpace(fromModel); q != "" && !isCommand(q) {
+		return q
+	}
+	if m := reQuoted.FindStringSubmatch(t.question); m != nil {
+		return strings.TrimSpace(m[1])
+	}
+	if !isCommand(t.question) {
+		return strings.TrimSpace(reCommandLead.ReplaceAllString(t.question, ""))
+	}
+	for i := len(t.history) - 1; i >= 0; i-- {
+		if m := t.history[i]; m.Role == "user" && !isCommand(m.Content) {
+			if q := reQuoted.FindStringSubmatch(m.Content); q != nil {
+				return strings.TrimSpace(q[1])
+			}
+			return strings.TrimSpace(m.Content)
+		}
+	}
+	return t.question
+}
+
+// isCommand – реплика без самого вопроса: согласие, просьба передать или короткое «ну что?».
+func isCommand(s string) bool {
+	s = strings.TrimSpace(s)
+	if reAgree.MatchString(s) || len(strings.Fields(s)) < 3 {
+		return true
+	}
+	if !reHandoffAsk.MatchString(s) || reQuoted.MatchString(s) {
+		return false
+	}
+	// «передай наставнику» без вопроса: после команды почти ничего не остается
+	rest := reHandoffAsk.ReplaceAllString(s, "")
+	return len([]rune(strings.Trim(rest, " .,!?:–-"))) < 12
 }
 
 // runAction – кнопка «Сделать с AI-buddy» у задачи пути: действие известно заранее.
@@ -829,7 +1091,8 @@ func (a *Agent) listRequests(ctx context.Context, t *turn, number string) error 
 }
 
 // handoff – передать вопрос наставнику (нет наставника – руководителю).
-func (a *Agent) handoff(ctx context.Context, t *turn) error {
+func (a *Agent) handoff(ctx context.Context, t *turn, agreed string) error {
+	question := handoffQuestion(t, agreed)
 	to := t.viewer.MentorID
 	name := "наставник"
 	if to != nil {
@@ -842,11 +1105,11 @@ func (a *Agent) handoff(ctx context.Context, t *turn) error {
 	if to == nil {
 		return a.say(ctx, t, "error", "Не нашел, кому передать вопрос: у тебя пока нет наставника и руководителя в системе.", "sad", nil)
 	}
-	if err := a.chat.Handoff(ctx, t.questionID, t.viewer.ID, *to, t.question); err != nil {
+	if err := a.chat.Handoff(ctx, t.questionID, t.viewer.ID, *to, question); err != nil {
 		return err
 	}
 	a.logCall(ctx, t.conv, "buddy", "handoff", map[string]string{"to": *to}, "ok", nil, a.now())
-	return a.say(ctx, t, "text", a.phrase(ctx, t, fmt.Sprintf("Передал вопрос: %s ответит здесь же, обычно в течение дня.", name)), "mentor", nil)
+	return a.say(ctx, t, "text", fmt.Sprintf("Передал %s вопрос: «%s». Ответ придет сюда и в «Чат с наставником», обычно в течение дня.", nameDative(name), clip(question, 160)), "mentor", nil)
 }
 
 // reNextStep – вопрос «что делать дальше?» без подробностей: ответ зависит от состояния чата.
@@ -1188,4 +1451,29 @@ func deref(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// nameDative – «Игорю», «Артемию», «Марии», «наставнику»: кому передан вопрос.
+func nameDative(name string) string {
+	r := []rune(name)
+	if len(r) < 2 {
+		return name
+	}
+	last := string(r[len(r)-1])
+	stem := string(r[:len(r)-1])
+	switch last {
+	case "ь", "й":
+		return stem + "ю"
+	case "я":
+		if strings.HasSuffix(stem, "и") {
+			return stem + "и"
+		}
+		return stem + "е"
+	case "а":
+		return stem + "е"
+	}
+	if strings.ContainsAny(last, "бвгджзклмнпрстфхцчшщ") {
+		return name + "у"
+	}
+	return name
 }

@@ -64,25 +64,18 @@ function seedThreads(): Record<string, ThreadState> {
   return {
     'u-anna': {
       internId: 'u-anna',
-      internName: 'Анна',
+      internName: 'Мария',
       mentor: MENTOR,
       stageCode: '02',
       stageTitle: 'Доступы',
       unread: 2,
       messages: [
-        m(
-          'a1',
-          'handoff',
-          'buddy',
-          'AI-buddy',
-          'AI-buddy передал Игорю вопрос «Как проходит код-ревью»',
-          ago(1500),
-        ),
+        m('a1', 'handoff', 'buddy', 'AI-buddy', 'Как проходит код-ревью?', ago(1500)),
         m(
           'a2',
           'text',
           'intern',
-          'Анна',
+          'Мария',
           'Как у вас проходит код-ревью? В справочнике не нашла',
           ago(1499),
         ),
@@ -106,14 +99,14 @@ function seedThreads(): Record<string, ThreadState> {
           'handoff',
           'buddy',
           'AI-buddy',
-          'AI-buddy передал Игорю вопрос про роль в GitLab',
+          'Какую роль просить в GitLab, Developer или Reporter?',
           ago(40),
         ),
         m(
           'a6',
           'text',
           'intern',
-          'Анна',
+          'Мария',
           'Игорь, для GitLab нужна роль Developer или Maintainer?',
           ago(39),
         ),
@@ -121,7 +114,7 @@ function seedThreads(): Record<string, ThreadState> {
           'a7',
           'text',
           'intern',
-          'Анна',
+          'Мария',
           'И еще: тестовый стенд не согласуют уже 5 дней, это нормально?',
           ago(36),
         ),
@@ -147,14 +140,7 @@ function seedThreads(): Record<string, ThreadState> {
       stageTitle: 'Знакомство с командой',
       unread: 1,
       messages: [
-        m(
-          'l1',
-          'handoff',
-          'buddy',
-          'AI-buddy',
-          'AI-buddy передал Игорю вопрос про встречу 1:1',
-          ago(200),
-        ),
+        m('l1', 'handoff', 'buddy', 'AI-buddy', 'Когда будет первая встреча 1:1?', ago(200)),
         m('l2', 'text', 'intern', 'Лиза', 'Привет! Во сколько завтра встреча 1:1?', ago(199)),
       ],
     },
@@ -181,7 +167,7 @@ function seedMaterials(): TMaterial[] {
       kind: 'md',
       stageCode: '02',
       useInAi: true,
-      authorName: 'Олег',
+      authorName: 'Артемий',
       createdAt: '2026-10-30T10:00:00+03:00',
       sizeLabel: '1 мин',
     },
@@ -203,7 +189,7 @@ function seedMaterials(): TMaterial[] {
       kind: 'link',
       stageCode: null,
       useInAi: false,
-      authorName: 'Олег',
+      authorName: 'Артемий',
       createdAt: '2026-10-25T10:00:00+03:00',
       sizeLabel: 'видео',
     },
@@ -214,9 +200,9 @@ function seedMeetings(): TMentorMeeting[] {
   return [
     {
       id: 'mm-1',
-      title: '1:1 с Анной',
+      title: '1:1 с Марией',
       internId: 'u-anna',
-      withName: 'Анна',
+      withName: 'Мария',
       kind: 'one_on_one',
       startsAt: at(3, 15),
       durationMin: 60,
@@ -630,7 +616,7 @@ export const mentorHandlers = [
 ]
 
 // ---------- календарь стажера (docs/api-intern-calendar.md) ----------
-// Встречи берутся из расписания наставника (стажер Анна и общие), плюс прошедшие знакомства
+// Встречи берутся из расписания наставника (стажер Мария и общие), плюс прошедшие знакомства
 // и собственные записи стажера.
 
 type CalEvent = import('../schemas/calendar').TCalendarEvent
@@ -659,11 +645,11 @@ const FIXED: CalEvent[] = [
   },
   {
     id: 'ce-lead',
-    title: 'Цели стажировки с Олегом',
+    title: 'Цели стажировки с Артемием',
     kind: 'lead',
     startsAt: at(1, 12),
     durationMin: 30,
-    withName: 'Олег, руководитель',
+    withName: 'Артемий, руководитель',
     place: 'видеозвонок',
     note: 'Согласовали 3 цели от OKR команды. Они уже в «Моем пути».',
     status: 'accepted',
@@ -696,7 +682,7 @@ function calendarEvents(): CalEvent[] {
       const a = cal.answers[m.id]
       return {
         id: m.id,
-        title: m.internId ? m.title.replace('с Анной', 'с Игорем') : m.title,
+        title: m.internId ? m.title.replace('с Марией', 'с Игорем') : m.title,
         kind: m.kind === 'team' ? 'team' : 'mentor',
         startsAt: m.startsAt,
         durationMin: m.durationMin,
@@ -788,7 +774,7 @@ export const calendarHandlers = [
           kind: 'text',
           author: 'intern',
           authorName: t.internName,
-          text: `Можно перенести «${m.title.replace('с Анной', 'с тобой')}»? ${b.reason ?? ''}`.trim(),
+          text: `Можно перенести «${m.title.replace('с Марией', 'с тобой')}»? ${b.reason ?? ''}`.trim(),
           at: new Date().toISOString(),
           update: null,
         },

@@ -11,7 +11,7 @@ import { renderWithProviders } from './test-utils'
 describe('TestUserPicker', () => {
   it('показывает карточки тестовых пользователей с ролями', async () => {
     renderWithProviders(<TestUserPicker />)
-    expect(await screen.findByText('Анна')).toBeInTheDocument()
+    expect(await screen.findByText('Мария')).toBeInTheDocument()
     expect(screen.getByText('Павел')).toBeInTheDocument()
     expect(screen.getByText('Руководитель')).toBeInTheDocument()
   })
@@ -34,7 +34,7 @@ describe('TestUserPicker', () => {
       ),
     )
     renderWithProviders(<TestUserPicker />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Войти как Анна' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Войти как Мария' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Неверный логин или пароль')
   })
 

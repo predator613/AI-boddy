@@ -94,7 +94,7 @@ describe('Поддержка', () => {
     renderApp('/support')
     expect(await screen.findByText('Кому написать', {}, T)).toBeInTheDocument()
     expect(await screen.findByText('Игорь', {}, T)).toBeInTheDocument()
-    expect(screen.getByText('Олег')).toBeInTheDocument()
+    expect(screen.getByText('Артемий')).toBeInTheDocument()
     expect(screen.getByText('Отдел оборудования')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Какие данные видит AI-buddy?' }))
     expect(await screen.findByText(/Чужие заявки и личные данные/)).toBeInTheDocument()
@@ -167,7 +167,7 @@ describe('Наставник', () => {
 
   it('список стажеров и путь стажера со сменой статуса', async () => {
     renderApp('/')
-    await screen.findByRole('button', { name: /^Анна:/ }, T)
+    await screen.findByRole('button', { name: /^Мария:/ }, T)
     await userEvent.click(await screen.findByRole('link', { name: 'Весь путь' }, T))
     await userEvent.click(await screen.findByRole('button', { name: /Этап 02/ }, T))
     expect(screen.getByText(/как наставник/)).toBeInTheDocument()

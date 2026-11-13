@@ -55,7 +55,7 @@ func newStore(t *testing.T) *fakeStore {
 	require.NoError(t, err)
 	return &fakeStore{users: map[string]*models.UserWithPassword{
 		"intern_anna": {
-			User:         models.User{ID: "u-1", Login: "intern_anna", Name: "Анна", Role: models.RoleIntern},
+			User:         models.User{ID: "u-1", Login: "intern_anna", Name: "Мария", Role: models.RoleIntern},
 			PasswordHash: string(hash),
 		},
 	}}

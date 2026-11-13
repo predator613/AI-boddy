@@ -20,14 +20,14 @@ describe('маршруты', () => {
   it('стажер на / видит «Мой путь»', async () => {
     loginAs('intern_anna')
     renderApp('/')
-    expect(await greeting('Анна')).toBeInTheDocument()
+    expect(await greeting('Мария')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Мой путь' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('вошедшего пользователя /login отправляет на главную', async () => {
     loginAs('intern_anna')
     const router = renderApp('/login')
-    expect(await greeting('Анна')).toBeInTheDocument()
+    expect(await greeting('Мария')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/')
   })
 
@@ -43,7 +43,7 @@ describe('маршруты', () => {
 
   it('руководитель видит цели стажеров и согласования, а не «Мой путь»', async () => {
     renderApp('/login')
-    await userEvent.click(await screen.findByRole('button', { name: 'Войти как Олег' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Войти как Артемий' }))
     expect(await screen.findByRole('heading', { name: 'Цели стажеров' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Согласования' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Мои заявки' })).not.toBeInTheDocument()
@@ -53,7 +53,7 @@ describe('маршруты', () => {
   it('«Выйти» в меню профиля возвращает на /login', async () => {
     loginAs('intern_anna')
     const router = renderApp('/')
-    await greeting('Анна')
+    await greeting('Мария')
     // на медленном компьютере страница может перерисоваться и закрыть меню – открываем, пока не появится пункт
     const logout = await waitFor(
       async () => {
@@ -79,12 +79,12 @@ describe('маршруты', () => {
   it('данные пользователя обновляются ответом /me', async () => {
     server.use(
       http.get(`${API_URL}/api/auth/me`, () =>
-        HttpResponse.json({ ...mockUsers[0], name: 'Анна Н.' }),
+        HttpResponse.json({ ...mockUsers[0], name: 'Мария Н.' }),
       ),
     )
     loginAs('intern_anna')
     renderApp('/profile')
-    expect(await screen.findByText('Анна Н.')).toBeInTheDocument()
+    expect(await screen.findByText('Мария Н.')).toBeInTheDocument()
   })
 
   it('заявки недоступны наставнику: редирект на главную', async () => {

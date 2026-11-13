@@ -363,7 +363,7 @@ func actorKind(role string) string {
 	return "other"
 }
 
-// genitive – имя в родительном падеже: «цели Анны», «заявку Дмитрия».
+// genitive – имя в родительном падеже: «цели Марии», «заявку Дмитрия».
 func genitive(name string) string {
 	r := []rune(name)
 	if len(r) < 2 {

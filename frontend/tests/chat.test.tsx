@@ -18,7 +18,7 @@ describe('Чат', () => {
 
   it('пустой чат приветствует и предлагает вопросы', async () => {
     renderApp('/chat')
-    expect(await screen.findByText('Привет, Анна! С чего начнем?', {}, T)).toBeInTheDocument()
+    expect(await screen.findByText('Привет, Мария! С чего начнем?', {}, T)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Новый диалог' })).toBeDisabled()
   })
 
@@ -59,7 +59,7 @@ describe('Чат', () => {
     await send('Где взять печеньки?')
     expect(await screen.findByText(/Передать вопрос Игорю/, {}, T)).toBeInTheDocument()
     await send('Сколько ждать согласования?')
-    expect(await screen.findByText(/сам напомню Олегу/, {}, T)).toBeInTheDocument()
+    expect(await screen.findByText(/сам напомню Артемию/, {}, T)).toBeInTheDocument()
     await send('Какой следующий шаг?')
     expect(await screen.findByText(/Подготовить заявку\?/, {}, T)).toBeInTheDocument()
   })
@@ -93,7 +93,7 @@ describe('Чат', () => {
     renderApp('/chat?q=Кто мой наставник?')
     expect(await screen.findByText(/Твой наставник – Игорь/, {}, T)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Новый диалог' }))
-    expect(await screen.findByText('Привет, Анна! С чего начнем?', {}, T)).toBeInTheDocument()
+    expect(await screen.findByText('Привет, Мария! С чего начнем?', {}, T)).toBeInTheDocument()
     expect(screen.queryByText(/Твой наставник – Игорь/)).not.toBeInTheDocument()
   })
 
@@ -121,7 +121,9 @@ describe('история диалогов', () => {
     renderApp('/chat')
     const side = await screen.findByRole('complementary', { name: 'Диалоги' }, { timeout: 3000 })
     await userEvent.click(await within(side).findByRole('button', { name: /Отгул на 14 ноября/ }))
-    expect(await screen.findByText('Заявка на отгул создана, Олег ее одобрил.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Заявка на отгул создана, Артемий ее одобрил.'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Это прошлый диалог, он только для чтения.')).toBeInTheDocument()
     expect(screen.queryByLabelText('Сообщение')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Вернуться к текущему' }))
@@ -182,5 +184,23 @@ describe('карточка «Заявка создана» с ключом Jira'
       'href',
       'http://localhost:8090/browse/ACCESS-8001',
     )
+  })
+})
+
+describe('стиль ответа из профиля', () => {
+  it('уходит в запросе к помощнику', async () => {
+    const { useSettingsStore } = await import('../src/store/settingsStore')
+    let style: unknown
+    server.use(
+      http.post(`${API_URL}/api/chat/messages`, async ({ request }) => {
+        style = ((await request.json()) as { style?: string }).style
+        return HttpResponse.json({ messages: [] })
+      }),
+    )
+    loginAs('intern_anna')
+    useSettingsStore.getState().setAnswerStyle('short')
+    const { sendMessage } = await import('../src/api/assistant')
+    await sendMessage({ text: 'что такое спринт' })
+    expect(style).toBe('short')
   })
 })

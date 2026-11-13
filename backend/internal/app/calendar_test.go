@@ -27,7 +27,7 @@ func TestInternCalendar(t *testing.T) {
 		_, _ = pool.Exec(ctx, `DELETE FROM calendar_entries WHERE title LIKE 'test %'`)
 		_, _ = pool.Exec(ctx, `DELETE FROM meeting_answers WHERE meeting_id IN ($1, $2)`, annaOneOnOne, devopsIntro)
 		_, _ = pool.Exec(ctx, `DELETE FROM messages WHERE text LIKE 'Можно перенести%'`)
-		_, _ = pool.Exec(ctx, `DELETE FROM notifications WHERE kind = 'meetings' AND text LIKE 'Анна%'`)
+		_, _ = pool.Exec(ctx, `DELETE FROM notifications WHERE kind = 'meetings' AND text LIKE 'Мария%'`)
 	})
 	msk, _ := time.LoadLocation("Europe/Moscow")
 	var oneOnOne time.Time
@@ -137,7 +137,7 @@ func TestInternCalendar(t *testing.T) {
 	assert.Equal(t, "accepted", out.Status)
 	var n int
 	require.NoError(t, pool.QueryRow(t.Context(), `
-		SELECT count(*) FROM notifications WHERE user_id = 'aaaaaaaa-0000-4000-8000-000000000008' AND text = 'Анна придет на «Знакомство с DevOps»'`).Scan(&n))
+		SELECT count(*) FROM notifications WHERE user_id = 'aaaaaaaa-0000-4000-8000-000000000008' AND text = 'Мария придет на «Знакомство с DevOps»'`).Scan(&n))
 	assert.Equal(t, 1, n)
 
 	// «Попросить перенести» – сообщение в чат с наставником.

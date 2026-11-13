@@ -16,7 +16,7 @@ func ptr[T any](v T) *T { return &v }
 // Шаблон из двух этапов, как кусок макета.
 func sampleInput(now time.Time) pathInput {
 	return pathInput{
-		Intern:  models.User{ID: "anna", Name: "Анна", TeamName: "Backend", Role: models.RoleIntern},
+		Intern:  models.User{ID: "anna", Name: "Мария", TeamName: "Backend", Role: models.RoleIntern},
 		Mentor:  &models.PersonRef{ID: "igor", Name: "Игорь"},
 		Profile: models.InternProfile{StartDate: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), DurationWeeks: 24},
 		Now:     now,
@@ -33,7 +33,7 @@ func sampleInput(now time.Time) pathInput {
 				{ID: "r1", Kind: "access", Name: "Стенд", TaskID: ptr("t3")},
 				{ID: "r2", Kind: "access", Name: "GitLab", TaskID: ptr("t4")},
 				{ID: "r3", Kind: "access", Name: "Вики", TaskID: ptr("t5")},
-				{ID: "r4", Kind: "person", Name: "Олег", Tag: "Backend", TagKind: "none"},
+				{ID: "r4", Kind: "person", Name: "Артемий", Tag: "Backend", TagKind: "none"},
 			}},
 		},
 		Progress: map[string]models.TaskProgress{
@@ -76,7 +76,7 @@ func TestBuildPathLikeMockup(t *testing.T) {
 	assert.Equal(t, "на согласовании/wait", tags["Стенд"])
 	assert.Equal(t, "не запрошен/none", tags["GitLab"])
 	assert.Equal(t, "активен/ok", tags["Вики"])
-	assert.Equal(t, "Backend/none", tags["Олег"], "карточка без задачи берет тег из шаблона")
+	assert.Equal(t, "Backend/none", tags["Артемий"], "карточка без задачи берет тег из шаблона")
 
 	assert.Contains(t, v.Buddy.Text, "«Доступы»")
 	assert.Contains(t, v.Buddy.Text, "Осталось 2 из 3")

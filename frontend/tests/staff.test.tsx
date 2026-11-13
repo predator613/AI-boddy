@@ -23,7 +23,7 @@ describe('расчеты главной наставника', () => {
     const todos = buildTodos(
       {
         internId: 'u-anna',
-        internName: 'Анна',
+        internName: 'Мария',
         stageCode: '02',
         stageTitle: 'Доступы',
         lastText: 'Какая роль нужна?',
@@ -60,9 +60,9 @@ describe('главная наставника', () => {
     renderApp('/')
     expect(await screen.findByRole('heading', { name: 'Привет, Игорь!' }, T)).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Мои стажеры' })).toBeInTheDocument()
-    const anna = await screen.findByRole('button', { name: /^Анна:.*вопрос/ }, T)
+    const anna = await screen.findByRole('button', { name: /^Мария:.*вопрос/ }, T)
     expect(anna).toHaveAttribute('aria-expanded', 'true')
-    const panel = await screen.findByRole('region', { name: 'Анна: подробности' }, T)
+    const panel = await screen.findByRole('region', { name: 'Мария: подробности' }, T)
     expect(within(panel).getAllByRole('link', { name: 'Ответить' })[0]).toHaveAttribute(
       'href',
       '/inbox?intern=u-anna',
@@ -84,7 +84,7 @@ describe('главная наставника', () => {
     const pavel = screen.getByRole('button', { name: /^Павел:/ })
     await userEvent.click(pavel)
     expect(await screen.findByRole('region', { name: 'Павел: подробности' }, T)).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Анна: подробности' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Мария: подробности' })).not.toBeInTheDocument()
     expect(await screen.findByText('Цели еще не согласованы', {}, T)).toBeInTheDocument()
   })
 })
@@ -163,16 +163,16 @@ describe('руководитель: цели стажеров', () => {
     )
 
     await userEvent.click(within(panel).getByRole('button', { name: 'Согласовать цели' }))
-    expect(await within(panel).findByText(/согласованы с Олегом/, {}, T)).toBeInTheDocument()
+    expect(await within(panel).findByText(/согласованы с Артемием/, {}, T)).toBeInTheDocument()
     expect(
       within(panel).queryByRole('button', { name: 'Согласовать цели' }),
     ).not.toBeInTheDocument()
   })
 
-  it('подтверждает свой шаг в согласованных целях Анны', async () => {
+  it('подтверждает свой шаг в согласованных целях Марии', async () => {
     loginAs('lead_oleg')
     renderApp('/')
-    const panel = await screen.findByRole('region', { name: 'Цели: Анна' }, T)
+    const panel = await screen.findByRole('region', { name: 'Цели: Мария' }, T)
     await userEvent.click(await within(panel).findByRole('button', { name: 'Подтвердить' }, T))
     await waitFor(
       () =>
@@ -255,10 +255,24 @@ describe('правки после проверки на стенде', () => {
     expect(screen.getByText('82%')).toBeInTheDocument()
   })
 
-  it('куратор стажировки есть в контактах стажера', async () => {
+  it('куратор стажировки – в карточке HR, кнопки контактов работают', async () => {
     loginAs('intern_anna')
+    const router = renderApp('/support')
+    expect(await screen.findByText(/куратор стажировки \(HR BP\)/, {}, T)).toBeInTheDocument()
+    expect(screen.getByText(/Вопросы к руководителю обсуди с наставником/)).toBeInTheDocument()
+    await userEvent.click(screen.getAllByRole('button', { name: 'Оформить заявку' })[0]!)
+    expect(router.state.location.pathname).toBe('/chat')
+    await router.navigate({ to: '/support' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Написать' }, T))
+    expect(router.state.location.pathname).toBe('/mentor')
+  })
+
+  it('у наставника кнопки контактов ведут к форме обращения', async () => {
+    loginAs('mentor_igor')
     renderApp('/support')
-    expect(await screen.findByText('Куратор стажировки', {}, T)).toBeInTheDocument()
+    const buttons = await screen.findAllByRole('button', { name: 'Сообщить о проблеме' }, T)
+    await userEvent.click(buttons[0]!)
+    expect(screen.getByLabelText('Подробности')).toHaveFocus()
   })
 
   it('null в external значит «не в Jira»: показывается обычный номер', async () => {

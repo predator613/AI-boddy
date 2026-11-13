@@ -117,7 +117,7 @@ const DETAILS: Record<
   't-604': {
     about:
       'Расскажи о промежуточных результатах. После экватора наставник даст обратную связь на 1:1.',
-    helper: 'Игорь, Олег',
+    helper: 'Игорь, Артемий',
     doneWhen: 'выступление прошло',
     goal: null,
   },
@@ -153,14 +153,14 @@ const DETAILS: Record<
   },
   't-203': {
     about: 'Стенд нужен, чтобы проверять изменения до релиза. Заявка уже отправлена.',
-    helper: 'Олег согласует, AI-buddy напоминает ему',
+    helper: 'Артемий согласует, AI-buddy напоминает ему',
     doneWhen: 'заявка согласована и доступ работает',
     goal: null,
   },
   't-204': {
     about:
       'Без GitLab не получится взять первую задачу. Нужна группа backend с правами Developer: читать код, создавать ветки и merge request.',
-    helper: 'AI-buddy заполнит заявку, согласует Олег',
+    helper: 'AI-buddy заполнит заявку, согласует Артемий',
     doneWhen: 'заявка согласована и ты видишь репозиторий',
     goal: 'Пройти путь задачи до релиза',
   },
@@ -284,7 +284,7 @@ function seed(): StageSeed[] {
         {
           id: 'r-12',
           kind: 'person',
-          name: 'Олег',
+          name: 'Артемий',
           note: 'руководитель команды',
           tag: 'Backend',
           tagKind: 'none',
@@ -327,7 +327,7 @@ function seed(): StageSeed[] {
         {
           id: 't-203',
           title: 'Доступ к тестовому стенду',
-          note: 'Ждет подтверждения Олега',
+          note: 'Ждет подтверждения Артемия',
           status: 'waiting',
           due: '2026-11-05',
           action: { kind: 'access_request', payload: { service: 'test_stand', role: 'read' } },
@@ -562,7 +562,7 @@ function seed(): StageSeed[] {
       tasks: [
         {
           id: 't-601',
-          title: 'Сходить на мастер-классы к экватору',
+          title: 'Пройти мастер-классы перед экватором',
           note: 'Приглашения придут в календарь',
           status: 'todo',
           due: '2027-02-01',
@@ -686,7 +686,7 @@ function accessTag(status: Status | undefined) {
 }
 
 export function buildMockPath(
-  intern: { name: string; teamName: string } = { name: 'Анна', teamName: 'Backend' },
+  intern: { name: string; teamName: string } = { name: 'Мария', teamName: 'Backend' },
   today = '2026-11-10',
   src: StageSeed[] = stages,
 ): TPathView {
@@ -803,7 +803,7 @@ export const mockInterns = () => {
     {
       id: 'u-anna',
       login: 'intern_anna',
-      name: 'Анна',
+      name: 'Мария',
       teamName: 'Backend',
       mentor: { id: 'u-igor', name: 'Игорь' },
       week: 2,

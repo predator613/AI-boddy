@@ -37,7 +37,7 @@ describe('LoginForm', () => {
     await fillAndSubmit('  intern_anna  ', 'demo123')
     await vi.waitFor(() => expect(onSuccess).toHaveBeenCalled())
     expect(useAuthStore.getState().token).toBe(mockToken('intern_anna'))
-    expect(useAuthStore.getState().user?.name).toBe('Анна')
+    expect(useAuthStore.getState().user?.name).toBe('Мария')
   })
 
   it('сервер недоступен – понятный текст ошибки', async () => {

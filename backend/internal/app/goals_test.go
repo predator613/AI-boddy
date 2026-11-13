@@ -28,7 +28,7 @@ func TestGoalsForAnna(t *testing.T) {
 	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/goals", nil, &v))
 	require.Len(t, v.Goals, 3)
 	require.NotNil(t, v.Agreed)
-	assert.Equal(t, "Олег", v.Agreed.By.Name)
+	assert.Equal(t, "Артемий", v.Agreed.By.Name)
 	assert.True(t, v.FromOKR)
 	assert.Len(t, v.OKRs, 2)
 	assert.False(t, v.CanEdit, "после согласования стажер цели не меняет")
@@ -46,7 +46,7 @@ func TestGoalsForAnna(t *testing.T) {
 	assert.Nil(t, st[1].TaskID)
 	assert.Equal(t, "lead", st[3].Source)
 	require.NotNil(t, v.Goals[1].LastUpdate)
-	assert.Equal(t, "Анна", v.Goals[1].LastUpdate.Author.Name)
+	assert.Equal(t, "Мария", v.Goals[1].LastUpdate.Author.Name)
 
 	// Наставник и стажер другой команды.
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodGet, "/api/goals", nil, nil))
@@ -74,13 +74,13 @@ func TestGoalProgress(t *testing.T) {
 		map[string]any{"progressPct": 45, "note": "test: покрытие выросло"}, &g))
 	assert.Equal(t, 45, g.ProgressPct)
 	require.NotNil(t, g.LastUpdate)
-	assert.Equal(t, "Олег", g.LastUpdate.Author.Name)
+	assert.Equal(t, "Артемий", g.LastUpdate.Author.Name)
 	assert.Empty(t, g.Steps)
 
 	// Наставник получил уведомление об отметке руководителя.
 	var n int
 	require.NoError(t, pool.QueryRow(t.Context(),
-		`SELECT count(*) FROM notifications WHERE user_id = 'aaaaaaaa-0000-4000-8000-000000000002' AND kind = 'goals' AND text LIKE 'Олег%Дмитрий%45%'`).Scan(&n))
+		`SELECT count(*) FROM notifications WHERE user_id = 'aaaaaaaa-0000-4000-8000-000000000002' AND kind = 'goals' AND text LIKE 'Артемий%Дмитрий%45%'`).Scan(&n))
 	assert.Equal(t, 1, n)
 
 	for name, body := range map[string]map[string]any{
@@ -156,7 +156,7 @@ func TestGoalsLifecycleForLiza(t *testing.T) {
 	// Согласовать пустой список нельзя.
 	assert.Equal(t, http.StatusBadRequest, e.call("lead_oleg", http.MethodPost, "/api/interns/"+lizaID+"/goals/agree", nil, nil))
 
-	// Лиза вносит цель после встречи с Олегом.
+	// Лиза вносит цель после встречи с Артемием.
 	var g models.Goal
 	require.Equal(t, http.StatusCreated, e.call("intern_liza", http.MethodPost, "/api/interns/"+lizaID+"/goals",
 		map[string]any{"title": "Пройти путь задачи до релиза", "criterion": "первый merge в main до 4 недели", "dueWeek": 4, "okrId": backendOKR1}, &g))
@@ -194,7 +194,7 @@ func TestGoalsLifecycleForLiza(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, e.call("lead_nina", http.MethodPost, "/api/interns/"+lizaID+"/goals/agree", nil, nil))
 	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodPost, "/api/interns/"+lizaID+"/goals/agree", nil, &v))
 	require.NotNil(t, v.Agreed)
-	assert.Equal(t, "Олег", v.Agreed.By.Name)
+	assert.Equal(t, "Артемий", v.Agreed.By.Name)
 	assert.False(t, v.CanAgree, "согласованные цели повторно не согласуют")
 
 	// После согласования стажер не меняет и не удаляет цели; процент сам тоже не ставит.

@@ -80,7 +80,7 @@ beforeEach(() => {
 describe('api/path', () => {
   it('стажеры и путь стажера', async () => {
     expect(await api.getInterns()).toHaveLength(2)
-    expect((await api.getInternPath('u-anna')).intern.name).toBe('Анна')
+    expect((await api.getInternPath('u-anna')).intern.name).toBe('Мария')
     const path = await api.setInternTaskStatus('u-anna', 't-204', { status: 'done' })
     expect(path.progress.done).toBe(8)
     expect(
@@ -113,7 +113,7 @@ describe('hooks/usePath', () => {
     const p = renderHook(() => hooks.useInternPath('u-anna'), { wrapper })
     await waitFor(() => expect(t.result.current.data).toHaveLength(1))
     await waitFor(() => expect(k.result.current.data).toHaveLength(1))
-    await waitFor(() => expect(p.result.current.data?.intern.name).toBe('Анна'))
+    await waitFor(() => expect(p.result.current.data?.intern.name).toBe('Мария'))
   })
 
   it('мутации шаблонов и встреч', async () => {

@@ -23,7 +23,7 @@ import { Marker, PageHeader } from '../components/PageHeader'
 import { Page } from '../components/Page'
 import {
   BUDDY_TEAM_CARD,
-  CURATOR_CARD,
+  CURATOR_NOTE,
   DEPARTMENT_STYLE,
   FAQ,
   FAQ_LEAD,
@@ -36,6 +36,7 @@ import {
 import { useInterns } from '../hooks/usePath'
 import { getContacts } from '../api/people'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { useAuthStore } from '../store/authStore'
 import { useCreateTicket, useTickets } from '../hooks/useSupport'
 import { errorText } from '../lib/errors'
@@ -97,16 +98,34 @@ export function SupportPage() {
     id: d.code,
     name: d.title,
     role: `ответ до ${d.slaHours} ч`,
-    when: d.about,
+    // Куратор стажировки (HR BP) работает в HR: отдельной карточкой его не показываем.
+    when: d.code === 'hr' ? `${d.about} ${CURATOR_NOTE}` : d.about,
     initials: DEPARTMENT_STYLE[d.code]?.initials ?? d.title.slice(0, 2),
     bg: DEPARTMENT_STYLE[d.code]?.bg ?? '#FFFFFF',
   }))
-  const contacts = [
-    ...people,
-    ...(lead ? [] : [CURATOR_CARD]),
-    ...(staff ? [BUDDY_TEAM_CARD] : []),
-    ...departments,
-  ]
+  const contacts = [...people, ...(staff ? [BUDDY_TEAM_CARD] : []), ...departments]
+  const navigate = useNavigate()
+  // Что делает кнопка карточки: наставник – переписка, отдел – заявка через AI-buddy,
+  // остальное – форма «Сообщить о проблеме» ниже. Руководителю стажер пишет через наставника.
+  const contactAction = (id: string, name: string) => {
+    if (role === 'intern' && id === 'mentor' && data?.mentor) {
+      return { label: 'Написать', run: () => navigate({ to: '/mentor' }) }
+    }
+    if (role === 'intern' && DEPARTMENT_STYLE[id]) {
+      return {
+        label: 'Оформить заявку',
+        run: () => navigate({ to: '/chat', search: { q: `Нужна заявка: ${name.toLowerCase()}` } }),
+      }
+    }
+    if (id === 'lead' || id === 'mentor') return null
+    return {
+      label: 'Сообщить о проблеме',
+      run: () => {
+        document.getElementById('support-form')?.scrollIntoView?.({ behavior: 'smooth' })
+        document.getElementById('support-details')?.focus()
+      },
+    }
+  }
 
   return (
     <Page maxWidth={1240}>
@@ -185,13 +204,25 @@ export function SupportPage() {
                 <Text size="sm" style={{ flex: 1 }}>
                   {c.when}
                 </Text>
-                <Button
-                  variant="default"
-                  size="sm"
-                  style={{ alignSelf: 'flex-start', borderColor: '#141414' }}
-                >
-                  Написать
-                </Button>
+                {(() => {
+                  const act = contactAction(c.id, c.name)
+                  return act ? (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={act.run}
+                      style={{ alignSelf: 'flex-start', borderColor: '#141414' }}
+                    >
+                      {act.label}
+                    </Button>
+                  ) : (
+                    <Text size="xs" c="ink.5">
+                      {c.id === 'lead' && role === 'intern'
+                        ? 'Вопросы к руководителю обсуди с наставником или на 1:1'
+                        : 'Пока не назначен'}
+                    </Text>
+                  )
+                })()}
               </div>
             ))}
           </SimpleGrid>
@@ -212,7 +243,7 @@ export function SupportPage() {
             </Accordion>
           </Paper>
 
-          <Paper radius="lg" p="lg" style={{ flex: '1 1 320px', minWidth: 0 }}>
+          <Paper id="support-form" radius="lg" p="lg" style={{ flex: '1 1 320px', minWidth: 0 }}>
             <Title order={2}>Сообщить о проблеме</Title>
             <Text size="sm" c="ink.5" mt={6} mb="md">
               {lead
@@ -277,6 +308,7 @@ export function SupportPage() {
                     />
                   )}
                   <Textarea
+                    id="support-details"
                     label="Подробности"
                     placeholder="Опиши, что произошло"
                     autosize

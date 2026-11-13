@@ -16,7 +16,7 @@ describe('Цели стажировки', () => {
     loginAs('intern_anna')
     renderApp('/')
     expect(await screen.findByText('Мои цели на стажировку', {}, T)).toBeInTheDocument()
-    expect(screen.getByText(/согласованы с Олегом .* · от OKR команды/)).toBeInTheDocument()
+    expect(screen.getByText(/согласованы с Артемием .* · от OKR команды/)).toBeInTheDocument()
     const goal = screen.getByLabelText('Разобраться в сервисе авторизации: 25%')
     expect(
       within(goal).getByText(/критерий: провести демо команде на 8 неделе/),
@@ -81,7 +81,7 @@ describe('Цели стажировки', () => {
   })
 
   it('подписи и шаг прогресса', () => {
-    expect(withName('Олег')).toBe('Олегом')
+    expect(withName('Артемий')).toBe('Артемием')
     expect(withName('Нина')).toBe('Ниной')
     expect(withName('Игорь')).toBe('Игорем')
     expect(withName('Илья')).toBe('Ильей')
@@ -91,14 +91,14 @@ describe('Цели стажировки', () => {
     expect(nextPct(100)).toBe(0)
     const view: TGoalsView = {
       internId: 'x',
-      agreed: { by: { id: '1', name: 'Олег' }, at: '2026-11-04T10:00:00Z' },
+      agreed: { by: { id: '1', name: 'Артемий' }, at: '2026-11-04T10:00:00Z' },
       fromOkr: false,
       goals: [],
       okrs: [],
       canEdit: false,
       canAgree: false,
     }
-    expect(agreedLabel(view)).toBe('согласованы с Олегом 4 нояб')
+    expect(agreedLabel(view)).toBe('согласованы с Артемием 4 нояб')
   })
 })
 

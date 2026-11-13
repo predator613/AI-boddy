@@ -39,23 +39,42 @@ interface Props {
 
 // Сообщение переписки стажера и наставника: текст, передача от AI-buddy или карточка изменения.
 export function ThreadMessageView({ message: m, viewer, onAck, ackBusy }: Props) {
+  // Вопрос, который AI-buddy не смог закрыть сам и передал наставнику: стоит как сообщение стажера,
+  // но с пометкой, откуда он пришел, и подсказкой наставнику, что делать.
   if (m.kind === 'handoff') {
+    const mine = viewer === 'intern'
     return (
-      <Group
+      <Stack
+        className="ab-pop"
         gap={8}
-        wrap="nowrap"
+        aria-label="Вопрос, переданный AI-buddy"
         style={{
-          alignSelf: 'center',
+          alignSelf: mine ? 'flex-end' : 'flex-start',
+          maxWidth: '75%',
           background: '#FFFFFF',
-          border: '1px dashed #D6D6D6',
-          padding: '6px 12px',
+          outline: '2px solid #965EEB',
+          outlineOffset: -2,
+          borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+          padding: '12px 16px',
         }}
       >
-        <Mascot size={22} mood="mentor" />
-        <Text size="sm" c="ink.5">
+        <Group gap={6} wrap="nowrap">
+          <Mascot size={20} mood="mentor" />
+          <Text size="xs" c="ink.5">
+            {mine ? 'Ты спросил через AI-buddy' : 'AI-buddy передал вопрос стажера'} ·{' '}
+            {timeLabel(m.at)}
+          </Text>
+        </Group>
+        <Text fz={16} lh={1.4}>
           {m.text}
         </Text>
-      </Group>
+        {!mine && (
+          <Text size="xs" c="ink.5">
+            Ответь ниже: ответ получит стажер. С галочкой «Добавить ответ в справочник» AI-buddy
+            дальше будет отвечать на такой вопрос сам.
+          </Text>
+        )}
+      </Stack>
     )
   }
 

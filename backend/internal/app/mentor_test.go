@@ -79,6 +79,7 @@ func TestMentorThreadsAndHandoff(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodGet, "/api/mentor/threads/"+pavelID, nil, nil))
 
 	e.say("intern_anna", map[string]any{"text": "передай наставнику: где взять пример конфига для auth-service?"})
+	e.say("intern_anna", map[string]any{"text": "да"}) // передача только после согласия стажера
 
 	var list []models.ThreadSummary
 	require.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodGet, "/api/mentor/threads", nil, &list))
@@ -191,7 +192,7 @@ func TestMentorMeetingsAndStats(t *testing.T) {
 	require.Equal(t, http.StatusCreated, e.call("mentor_igor", http.MethodPost, "/api/mentor/meetings",
 		map[string]any{"internId": annaID, "title": "Разбор MR", "startsAt": start, "durationMin": 30, "notify": true}, &m))
 	assert.Equal(t, "review", m.Kind)
-	assert.Equal(t, "Анна", m.WithName)
+	assert.Equal(t, "Мария", m.WithName)
 	var all models.MentorMeeting
 	require.Equal(t, http.StatusCreated, e.call("mentor_igor", http.MethodPost, "/api/mentor/meetings",
 		map[string]any{"internId": "all", "title": "Синк стажеров", "startsAt": start.Add(2 * time.Hour), "durationMin": 60, "notify": false}, &all))
