@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -46,6 +47,10 @@ type TaskInput struct {
 	DueDay   *int           `json:"dueDay"`
 	Action   *models.Action `json:"action"`
 	Position int            `json:"position"`
+	// Подробности задачи; если ни одно поле не пришло, при изменении они не меняются.
+	About    *string `json:"about"`
+	Helper   *string `json:"helper"`
+	DoneWhen *string `json:"doneWhen"`
 }
 
 // ResourceInput – поля карточки из формы консоли.
@@ -319,6 +324,20 @@ func cleanTask(in TaskInput) (models.TaskTemplate, error) {
 	}
 	if t.DueDay != nil && (*t.DueDay < 1 || *t.DueDay > 730) {
 		return t, invalid("dueDay must be between 1 and 730")
+	}
+	t.KeepDetails = in.About == nil && in.Helper == nil && in.DoneWhen == nil
+	for _, f := range []struct {
+		in  *string
+		dst *string
+		max int
+		key string
+	}{{in.About, &t.About, 600, "about"}, {in.Helper, &t.Helper, 300, "helper"}, {in.DoneWhen, &t.DoneWhen, 300, "doneWhen"}} {
+		if f.in != nil {
+			*f.dst = strings.TrimSpace(*f.in)
+			if len([]rune(*f.dst)) > f.max {
+				return t, invalid(fmt.Sprintf("%s is too long (max %d)", f.key, f.max))
+			}
+		}
 	}
 	if in.Action != nil {
 		if _, ok := ActionKinds[in.Action.Kind]; !ok {

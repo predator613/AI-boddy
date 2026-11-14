@@ -356,3 +356,34 @@ func TestFullPathAndJoinChats(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, "/api/console/stages",
 		map[string]any{"title": "x", "period": string(make([]rune, 41))}, nil))
 }
+
+// Подробности задачи редактируются в консоли плана; без полей при изменении они сохраняются.
+func TestConsoleTaskDetails(t *testing.T) {
+	e := newMentorEnv(t)
+	var task models.TaskTemplate
+	require.Equal(t, http.StatusCreated, e.call("mentor_igor", http.MethodPost, "/api/console/stages/b5000000-0000-4000-8000-000000000004/tasks",
+		map[string]any{"title": "test задача", "about": " Что сделать ", "helper": "{{mentor}}", "doneWhen": "тесты зеленые"}, &task))
+	assert.Equal(t, "Что сделать", task.About)
+	t.Cleanup(func() { e.call("mentor_igor", http.MethodDelete, "/api/console/tasks/"+task.ID, nil, nil) })
+
+	require.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodPut, "/api/console/tasks/"+task.ID,
+		map[string]any{"title": "test задача 2", "position": 1}, &task))
+	assert.Equal(t, "Что сделать", task.About, "без полей подробности не меняются")
+	require.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodPut, "/api/console/tasks/"+task.ID,
+		map[string]any{"title": "test задача 2", "position": 1, "about": "Новое", "helper": "", "doneWhen": ""}, &task))
+	assert.Equal(t, "Новое", task.About)
+	assert.Empty(t, task.Helper)
+
+	var details *models.TaskDetails
+	for _, s := range e.path("intern_anna").Stages {
+		for _, x := range s.Tasks {
+			if x.ID == task.ID {
+				details = x.Details
+			}
+		}
+	}
+	require.NotNil(t, details)
+	assert.Equal(t, "Новое", details.About)
+	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPut, "/api/console/tasks/"+task.ID,
+		map[string]any{"title": "x", "position": 1, "about": string(make([]rune, 601))}, nil))
+}

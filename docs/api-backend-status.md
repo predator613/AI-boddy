@@ -23,6 +23,7 @@
 - 4: `GET /api/mentor/feed`, `POST /api/mentor/feed/read`.
 - 5: `details` у задачи в `GET /api/path`.
 - 7: `period` у этапа (редактируется и в консоли плана: поле `period` в `POST/PUT /api/console/stages`); этапы 05 «Безопасность и учеба», 06 «Экватор», 07 «Итоги» у команды Backend; задачи этапа 01 «Добавиться в чаты и каналы команды» (`join_chats`) и «Завести конспект встреч». `join_chats`: карточка «Добавить в чаты и каналы?» с полями «Чаты», «Каналы», «Закрытые», после подтверждения заявка сразу `done`, задача закрывается. У `ask_buddy` в payload есть `prompt`.
+- 5, редактор плана: у задачи в `GET /api/console/templates` поля `about`, `helper`, `doneWhen`; их же принимают `POST /api/console/stages/{stageId}/tasks` и `PUT /api/console/tasks/{taskId}` (до 600, 300 и 300 символов, можно `{{mentor}}` и `{{lead}}`). Если в PUT нет ни одного из трех полей, подробности не меняются.
 - 8: чек-лист наставника, id пунктов – UUID.
 - 9: `GET /api/me/notes`, `PUT /api/me/notes/{eventId}`.
 - 10: `competency` у цели; `section` у материала.

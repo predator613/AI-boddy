@@ -45,6 +45,12 @@ type TaskTemplate struct {
 	Note     string  `json:"note"`
 	DueDay   *int    `json:"dueDay"`
 	Action   *Action `json:"action"`
+	// Подробности для стажера: что сделать, кто поможет, когда задача готова.
+	About    string `json:"about"`
+	Helper   string `json:"helper"`
+	DoneWhen string `json:"doneWhen"`
+	// KeepDetails – при изменении не трогать подробности (форма их не прислала).
+	KeepDetails bool `json:"-"`
 }
 
 // Action – что AI-buddy может сделать по задаче (кнопка «Сделать с AI-buddy»).

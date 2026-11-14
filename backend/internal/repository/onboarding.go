@@ -336,12 +336,12 @@ func (r *Onboarding) CreateTask(ctx context.Context, t models.TaskTemplate) (*mo
 	var id string
 	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
-			INSERT INTO onboarding_tasks (stage_id, position, title, note, due_day)
+			INSERT INTO onboarding_tasks (stage_id, position, title, note, due_day, about, helper, done_when)
 			VALUES ($1::uuid,
 			        COALESCE((SELECT max(position) FROM onboarding_tasks WHERE stage_id = $1::uuid), 0) + 1,
-			        $2, $3, $4)
+			        $2, $3, $4, $5, $6, $7)
 			RETURNING id::text`,
-			t.StageID, t.Title, t.Note, t.DueDay).Scan(&id)
+			t.StageID, t.Title, t.Note, t.DueDay, t.About, t.Helper, t.DoneWhen).Scan(&id)
 		if err != nil {
 			return err
 		}
@@ -358,9 +358,11 @@ func (r *Onboarding) CreateTask(ctx context.Context, t models.TaskTemplate) (*mo
 func (r *Onboarding) UpdateTask(ctx context.Context, t models.TaskTemplate) (*models.TaskTemplate, error) {
 	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
 		if err := execOne(tx.Exec(ctx, `
-			UPDATE onboarding_tasks SET position = $2, title = $3, note = $4, due_day = $5
+			UPDATE onboarding_tasks SET position = $2, title = $3, note = $4, due_day = $5,
+			       about = CASE WHEN $9 THEN about ELSE $6 END, helper = CASE WHEN $9 THEN helper ELSE $7 END,
+			       done_when = CASE WHEN $9 THEN done_when ELSE $8 END
 			WHERE id::text = $1`,
-			t.ID, t.Position, t.Title, t.Note, t.DueDay)); err != nil {
+			t.ID, t.Position, t.Title, t.Note, t.DueDay, t.About, t.Helper, t.DoneWhen, t.KeepDetails)); err != nil {
 			return err
 		}
 		return replaceAction(ctx, tx, t.ID, t.Action)
@@ -415,7 +417,7 @@ const stageCols = `s.id::text, s.team_id::text, s.position, s.title, s.color, s.
 
 // Действие задачи хранится строкой task_actions; фронту отдается прежний формат {kind, payload}.
 const taskSelect = `
-	SELECT t.id::text, t.stage_id::text, t.position, t.title, t.note, t.due_day, a.kind,
+	SELECT t.id::text, t.stage_id::text, t.position, t.title, t.note, t.due_day, t.about, t.helper, t.done_when, a.kind,
 	       CASE WHEN a.kind IS NULL THEN NULL ELSE jsonb_strip_nulls(jsonb_build_object(
 	           'service', a.service_code, 'role', a.service_role, 'project', a.project_code,
 	           'type', a.leave_type, 'question', a.question, 'articleId', a.article_id::text,
@@ -455,7 +457,7 @@ func scanTaskWith(row pgx.Row, extra ...any) (models.TaskTemplate, error) {
 	var t models.TaskTemplate
 	var kind *string
 	var payload []byte
-	dest := append([]any{&t.ID, &t.StageID, &t.Position, &t.Title, &t.Note, &t.DueDay, &kind, &payload}, extra...)
+	dest := append([]any{&t.ID, &t.StageID, &t.Position, &t.Title, &t.Note, &t.DueDay, &t.About, &t.Helper, &t.DoneWhen, &kind, &payload}, extra...)
 	if err := row.Scan(dest...); err != nil {
 		return t, err
 	}
