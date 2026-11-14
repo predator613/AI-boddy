@@ -1,11 +1,12 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { API_URL } from '../src/api/client'
 import { foldMaterials } from '../src/lib/mentorUi'
 import { msk, mskIso, ymd } from '../src/lib/msk'
 import { EntryInput } from '../src/schemas/calendar'
+import { resetMentorMocks } from '../src/mocks/mentorData'
 import { server } from '../src/mocks/server'
 import { loginAs, renderApp } from './test-utils'
 
@@ -49,9 +50,10 @@ describe('чек-лист наставника', () => {
     }, T)
     await waitFor(() => expect(within(panel).queryByRole('checkbox', { name })).toBeNull(), T)
     await userEvent.click(
-      within(panel).getByRole('button', { name: /Чек-лист наставника · 5 из 10/ }),
+      await within(panel).findByRole('button', { name: /Чек-лист наставника · 5 из 10/ }, T),
     )
-    const inMenu = await screen.findByRole('checkbox', { name }, T)
+    // hidden: меню может еще проигрывать анимацию появления, а пункт уже на месте
+    const inMenu = await screen.findByRole('checkbox', { name, hidden: true }, T)
     expect(inMenu).toBeChecked()
     await userEvent.click(inMenu)
     expect(
@@ -88,6 +90,13 @@ describe('материалы и справочник наставника', () =
 
 describe('стажер: конспект, чаты, профиль, счетчик заявок', () => {
   it('конспект встречи сохраняется в календаре', async () => {
+    // будний день: в выходные календарь открывает следующую неделю, а демо-встречи – на текущей
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 10, 11, 13, 20))
+    resetMentorMocks()
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     loginAs('intern_maria')
     renderApp('/calendar')
     await userEvent.click(await screen.findByRole('button', { name: /Знакомство с DevOps/ }, T))

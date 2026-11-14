@@ -7,7 +7,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"ai-buddy/backend/internal/httpx"
 	"ai-buddy/backend/internal/middleware"
@@ -27,11 +29,13 @@ type Auth struct {
 	svc      AuthService
 	demoMode bool
 	log      *slog.Logger
+	limit    *loginLimiter
 }
 
 // NewAuth создает обработчики авторизации.
 func NewAuth(svc AuthService, demoMode bool, log *slog.Logger) *Auth {
-	return &Auth{svc: svc, demoMode: demoMode, log: log}
+	// 10 неудачных попыток за 5 минут – вход для этой пары «адрес + логин» закрыт до конца окна.
+	return &Auth{svc: svc, demoMode: demoMode, log: log, limit: newLoginLimiter(10, 5*time.Minute)}
 }
 
 type loginRequest struct {
@@ -61,8 +65,15 @@ func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	key := loginKey(r, req.Login)
+	if wait := h.limit.blocked(key); wait > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		httpx.Error(w, http.StatusTooManyRequests, httpx.CodeTooManyAttempts, "too many login attempts, try again later")
+		return
+	}
 	token, user, err := h.svc.Login(r.Context(), req.Login, req.Password)
 	if errors.Is(err, services.ErrInvalidCredentials) {
+		h.limit.fail(key)
 		httpx.Error(w, http.StatusUnauthorized, httpx.CodeInvalidCredentials, "invalid login or password")
 		return
 	}
@@ -70,6 +81,7 @@ func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		h.internal(w, "login failed", err)
 		return
 	}
+	h.limit.reset(key)
 	httpx.JSON(w, http.StatusOK, loginResponse{Token: token, User: user})
 }
 

@@ -87,7 +87,10 @@ describe('Мой путь', () => {
 
   it('вопрос из панели помощника уходит в чат', async () => {
     const router = renderApp('/')
-    await userEvent.click(await screen.findByRole('button', { name: 'Кто выдает доступы?' }, T))
+    // подсказки строятся из незакрытых задач этапа
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Помоги: получить доступ к GitLab' }, T),
+    )
     expect(router.state.location.pathname).toBe('/chat')
     await userEvent.type(await screen.findByLabelText('Сообщение'), 'x')
   })

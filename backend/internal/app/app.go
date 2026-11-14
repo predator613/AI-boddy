@@ -101,6 +101,7 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Recoverer)
+	r.Use(middleware.SecurityHeaders)
 	r.Use(chimw.Timeout(30 * time.Second)) // ответ модели может идти дольше простых запросов
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: cfg.CORSOrigins,

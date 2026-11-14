@@ -17,6 +17,7 @@ const (
 	CodeMethodNotAllowed   = "method_not_allowed"
 	CodeInternal           = "internal_error"
 	CodeUnavailable        = "service_unavailable" // внешняя система (заявки) не ответила
+	CodeTooManyAttempts    = "too_many_attempts"   // слишком много неудачных попыток входа
 )
 
 type errorBody struct {

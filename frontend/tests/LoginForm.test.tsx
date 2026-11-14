@@ -31,6 +31,21 @@ describe('LoginForm', () => {
     expect(useAuthStore.getState().token).toBeNull()
   })
 
+  it('много неудачных попыток (429) – просим подождать', async () => {
+    server.use(
+      http.post(`${API_URL}/api/auth/login`, () =>
+        HttpResponse.json(
+          { error: { code: 'too_many_attempts', message: 'too many login attempts' } },
+          { status: 429 },
+        ),
+      ),
+    )
+    renderWithProviders(<LoginForm />)
+    await fillAndSubmit('intern_maria', 'demo123')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Подождите 5 минут')
+    expect(useAuthStore.getState().token).toBeNull()
+  })
+
   it('успешный вход – токен в store и вызов onSuccess', async () => {
     const onSuccess = vi.fn()
     renderWithProviders(<LoginForm onSuccess={onSuccess} />)

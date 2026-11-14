@@ -46,6 +46,20 @@ describe('Календарь стажера', () => {
     expect(screen.queryByRole('button', { name: 'Приду' })).not.toBeInTheDocument()
   })
 
+  it('в выходные сразу открывается ближайшая рабочая неделя', async () => {
+    vi.setSystemTime(new Date(2026, 10, 14, 23, 0)) // суббота
+    loginAs('intern_maria')
+    renderApp('/calendar')
+    expect(await screen.findByRole('heading', { name: 'Мои встречи' }, T)).toBeInTheDocument()
+    const home = await screen.findByRole('button', { name: 'Ближайшая неделя' }, T)
+    expect(home).toBeDisabled()
+    // в сетке неделя 16–20 ноября, а не прошедшая 9–13
+    expect(screen.getAllByText('16').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: /Встреча-знакомство с командой, пн/ })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Прошлая неделя' }))
+    expect(home).toBeEnabled()
+  })
+
   it('просьба перенести уходит наставнику в чат', async () => {
     loginAs('intern_maria')
     renderApp('/calendar')

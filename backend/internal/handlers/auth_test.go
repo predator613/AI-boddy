@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -175,4 +176,34 @@ func TestHealth(t *testing.T) {
 	Health(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{"status":"ok"}`, rec.Body.String())
+}
+
+// После 10 неудачных попыток вход для пары «адрес + логин» закрыт на 5 минут, даже с верным
+// паролем; другой логин и тот же логин после окна – снова можно. Успешный вход сбрасывает счетчик.
+func TestLoginAttemptsLimited(t *testing.T) {
+	f := &fakeAuth{loginErr: services.ErrInvalidCredentials}
+	h := NewAuth(f, false, quietLog)
+	now := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
+	h.limit.now = func() time.Time { return now }
+	bad := `{"login":"intern_maria","password":"bad"}`
+	for range 10 {
+		assert.Equal(t, http.StatusUnauthorized, postLogin(h, bad).Code)
+	}
+	f.loginErr = nil
+	rec := postLogin(h, `{"login":"intern_maria","password":"demo123"}`)
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
+	assert.Equal(t, "too_many_attempts", errorCode(t, rec))
+	assert.NotEmpty(t, rec.Header().Get("Retry-After"))
+	assert.Equal(t, http.StatusOK, postLogin(h, `{"login":"mentor_igor","password":"demo123"}`).Code)
+
+	now = now.Add(5*time.Minute + time.Second)
+	assert.Equal(t, http.StatusOK, postLogin(h, `{"login":"intern_maria","password":"demo123"}`).Code)
+
+	// успешный вход сбрасывает счетчик: снова доступно 10 ошибок
+	f.loginErr = services.ErrInvalidCredentials
+	for range 9 {
+		postLogin(h, bad)
+	}
+	f.loginErr = nil
+	assert.Equal(t, http.StatusOK, postLogin(h, `{"login":"intern_maria","password":"demo123"}`).Code)
 }

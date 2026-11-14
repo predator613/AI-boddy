@@ -223,7 +223,6 @@ function TaskDetailsPanel({ task }: { task: TTaskView }) {
   const rows: [string, string][] = [['Срок', shortDate(task.dueDate)]]
   if (d) {
     rows.push(['Кто поможет', d.helper], ['Готово, когда', d.doneWhen])
-    rows.push(['Идет в цель', d.goal ?? 'не входит в цели'])
   }
   return (
     <div

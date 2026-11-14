@@ -90,7 +90,7 @@ describe('главная наставника', () => {
 })
 
 describe('путь стажера: подробности задачи', () => {
-  it('клик по задаче раскрывает описание, срок и цель', async () => {
+  it('клик по задаче раскрывает описание, срок и кто поможет', async () => {
     loginAs('intern_maria')
     renderApp('/?stage=02')
     const task = await screen.findByRole(
@@ -103,7 +103,8 @@ describe('путь стажера: подробности задачи', () => {
     expect(task).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText(/Нужна группа backend с правами Developer/)).toBeInTheDocument()
     expect(screen.getByText('10 нояб')).toBeInTheDocument()
-    expect(screen.getByText('Пройти путь задачи до релиза', { selector: 'dd' })).toBeInTheDocument()
+    // строки «Идет в цель» больше нет: цели видны в отдельной карточке
+    expect(screen.queryByText('Идет в цель')).not.toBeInTheDocument()
     await userEvent.click(task)
     expect(screen.queryByText(/Нужна группа backend/)).not.toBeInTheDocument()
   })

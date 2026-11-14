@@ -1,3 +1,4 @@
+import { pathHints } from '../lib/buddyHints'
 import { useNavigate } from '@tanstack/react-router'
 import { BuddyPanel } from '../components/BuddyPanel'
 import { Marker, PageHeader } from '../components/PageHeader'
@@ -35,7 +36,11 @@ export function MyPathPage({ stage, onStage, now }: MyPathPageProps) {
 
   const path = pathQuery.data
   const open = stage ? path.stages.find((s) => s.code === stage) : null
-  const buddy = open ? { text: open.tip, suggestions: open.suggestions } : path.buddy
+  // Подсказки строятся из состояния: незакрытые задачи этапа, а не только текст из плана.
+  const buddy = {
+    text: open ? open.tip : path.buddy.text,
+    suggestions: pathHints(path, open?.code),
+  }
 
   return (
     <Page>

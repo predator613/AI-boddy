@@ -97,7 +97,10 @@ interface CalendarPageProps {
 // Календарь стажера: встречи, которые назначил наставник или команда, свои записи и сроки задач.
 export function CalendarPage({ now: nowProp }: CalendarPageProps) {
   const [now] = useState(() => nowProp ?? new Date())
-  const [monday, setMonday] = useState(() => mondayOf(now))
+  // В субботу и воскресенье рабочая неделя уже прошла: сразу показываем ближайшую.
+  const weekend = msk(now).weekday >= 5
+  const home = weekend ? addDays(mondayOf(now), 7) : mondayOf(now)
+  const [monday, setMonday] = useState(home)
   const from = monday.toISOString()
   const to = addDays(monday, 7).toISOString()
   const cal = useCalendar(from, to)
@@ -107,7 +110,7 @@ export function CalendarPage({ now: nowProp }: CalendarPageProps) {
   const events = cal.data?.events ?? []
   const selected =
     events.find((e) => e.id === selectedId) ?? events.find((e) => e.status === 'pending') ?? null
-  const isThisWeek = mondayOf(now).getTime() === monday.getTime()
+  const isThisWeek = home.getTime() === monday.getTime()
 
   const deadlines = (path.data?.stages ?? [])
     .flatMap((s) => s.tasks.map((t) => ({ ...t, stageCode: s.code })))
@@ -148,10 +151,10 @@ export function CalendarPage({ now: nowProp }: CalendarPageProps) {
                 color="ink"
                 radius="xl"
                 h={44}
-                onClick={() => setMonday(mondayOf(now))}
+                onClick={() => setMonday(home)}
                 disabled={isThisWeek}
               >
-                Эта неделя
+                {weekend ? 'Ближайшая неделя' : 'Эта неделя'}
               </Button>
               <ActionIcon
                 variant="white"

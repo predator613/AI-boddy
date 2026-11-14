@@ -147,6 +147,11 @@ func TestRouterExtras(t *testing.T) {
 
 	resp := do(t, http.MethodGet, srv.URL+"/api/health", "", nil)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	// заголовки защиты на всех ответах API
+	assert.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+	assert.Equal(t, "DENY", resp.Header.Get("X-Frame-Options"))
+	assert.Equal(t, "no-referrer", resp.Header.Get("Referrer-Policy"))
+	assert.Equal(t, "no-store", resp.Header.Get("Cache-Control"))
 
 	resp = do(t, http.MethodGet, srv.URL+"/api/unknown", "", nil)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)

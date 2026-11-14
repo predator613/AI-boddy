@@ -16,6 +16,7 @@ import {
   cancelAction,
   confirmAction,
   getChatHistory,
+  getRequests,
   resetChat,
   sendMessage,
 } from '../api/assistant'
@@ -26,6 +27,7 @@ import { chatKey, dialogsKey } from '../lib/chatKeys'
 import { getDialogMessages } from '../api/chatDialogs'
 import { errorText } from '../lib/errors'
 import { pathKeys, useMyPath } from '../hooks/usePath'
+import { chatHints } from '../lib/buddyHints'
 import { ApiError } from '../api/client'
 import { StatusTag } from '../components/StatusTag'
 import { toast } from '../store/toastStore'
@@ -33,13 +35,6 @@ import type { TChatMessage, TChatReply } from '../schemas/assistant'
 import type { TPathView } from '../schemas/path'
 import { useAuthStore } from '../store/authStore'
 import classes from './ChatPage.module.css'
-
-const SUGGESTIONS = [
-  'Какой мой следующий шаг?',
-  'Как оформить отгул?',
-  'Кто мой наставник?',
-  'Как устроено код-ревью?',
-]
 
 let localId = 0
 const userMessage = (text: string): TChatMessage => ({
@@ -74,6 +69,13 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const path = useMyPath({ enabled: user?.role === 'intern' })
+  // Подсказки под полем ввода – по ситуации стажера: заявка на согласовании, следующий шаг.
+  const requests = useQuery({
+    queryKey: ['requests'],
+    queryFn: getRequests,
+    enabled: user?.role === 'intern',
+  })
+  const hints = chatHints(path.data, requests.data)
   // Тот же этап, что «СЕЙЧАС» на «Моем пути», а не этап следующей задачи: иначе экраны расходятся.
   const stage =
     path.data?.stages.find((s) => s.status === 'current') ??
@@ -332,7 +334,7 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
           <div className={classes.composer}>
             <Stack gap={10} className={classes.column}>
               <Group gap={8}>
-                {SUGGESTIONS.map((s) => (
+                {hints.map((s) => (
                   <UnstyledButton
                     key={s}
                     onClick={() => ask(s)}
