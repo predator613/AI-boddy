@@ -25,7 +25,7 @@ const (
 func TestGoalsForAnna(t *testing.T) {
 	e := newEnv(t)
 	var v models.GoalsView
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/goals", nil, &v))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/goals", nil, &v))
 	require.Len(t, v.Goals, 3)
 	require.NotNil(t, v.Agreed)
 	assert.Equal(t, "Артемий", v.Agreed.By.Name)
@@ -52,7 +52,7 @@ func TestGoalsForAnna(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodGet, "/api/goals", nil, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("intern_pavel", http.MethodGet, "/api/interns/"+annaID+"/goals", nil, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("lead_nina", http.MethodGet, "/api/interns/"+annaID+"/goals", nil, nil))
-	assert.Equal(t, http.StatusNotFound, e.call("intern_anna", http.MethodGet, "/api/interns/"+dimaID+"/goals", nil, nil))
+	assert.Equal(t, http.StatusNotFound, e.call("intern_maria", http.MethodGet, "/api/interns/"+dimaID+"/goals", nil, nil))
 }
 
 // Стажер больше не выставляет процент сам: он складывается из шагов. Наставнику и руководителю
@@ -66,11 +66,11 @@ func TestGoalProgress(t *testing.T) {
 		_, _ = pool.Exec(context.Background(), `DELETE FROM notifications WHERE kind = 'goals' AND text LIKE '%Дмитрий%'`)
 	})
 
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodPost, "/api/goals/"+annaGoal2+"/progress",
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodPost, "/api/goals/"+annaGoal2+"/progress",
 		map[string]any{"progressPct": 100}, nil), "стажер не ставит себе 100%")
 
 	var g models.Goal
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodPost, "/api/goals/"+dimaGoal2+"/progress",
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodPost, "/api/goals/"+dimaGoal2+"/progress",
 		map[string]any{"progressPct": 45, "note": "test: покрытие выросло"}, &g))
 	assert.Equal(t, 45, g.ProgressPct)
 	require.NotNil(t, g.LastUpdate)
@@ -91,7 +91,7 @@ func TestGoalProgress(t *testing.T) {
 	} {
 		assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, "/api/goals/"+dimaGoal2+"/progress", body, nil), name)
 	}
-	assert.Equal(t, http.StatusNotFound, e.call("intern_anna", http.MethodPost, "/api/goals/"+dimaGoal2+"/progress",
+	assert.Equal(t, http.StatusNotFound, e.call("intern_maria", http.MethodPost, "/api/goals/"+dimaGoal2+"/progress",
 		map[string]any{"progressPct": 50}, nil), "чужая цель скрыта")
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodPost, "/api/goals/missing/progress",
 		map[string]any{"progressPct": 50}, nil))
@@ -107,7 +107,7 @@ func TestGoalSteps(t *testing.T) {
 		_, _ = pool.Exec(context.Background(), `UPDATE intern_task_progress SET status = 'in_progress' WHERE intern_id = $1 AND task_id = $2`, annaID, gitlabTask)
 	})
 	var v models.GoalsView
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/goals", nil, &v))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/goals", nil, &v))
 	goal := v.Goals[0]
 	require.Len(t, goal.Steps, 5)
 	assert.Equal(t, 0, goal.ProgressPct)
@@ -124,15 +124,15 @@ func TestGoalSteps(t *testing.T) {
 	// Задача пути закрыта – процент вырос сам.
 	_, err := pool.Exec(t.Context(), `UPDATE intern_task_progress SET status = 'done' WHERE intern_id = $1 AND task_id = $2`, annaID, gitlabTask)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/goals", nil, &v))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/goals", nil, &v))
 	assert.Equal(t, 40, v.Goals[0].ProgressPct)
 	assert.Equal(t, "done", v.Goals[0].Steps[0].Status)
 
 	// Снять отметку может руководитель.
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodPost, url(mentorStep.ID), map[string]any{"done": false}, &g))
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodPost, url(mentorStep.ID), map[string]any{"done": false}, &g))
 	assert.Equal(t, 20, g.ProgressPct)
 
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodPost, url(mentorStep.ID), map[string]any{"done": true}, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodPost, url(mentorStep.ID), map[string]any{"done": true}, nil))
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, url(taskStep.ID), map[string]any{"done": true}, nil))
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, url(mentorStep.ID), map[string]any{}, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodPost, url("missing"), map[string]any{"done": true}, nil))
@@ -154,7 +154,7 @@ func TestGoalsLifecycleForLiza(t *testing.T) {
 	assert.True(t, v.CanEdit, "до согласования стажер вносит цели сама")
 
 	// Согласовать пустой список нельзя.
-	assert.Equal(t, http.StatusBadRequest, e.call("lead_oleg", http.MethodPost, "/api/interns/"+lizaID+"/goals/agree", nil, nil))
+	assert.Equal(t, http.StatusBadRequest, e.call("lead_artemiy", http.MethodPost, "/api/interns/"+lizaID+"/goals/agree", nil, nil))
 
 	// Лиза вносит цель после встречи с Артемием.
 	var g models.Goal
@@ -192,7 +192,7 @@ func TestGoalsLifecycleForLiza(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, e.call("mentor_igor", http.MethodPost, "/api/interns/"+lizaID+"/goals/agree", nil, nil))
 	assert.Equal(t, http.StatusForbidden, e.call("intern_liza", http.MethodPost, "/api/interns/"+lizaID+"/goals/agree", nil, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("lead_nina", http.MethodPost, "/api/interns/"+lizaID+"/goals/agree", nil, nil))
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodPost, "/api/interns/"+lizaID+"/goals/agree", nil, &v))
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodPost, "/api/interns/"+lizaID+"/goals/agree", nil, &v))
 	require.NotNil(t, v.Agreed)
 	assert.Equal(t, "Артемий", v.Agreed.By.Name)
 	assert.False(t, v.CanAgree, "согласованные цели повторно не согласуют")
@@ -205,8 +205,8 @@ func TestGoalsLifecycleForLiza(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, e.call("intern_liza", http.MethodPost, "/api/goals/"+g.ID+"/progress", map[string]any{"progressPct": 25}, nil))
 
 	// Удаление.
-	assert.Equal(t, http.StatusNoContent, e.call("lead_oleg", http.MethodDelete, "/api/goals/"+g2.ID, nil, nil))
-	assert.Equal(t, http.StatusNotFound, e.call("lead_oleg", http.MethodDelete, "/api/goals/"+g2.ID, nil, nil))
+	assert.Equal(t, http.StatusNoContent, e.call("lead_artemiy", http.MethodDelete, "/api/goals/"+g2.ID, nil, nil))
+	assert.Equal(t, http.StatusNotFound, e.call("lead_artemiy", http.MethodDelete, "/api/goals/"+g2.ID, nil, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("intern_pavel", http.MethodDelete, "/api/goals/"+g.ID, nil, nil))
 }
 

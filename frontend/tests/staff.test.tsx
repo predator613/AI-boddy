@@ -91,7 +91,7 @@ describe('главная наставника', () => {
 
 describe('путь стажера: подробности задачи', () => {
   it('клик по задаче раскрывает описание, срок и цель', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/?stage=02')
     const task = await screen.findByRole(
       'button',
@@ -124,7 +124,7 @@ describe('справочник наставника', () => {
 
 describe('руководитель: цели стажеров', () => {
   it('правит черновик Павла и согласует цели', async () => {
-    loginAs('lead_oleg')
+    loginAs('lead_artemiy')
     renderApp('/')
     await userEvent.click(await screen.findByRole('button', { name: /Павел/ }, T))
     const panel = await screen.findByRole('region', { name: 'Цели: Павел' }, T)
@@ -170,7 +170,7 @@ describe('руководитель: цели стажеров', () => {
   })
 
   it('подтверждает свой шаг в согласованных целях Марии', async () => {
-    loginAs('lead_oleg')
+    loginAs('lead_artemiy')
     renderApp('/')
     const panel = await screen.findByRole('region', { name: 'Цели: Мария' }, T)
     await userEvent.click(await within(panel).findByRole('button', { name: 'Подтвердить' }, T))
@@ -185,7 +185,7 @@ describe('руководитель: цели стажеров', () => {
   })
 
   it('ошибка списка стажеров и пустой список', async () => {
-    loginAs('lead_oleg')
+    loginAs('lead_artemiy')
     server.use(http.get(`${API_URL}/api/interns`, () => HttpResponse.json([])))
     renderApp('/')
     expect(await screen.findByText('В команде пока нет стажеров.', {}, T)).toBeInTheDocument()
@@ -194,7 +194,7 @@ describe('руководитель: цели стажеров', () => {
 
 describe('руководитель: согласования', () => {
   it('согласует заявку и отклоняет только с причиной', async () => {
-    loginAs('lead_oleg')
+    loginAs('lead_artemiy')
     renderApp('/approvals')
     const gitlab = await screen.findByRole('region', { name: /№1042/ }, T)
     await userEvent.click(within(gitlab).getByRole('button', { name: 'Согласовать' }))
@@ -223,20 +223,20 @@ describe('руководитель: согласования', () => {
 describe('правки после проверки на стенде', () => {
   it('настройки у каждого аккаунта свои', async () => {
     const { useSettingsStore } = await import('../src/store/settingsStore')
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     await waitFor(() => expect(useSettingsStore.getState().answerStyle).toBe('normal'))
     useSettingsStore.getState().setAnswerStyle('detailed')
     loginAs('mentor_igor')
     await waitFor(() => expect(useSettingsStore.getState().answerStyle).toBe('normal'))
     useSettingsStore.getState().setAnswerStyle('short')
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     await waitFor(() => expect(useSettingsStore.getState().answerStyle).toBe('detailed'))
     loginAs('mentor_igor')
     await waitFor(() => expect(useSettingsStore.getState().answerStyle).toBe('short'))
   })
 
   it('руководитель видит поддержку по техническим сбоям', async () => {
-    loginAs('lead_oleg')
+    loginAs('lead_artemiy')
     renderApp('/support')
     expect(await screen.findByText('не работает?', {}, T)).toBeInTheDocument()
     expect(screen.getAllByText('Не сохраняются цели стажера').length).toBeGreaterThan(0)
@@ -256,7 +256,7 @@ describe('правки после проверки на стенде', () => {
   })
 
   it('куратор стажировки – в карточке HR, кнопки контактов работают', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     const router = renderApp('/support')
     expect(await screen.findByText(/куратор стажировки \(HR BP\)/, {}, T)).toBeInTheDocument()
     expect(screen.getByText(/Вопросы к руководителю обсуди с наставником/)).toBeInTheDocument()

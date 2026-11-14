@@ -306,10 +306,15 @@ func (r *Mentor) CreateMaterial(ctx context.Context, d models.MaterialDraft, sou
 		if !d.UseInAI {
 			return nil
 		}
+		// Каждый кусок – заголовок и абзац текста: поиск по вопросу находит кусок вместе с ответом,
+		// а не отдельный заголовок без ответа.
 		_, err = tx.Exec(ctx, `
 			INSERT INTO kb_chunks (article_id, chunk_no, content)
-			SELECT $1::uuid, p.ord, p.part FROM regexp_split_to_table($2, E'\n\n') WITH ORDINALITY AS p(part, ord)
-			WHERE btrim(p.part) <> ''`, id, d.Title+"\n\n"+d.Body)
+			SELECT $1::uuid, row_number() OVER (), $2 || E'\n' || btrim(p.part)
+			FROM regexp_split_to_table($3, E'\n\n') AS p(part)
+			WHERE btrim(p.part) <> ''
+			UNION ALL
+			SELECT $1::uuid, 1, $2 WHERE btrim($3) = ''`, id, d.Title, d.Body)
 		return err
 	})
 	if err != nil {

@@ -22,7 +22,7 @@ describe('меню по ролям', () => {
   })
 
   it('стажера не пускает в разделы наставника, а наставника – в чат стажера', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     const router = renderApp('/plan')
     await screen.findByRole('heading', { name: 'Привет, Мария!' }, T)
     expect(router.state.location.pathname).toBe('/')
@@ -52,7 +52,7 @@ describe('колокольчик наставника', () => {
 
 describe('чат стажера с наставником', () => {
   it('показывает переписку, передачу от AI-buddy и карточки изменений', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/mentor')
     expect(await screen.findByRole('heading', { name: 'Игорь' }, T)).toBeInTheDocument()
     expect(screen.getByText(/Какую роль просить в GitLab/)).toBeInTheDocument()
@@ -63,7 +63,7 @@ describe('чат стажера с наставником', () => {
   })
 
   it('фильтр «только изменения» скрывает обычные сообщения', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/mentor')
     await screen.findByText('Игорь, для GitLab нужна роль Developer или Maintainer?', {}, T)
     await userEvent.click(screen.getByLabelText('Только изменения от наставника'))
@@ -74,7 +74,7 @@ describe('чат стажера с наставником', () => {
   })
 
   it('сообщение стажера уходит наставнику во «Входящие»', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/mentor')
     const box = await screen.findByLabelText('Сообщение наставнику', {}, T)
     await userEvent.click(screen.getByRole('button', { name: 'Спасибо!' }))
@@ -92,7 +92,7 @@ describe('чат стажера с наставником', () => {
         HttpResponse.json({ error: { code: 'internal_error', message: 'x' } }, { status: 500 }),
       ),
     )
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/mentor')
     const box = await screen.findByLabelText('Сообщение наставнику', {}, T)
     await userEvent.type(box, 'Привет{Enter}')
@@ -106,7 +106,7 @@ describe('чат стажера с наставником', () => {
         HttpResponse.json({ error: { code: 'internal_error', message: 'x' } }, { status: 500 }),
       ),
     )
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/mentor')
     expect(await screen.findByRole('button', { name: 'Повторить' }, T)).toBeInTheDocument()
   })
@@ -217,7 +217,7 @@ describe('план адаптации', () => {
   })
 
   it('добавляет этап, двигает и удаляет его', async () => {
-    loginAs('lead_oleg')
+    loginAs('lead_artemiy')
     renderApp('/plan')
     await screen.findByRole('region', { name: 'Этап Доступы' }, T)
     await userEvent.click(screen.getByRole('button', { name: 'Этап' }))

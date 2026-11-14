@@ -18,14 +18,14 @@ describe('маршруты', () => {
   })
 
   it('стажер на / видит «Мой путь»', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/')
     expect(await greeting('Мария')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Мой путь' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('вошедшего пользователя /login отправляет на главную', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     const router = renderApp('/login')
     expect(await greeting('Мария')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/')
@@ -51,7 +51,7 @@ describe('маршруты', () => {
   })
 
   it('«Выйти» в меню профиля возвращает на /login', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     const router = renderApp('/')
     await greeting('Мария')
     // на медленном компьютере страница может перерисоваться и закрыть меню – открываем, пока не появится пункт
@@ -82,7 +82,7 @@ describe('маршруты', () => {
         HttpResponse.json({ ...mockUsers[0], name: 'Мария Н.' }),
       ),
     )
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/profile')
     expect(await screen.findByText('Мария Н.')).toBeInTheDocument()
   })

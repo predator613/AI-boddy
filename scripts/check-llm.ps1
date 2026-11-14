@@ -60,9 +60,9 @@ Pop-Location
 # 4. Чат через backend: один вопрос дважды – живая модель отвечает разными словами.
 $port = if ($cfg['BACKEND_PORT']) { $cfg['BACKEND_PORT'] } else { '8080' }
 $api = "http://localhost:$port/api"
-$login = Post "$api/auth/login" @{} @{ login = 'intern_anna'; password = 'demo123' }
+$login = Post "$api/auth/login" @{} @{ login = 'intern_maria'; password = 'demo123' }
 if ($login.code -ne 200) {
-  Say "4. Вход intern_anna: HTTP $($login.code) $($login.text)"
+  Say "4. Вход intern_maria: HTTP $($login.code) $($login.text)"
 } else {
   $tok = ($login.text | ConvertFrom-Json).token
   foreach ($question in @('Как устроено код-ревью у нас в команде?', 'Как устроено код-ревью у нас в команде?', 'Посоветуй, как не тонуть в задачах в первую неделю')) {

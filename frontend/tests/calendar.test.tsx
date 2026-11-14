@@ -26,7 +26,7 @@ describe('Календарь стажера', () => {
   })
 
   it('показывает неделю, встречи и отвечает «Приду»', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/')
     await userEvent.click(await screen.findByRole('link', { name: 'Календарь' }, T))
     expect(await screen.findByRole('heading', { name: 'Мои встречи' }, T)).toBeInTheDocument()
@@ -47,7 +47,7 @@ describe('Календарь стажера', () => {
   })
 
   it('просьба перенести уходит наставнику в чат', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/calendar')
     await screen.findByRole('heading', { name: '1:1 с Игорем' }, T)
     await userEvent.click(screen.getByRole('button', { name: 'Попросить перенести' }))
@@ -61,7 +61,7 @@ describe('Календарь стажера', () => {
   })
 
   it('своя запись: проверка полей, пересечение, добавление и удаление', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/calendar')
     await screen.findByRole('heading', { name: '1:1 с Игорем' }, T)
     await userEvent.click(screen.getByRole('button', { name: 'Добавить запись' }))
@@ -97,7 +97,7 @@ describe('Календарь стажера', () => {
   })
 
   it('листает недели и возвращается к текущей', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/calendar')
     await screen.findByRole('heading', { name: '1:1 с Игорем' }, T)
     expect(screen.getByRole('button', { name: 'Эта неделя' })).toBeDisabled()
@@ -115,7 +115,7 @@ describe('Календарь стажера', () => {
         HttpResponse.json({ error: { code: 'internal_error', message: 'x' } }, { status: 500 }),
       ),
     )
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/calendar')
     expect(await screen.findByRole('button', { name: 'Повторить' }, T)).toBeInTheDocument()
   })
@@ -123,7 +123,7 @@ describe('Календарь стажера', () => {
 
 describe('чат с наставником закреплен как мессенджер', () => {
   it('фильтр «Только изменения» и поле ввода внизу', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/mentor')
     const log = await screen.findByRole('log', { name: 'Переписка с наставником' }, T)
     expect(within(log).getByText(/для GitLab нужна роль/)).toBeInTheDocument()

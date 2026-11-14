@@ -10,7 +10,8 @@ export const ExternalRef = z
   .object({ system: z.string(), key: z.string(), url: z.string().nullable() })
   .nullish()
 
-export const RequestStatus = z.enum(['waiting', 'approved', 'done', 'rejected'])
+// cancelled – стажер отозвал заявку, пока она была на согласовании.
+export const RequestStatus = z.enum(['waiting', 'approved', 'done', 'rejected', 'cancelled'])
 
 export const RequestItem = z.object({
   id: z.string(),

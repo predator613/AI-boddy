@@ -7,7 +7,7 @@ describe('authStore', () => {
   it('setAuth сохраняет токен и пользователя, в том числе в localStorage', () => {
     useAuthStore.getState().setAuth('t-1', anna)
     expect(useAuthStore.getState().token).toBe('t-1')
-    expect(useAuthStore.getState().user?.login).toBe('intern_anna')
+    expect(useAuthStore.getState().user?.login).toBe('intern_maria')
     expect(localStorage.getItem('ai-buddy-auth')).toContain('t-1')
   })
 

@@ -91,7 +91,7 @@ func login(t *testing.T, base, user, pass string) (int, string, models.User) {
 func TestFullLoginFlow(t *testing.T) {
 	srv := newServer(t, true)
 
-	code, token, user := login(t, srv.URL, "intern_anna", "demo123")
+	code, token, user := login(t, srv.URL, "intern_maria", "demo123")
 	require.Equal(t, http.StatusOK, code)
 	require.NotEmpty(t, token)
 	assert.Equal(t, "intern", user.Role)
@@ -116,7 +116,7 @@ func TestFullLoginFlow(t *testing.T) {
 func TestLoginErrorsOverHTTP(t *testing.T) {
 	srv := newServer(t, true)
 
-	code, _, _ := login(t, srv.URL, "intern_anna", "wrong")
+	code, _, _ := login(t, srv.URL, "intern_maria", "wrong")
 	assert.Equal(t, http.StatusUnauthorized, code)
 
 	code, _, _ = login(t, srv.URL, "", "")

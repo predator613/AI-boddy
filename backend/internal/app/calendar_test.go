@@ -45,7 +45,7 @@ func TestInternCalendar(t *testing.T) {
 		t.Helper()
 		var v models.CalendarView
 		q := "/api/me/calendar?from=" + url.QueryEscape(from.Format(time.RFC3339)) + "&to=" + url.QueryEscape(to.Format(time.RFC3339))
-		require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, q, nil, &v))
+		require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, q, nil, &v))
 		return v.Events
 	}
 	find := func(evs []models.CalendarEvent, id string) *models.CalendarEvent {
@@ -90,7 +90,7 @@ func TestInternCalendar(t *testing.T) {
 
 	// Своя запись после 1:1: сохраняется и удаляется.
 	var ev models.CalendarEvent
-	require.Equal(t, http.StatusCreated, e.call("intern_anna", http.MethodPost, "/api/me/calendar/entries", map[string]any{
+	require.Equal(t, http.StatusCreated, e.call("intern_maria", http.MethodPost, "/api/me/calendar/entries", map[string]any{
 		"title": "test фокус", "kind": "focus", "startsAt": at(16, 0), "durationMin": 60, "shareWithMentor": false,
 	}, &ev))
 	assert.Equal(t, "own", ev.Status)
@@ -101,12 +101,12 @@ func TestInternCalendar(t *testing.T) {
 	var errBody struct {
 		Error struct{ Code, Message string } `json:"error"`
 	}
-	require.Equal(t, http.StatusConflict, e.call("intern_anna", http.MethodPost, "/api/me/calendar/entries", map[string]any{
+	require.Equal(t, http.StatusConflict, e.call("intern_maria", http.MethodPost, "/api/me/calendar/entries", map[string]any{
 		"title": "test учеба", "kind": "study", "startsAt": at(15, 30), "durationMin": 30,
 	}, &errBody))
 	assert.Equal(t, "conflict", errBody.Error.Code)
 	assert.Equal(t, "Пересекается с «1:1 с наставником»", errBody.Error.Message)
-	assert.Equal(t, http.StatusConflict, e.call("intern_anna", http.MethodPost, "/api/me/calendar/entries", map[string]any{
+	assert.Equal(t, http.StatusConflict, e.call("intern_maria", http.MethodPost, "/api/me/calendar/entries", map[string]any{
 		"title": "test личное", "kind": "personal", "startsAt": at(16, 30), "durationMin": 15,
 	}, nil), "пересечение со своей записью")
 
@@ -119,17 +119,17 @@ func TestInternCalendar(t *testing.T) {
 		"раньше 10:00": {"title": "test рано", "kind": "focus", "startsAt": at(9, 30), "durationMin": 30},
 		"выходной":     {"title": "test суббота", "kind": "focus", "startsAt": saturday.Add(12 * time.Hour), "durationMin": 30},
 	} {
-		assert.Equal(t, http.StatusBadRequest, e.call("intern_anna", http.MethodPost, "/api/me/calendar/entries", body, nil), name)
+		assert.Equal(t, http.StatusBadRequest, e.call("intern_maria", http.MethodPost, "/api/me/calendar/entries", body, nil), name)
 	}
 
 	assert.Equal(t, http.StatusNotFound, e.call("intern_pavel", http.MethodDelete, "/api/me/calendar/entries/"+ev.ID, nil, nil), "чужая запись")
-	assert.Equal(t, http.StatusNoContent, e.call("intern_anna", http.MethodDelete, "/api/me/calendar/entries/"+ev.ID, nil, nil))
-	assert.Equal(t, http.StatusNotFound, e.call("intern_anna", http.MethodDelete, "/api/me/calendar/entries/"+ev.ID, nil, nil))
+	assert.Equal(t, http.StatusNoContent, e.call("intern_maria", http.MethodDelete, "/api/me/calendar/entries/"+ev.ID, nil, nil))
+	assert.Equal(t, http.StatusNotFound, e.call("intern_maria", http.MethodDelete, "/api/me/calendar/entries/"+ev.ID, nil, nil))
 
 	// «Приду» – статус и уведомление организатору.
 	answer := func(meeting string, body map[string]any) (int, models.CalendarEvent) {
 		var out models.CalendarEvent
-		code := e.call("intern_anna", http.MethodPost, "/api/me/calendar/events/"+meeting+"/answer", body, &out)
+		code := e.call("intern_maria", http.MethodPost, "/api/me/calendar/events/"+meeting+"/answer", body, &out)
 		return code, out
 	}
 	code, out := answer(devopsIntro, map[string]any{"answer": "accept"})
@@ -161,8 +161,8 @@ func TestInternCalendar(t *testing.T) {
 
 	// Только для стажера; период проверяется.
 	assert.Equal(t, http.StatusForbidden, e.call("mentor_igor", http.MethodGet, "/api/me/calendar?from=2026-11-01T00:00:00Z&to=2026-11-08T00:00:00Z", nil, nil))
-	assert.Equal(t, http.StatusForbidden, e.call("lead_oleg", http.MethodPost, "/api/me/calendar/entries", map[string]any{}, nil))
-	assert.Equal(t, http.StatusBadRequest, e.call("intern_anna", http.MethodGet, "/api/me/calendar?from=вчера&to=2026-11-08T00:00:00Z", nil, nil))
-	assert.Equal(t, http.StatusBadRequest, e.call("intern_anna", http.MethodGet, "/api/me/calendar?from=2026-11-08T00:00:00Z&to=2026-11-01T00:00:00Z", nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("lead_artemiy", http.MethodPost, "/api/me/calendar/entries", map[string]any{}, nil))
+	assert.Equal(t, http.StatusBadRequest, e.call("intern_maria", http.MethodGet, "/api/me/calendar?from=вчера&to=2026-11-08T00:00:00Z", nil, nil))
+	assert.Equal(t, http.StatusBadRequest, e.call("intern_maria", http.MethodGet, "/api/me/calendar?from=2026-11-08T00:00:00Z&to=2026-11-01T00:00:00Z", nil, nil))
 	assert.Equal(t, http.StatusUnauthorized, e.call("nobody", http.MethodGet, "/api/me/calendar", nil, nil))
 }

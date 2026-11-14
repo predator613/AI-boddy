@@ -24,7 +24,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       <Stack gap="sm">
         <TextInput
           label="Логин"
-          placeholder="например, intern_anna"
+          placeholder="например, intern_maria"
           autoComplete="username"
           key={form.key('login')}
           {...form.getInputProps('login')}

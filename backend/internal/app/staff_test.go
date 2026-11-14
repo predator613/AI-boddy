@@ -22,14 +22,14 @@ const (
 )
 
 func integrationsOrder(kind string) integrations.Order {
-	return integrations.Order{Kind: kind, Requester: "intern_anna", Title: "test"}
+	return integrations.Order{Kind: kind, Requester: "intern_maria", Title: "test"}
 }
 
 // newStaffEnv – чат-окружение плюс руководители и Лиза; после теста убирает обращения, заметки и отметки.
 func newStaffEnv(t *testing.T) *chatEnv {
 	t.Helper()
 	e := newChatEnv(t, "")
-	for _, u := range []string{"lead_oleg", "lead_nina", "intern_liza"} {
+	for _, u := range []string{"lead_artemiy", "lead_nina", "intern_liza"} {
 		code, token, _ := login(t, e.base, u, "demo123")
 		require.Equal(t, http.StatusOK, code)
 		e.tok[u] = token
@@ -77,9 +77,9 @@ func feedOf(t *testing.T, e *chatEnv, user string) models.Feed {
 func TestApprovalsFlow(t *testing.T) {
 	e := newStaffEnv(t)
 
-	card := confirmOf(t, e.say("intern_anna", map[string]any{"text": "нужен доступ в GitLab"}))
+	card := confirmOf(t, e.say("intern_maria", map[string]any{"text": "нужен доступ в GitLab"}))
 	var r models.ChatReply
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/chat/actions/"+card.ActionID+"/confirm", nil, &r))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPost, "/api/chat/actions/"+card.ActionID+"/confirm", nil, &r))
 	res := r.Messages[0].Result
 	require.NotNil(t, res)
 	require.NotNil(t, res.External, "в карточке чата – ключ заявки в Jira")
@@ -87,12 +87,12 @@ func TestApprovalsFlow(t *testing.T) {
 	assert.Equal(t, "Jira Service Desk", res.External.System)
 
 	// Стажер и чужой руководитель согласований не видят.
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodGet, "/api/approvals", nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodGet, "/api/approvals", nil, nil))
 	var list []models.Approval
 	require.Equal(t, http.StatusOK, e.call("lead_nina", http.MethodGet, "/api/approvals", nil, &list))
 	assert.Empty(t, list)
 
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodGet, "/api/approvals", nil, &list))
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodGet, "/api/approvals", nil, &list))
 	require.NotEmpty(t, list)
 	ap := list[0]
 	assert.Equal(t, res.RequestID, ap.ID, "ожидающая заявка – первой")
@@ -106,25 +106,25 @@ func TestApprovalsFlow(t *testing.T) {
 	assert.NotContains(t, f, "Согласует")
 
 	path := "/api/approvals/" + ap.ID
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodPost, path, map[string]any{"decision": "approve"}, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodPost, path, map[string]any{"decision": "approve"}, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("lead_nina", http.MethodPost, path, map[string]any{"decision": "approve"}, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodPost, path, map[string]any{"decision": "approve"}, nil))
-	assert.Equal(t, http.StatusBadRequest, e.call("lead_oleg", http.MethodPost, path, map[string]any{"decision": "reject"}, nil), "отказ без причины")
-	assert.Equal(t, http.StatusBadRequest, e.call("lead_oleg", http.MethodPost, path, map[string]any{"decision": "maybe"}, nil))
-	assert.Equal(t, http.StatusBadRequest, e.call("lead_oleg", http.MethodPost, path,
+	assert.Equal(t, http.StatusBadRequest, e.call("lead_artemiy", http.MethodPost, path, map[string]any{"decision": "reject"}, nil), "отказ без причины")
+	assert.Equal(t, http.StatusBadRequest, e.call("lead_artemiy", http.MethodPost, path, map[string]any{"decision": "maybe"}, nil))
+	assert.Equal(t, http.StatusBadRequest, e.call("lead_artemiy", http.MethodPost, path,
 		map[string]any{"decision": "reject", "reason": string(make([]rune, 301))}, nil))
-	assert.Equal(t, http.StatusNotFound, e.call("lead_oleg", http.MethodPost, "/api/approvals/00000000-0000-4000-8000-000000000000",
+	assert.Equal(t, http.StatusNotFound, e.call("lead_artemiy", http.MethodPost, "/api/approvals/00000000-0000-4000-8000-000000000000",
 		map[string]any{"decision": "approve"}, nil))
 
 	before := feedOf(t, e, "mentor_igor").Unread
 	var done models.Approval
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodPost, path, map[string]any{"decision": "approve"}, &done))
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodPost, path, map[string]any{"decision": "approve"}, &done))
 	assert.Equal(t, "approved", done.Status)
-	assert.Equal(t, http.StatusConflict, e.call("lead_oleg", http.MethodPost, path, map[string]any{"decision": "approve"}, nil), "повторное решение")
+	assert.Equal(t, http.StatusConflict, e.call("lead_artemiy", http.MethodPost, path, map[string]any{"decision": "approve"}, nil), "повторное решение")
 
 	// У стажера: заявка выполнена, задача пути закрыта, в чате сообщение.
 	var reqs []models.RequestItem
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/requests", nil, &reqs))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/requests", nil, &reqs))
 	assert.Equal(t, "done", reqs[0].Status)
 	require.NotNil(t, reqs[0].External)
 	assert.Equal(t, res.External.Key, reqs[0].External.Key)
@@ -148,16 +148,16 @@ func TestApprovalsFlow(t *testing.T) {
 	assert.False(t, feed.Items[0].Read)
 
 	// Отказ с причиной: отгул остается у руководителя, причина видна стажеру.
-	leave := confirmOf(t, e.say("intern_anna", map[string]any{"text": "хочу отгул 20 ноября"}))
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/chat/actions/"+leave.ActionID+"/confirm", nil, &r))
+	leave := confirmOf(t, e.say("intern_maria", map[string]any{"text": "хочу отгул 20 ноября"}))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPost, "/api/chat/actions/"+leave.ActionID+"/confirm", nil, &r))
 	assert.Nil(t, r.Messages[0].Result.External, "отгул в Jira не уходит")
 	var rejected models.Approval
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodPost, "/api/approvals/"+leave.ActionID,
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodPost, "/api/approvals/"+leave.ActionID,
 		map[string]any{"decision": "reject", "reason": "В этот день релиз"}, &rejected))
 	assert.Equal(t, "rejected", rejected.Status)
 	require.NotNil(t, rejected.RejectReason)
 	assert.Contains(t, fieldsMap(rejected.Fields)["Почему ты"], "руководитель")
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/requests", nil, &reqs))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/requests", nil, &reqs))
 	assert.Equal(t, "rejected", reqs[0].Status)
 	assert.Equal(t, "В этот день релиз", *reqs[0].RejectReason)
 	assert.Equal(t, "Артемий отклонил заявку Марии «Отгул 20 ноября»", feedOf(t, e, "mentor_igor").Items[0].Text)
@@ -174,18 +174,18 @@ func TestAccessGoesToJira(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	msgs := e.say("intern_anna", map[string]any{"text": "нужен доступ к тестовому стенду"})
+	msgs := e.say("intern_maria", map[string]any{"text": "нужен доступ к тестовому стенду"})
 	card := confirmOf(t, msgs)
 	assert.Contains(t, msgs[0].Text, "Jira Service Desk, команда доступов")
 	assert.Equal(t, "Jira Service Desk, команда доступов", fieldsMap(card.Fields)["Куда ушла"])
 
 	var r models.ChatReply
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/chat/actions/"+card.ActionID+"/confirm", nil, &r))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPost, "/api/chat/actions/"+card.ActionID+"/confirm", nil, &r))
 	res := r.Messages[0].Result
 	assert.Equal(t, "waiting", res.Status)
 
 	var list []models.Approval
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodGet, "/api/approvals", nil, &list))
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodGet, "/api/approvals", nil, &list))
 	for _, a := range list {
 		assert.NotEqual(t, res.RequestID, a.ID, "доступ к стенду не идет руководителю")
 	}
@@ -220,8 +220,8 @@ func TestAccessGoesToJira(t *testing.T) {
 func TestMentorFeed(t *testing.T) {
 	e := newStaffEnv(t)
 
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodGet, "/api/mentor/feed", nil, nil))
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodPost, "/api/mentor/feed/read", nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodGet, "/api/mentor/feed", nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodPost, "/api/mentor/feed/read", nil, nil))
 
 	feed := feedOf(t, e, "mentor_igor")
 	require.NotEmpty(t, feed.Items)
@@ -233,8 +233,8 @@ func TestMentorFeed(t *testing.T) {
 	before := feed.Unread
 
 	// Стажер закрыл задачу и ответил на приглашение – наставник видит оба события.
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/path/tasks/"+gitlabTask+"/complete", nil, nil))
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/me/calendar/events/"+reviewM+"/answer",
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPost, "/api/path/tasks/"+gitlabTask+"/complete", nil, nil))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPost, "/api/me/calendar/events/"+reviewM+"/answer",
 		map[string]any{"answer": "accept"}, nil))
 	feed = feedOf(t, e, "mentor_igor")
 	assert.Equal(t, before+2, feed.Unread)
@@ -254,7 +254,7 @@ func TestMentorFeed(t *testing.T) {
 	}
 
 	// У руководителя своя лента (может быть пустой).
-	lead := feedOf(t, e, "lead_oleg")
+	lead := feedOf(t, e, "lead_artemiy")
 	assert.NotNil(t, lead.Items)
 }
 
@@ -262,7 +262,7 @@ func TestMentorChecklist(t *testing.T) {
 	e := newStaffEnv(t)
 	path := "/api/mentor/interns/" + annaID + "/checklist"
 
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodGet, path, nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodGet, path, nil, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("lead_nina", http.MethodGet, path, nil, nil), "чужая команда")
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodGet, "/api/mentor/interns/"+pavelID+"/checklist", nil, nil), "не его стажер")
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodGet, "/api/mentor/interns/"+igorID+"/checklist", nil, nil), "не стажер")
@@ -287,9 +287,9 @@ func TestMentorChecklist(t *testing.T) {
 
 	// Руководитель видит отметки наставника стажера и может их менять.
 	var lead models.MentorChecklist
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodGet, path, nil, &lead))
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodGet, path, nil, &lead))
 	assert.True(t, lead.Items[4].Done)
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodPost, path+"/"+item, map[string]any{"done": false}, &lead))
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodPost, path+"/"+item, map[string]any{"done": false}, &lead))
 	assert.False(t, lead.Items[4].Done)
 	require.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodGet, path, nil, &c))
 	assert.False(t, c.Items[4].Done)
@@ -297,7 +297,7 @@ func TestMentorChecklist(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, path+"/"+item, map[string]any{}, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodPost, path+"/00000000-0000-4000-8000-000000000000", map[string]any{"done": true}, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodPost, path+"/00000000-0000-4000-8000-000000000000", map[string]any{"done": false}, nil))
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodPost, path+"/"+item, map[string]any{"done": true}, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodPost, path+"/"+item, map[string]any{"done": true}, nil))
 }
 
 func TestMeetingNotes(t *testing.T) {
@@ -307,12 +307,12 @@ func TestMeetingNotes(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, e.call("mentor_igor", http.MethodPut, "/api/me/notes/"+reviewM, map[string]any{"text": "x"}, nil))
 
 	var notes []models.MeetingNote
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/me/notes", nil, &notes))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/me/notes", nil, &notes))
 	require.Len(t, notes, 1)
 	assert.Equal(t, reviewM, notes[0].EventID)
 
 	var n models.MeetingNote
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPut, "/api/me/notes/"+reviewM, map[string]any{"text": "  Новый конспект  "}, &n))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPut, "/api/me/notes/"+reviewM, map[string]any{"text": "  Новый конспект  "}, &n))
 	assert.Equal(t, "Новый конспект", n.Text)
 	assert.Equal(t, reviewM, n.EventID)
 	assert.WithinDuration(t, time.Now(), n.UpdatedAt, time.Minute)
@@ -320,7 +320,7 @@ func TestMeetingNotes(t *testing.T) {
 	// Заметка к своей записи календаря.
 	var view models.CalendarView
 	from, to := time.Now().AddDate(0, 0, -1).Format(time.RFC3339), time.Now().AddDate(0, 0, 14).Format(time.RFC3339)
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/me/calendar?from="+from[:10]+"T00:00:00Z&to="+to[:10]+"T00:00:00Z", nil, &view))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/me/calendar?from="+from[:10]+"T00:00:00Z&to="+to[:10]+"T00:00:00Z", nil, &view))
 	own := ""
 	for _, ev := range view.Events {
 		if ev.Status == "own" {
@@ -328,19 +328,19 @@ func TestMeetingNotes(t *testing.T) {
 		}
 	}
 	require.NotEmpty(t, own)
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPut, "/api/me/notes/"+own, map[string]any{"text": "план на фокус"}, &n))
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/me/notes", nil, &notes))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPut, "/api/me/notes/"+own, map[string]any{"text": "план на фокус"}, &n))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/me/notes", nil, &notes))
 	assert.Len(t, notes, 2)
 
 	// Пустой текст удаляет; чужое событие и длинный текст не принимаются.
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPut, "/api/me/notes/"+own, map[string]any{"text": " "}, &n))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPut, "/api/me/notes/"+own, map[string]any{"text": " "}, &n))
 	assert.Empty(t, n.Text)
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/me/notes", nil, &notes))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/me/notes", nil, &notes))
 	assert.Len(t, notes, 1)
 	assert.Equal(t, http.StatusNotFound, e.call("intern_pavel", http.MethodPut, "/api/me/notes/"+reviewM, map[string]any{"text": "x"}, nil))
-	assert.Equal(t, http.StatusNotFound, e.call("intern_anna", http.MethodPut, "/api/me/notes/not-a-uuid", map[string]any{"text": "x"}, nil))
-	assert.Equal(t, http.StatusBadRequest, e.call("intern_anna", http.MethodPut, "/api/me/notes/"+reviewM, map[string]any{"text": string(make([]rune, 4001))}, nil))
-	assert.Equal(t, http.StatusBadRequest, e.call("intern_anna", http.MethodPut, "/api/me/notes/"+reviewM, map[string]any{}, nil))
+	assert.Equal(t, http.StatusNotFound, e.call("intern_maria", http.MethodPut, "/api/me/notes/not-a-uuid", map[string]any{"text": "x"}, nil))
+	assert.Equal(t, http.StatusBadRequest, e.call("intern_maria", http.MethodPut, "/api/me/notes/"+reviewM, map[string]any{"text": string(make([]rune, 4001))}, nil))
+	assert.Equal(t, http.StatusBadRequest, e.call("intern_maria", http.MethodPut, "/api/me/notes/"+reviewM, map[string]any{}, nil))
 
 	// Заметки видит только автор.
 	require.Equal(t, http.StatusOK, e.call("intern_pavel", http.MethodGet, "/api/me/notes", nil, &notes))
@@ -351,12 +351,12 @@ func TestSupportTickets(t *testing.T) {
 	e := newStaffEnv(t)
 
 	var list []models.SupportTicket
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/support/tickets", nil, &list))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/support/tickets", nil, &list))
 	assert.Empty(t, list)
 
-	e.say("intern_anna", map[string]any{"text": "как оформить отпуск"})
+	e.say("intern_maria", map[string]any{"text": "как оформить отпуск"})
 	var tk models.SupportTicket
-	require.Equal(t, http.StatusCreated, e.call("intern_anna", http.MethodPost, "/api/support/tickets",
+	require.Equal(t, http.StatusCreated, e.call("intern_maria", http.MethodPost, "/api/support/tickets",
 		map[string]any{"type": "Помощник ответил неверно", "details": "  Ответ про отпуск не по теме  ", "internId": nil, "attachDialog": true}, &tk))
 	assert.Regexp(t, `^SUP-\d+$`, tk.Number)
 	assert.Equal(t, "new", tk.Status)
@@ -372,7 +372,7 @@ func TestSupportTickets(t *testing.T) {
 		"длинное":         {"type": "Другое", "details": string(make([]rune, 2001))},
 		"стажер о других": {"type": "Другое", "details": "x", "internId": pavelID},
 	} {
-		assert.Equal(t, http.StatusBadRequest, e.call("intern_anna", http.MethodPost, "/api/support/tickets", body, nil), name)
+		assert.Equal(t, http.StatusBadRequest, e.call("intern_maria", http.MethodPost, "/api/support/tickets", body, nil), name)
 	}
 
 	// Наставник пишет про своего стажера; про чужого – нельзя.
@@ -381,11 +381,11 @@ func TestSupportTickets(t *testing.T) {
 		map[string]any{"type": "Не согласуется заявка", "details": "Заявка Марии висит", "internId": annaID, "attachDialog": true}, &mt))
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, "/api/support/tickets",
 		map[string]any{"type": "Другое", "details": "x", "internId": pavelID}, nil))
-	require.Equal(t, http.StatusCreated, e.call("lead_oleg", http.MethodPost, "/api/support/tickets",
+	require.Equal(t, http.StatusCreated, e.call("lead_artemiy", http.MethodPost, "/api/support/tickets",
 		map[string]any{"type": "Другое", "details": "x"}, nil))
 
 	// Каждый видит только свои обращения, новые сверху.
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/support/tickets", nil, &list))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/support/tickets", nil, &list))
 	require.Len(t, list, 1)
 	assert.Equal(t, tk.Number, list[0].Number)
 	assert.Equal(t, "Помощник ответил неверно", list[0].Type)
@@ -399,7 +399,7 @@ func TestSupportTickets(t *testing.T) {
 	n, err = e.svc.Support.SyncOnce(context.Background())
 	require.NoError(t, err)
 	assert.Zero(t, n)
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/support/tickets", nil, &list))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/support/tickets", nil, &list))
 	assert.Equal(t, "done", list[0].Status)
 	require.NotNil(t, list[0].Answer)
 	assert.Equal(t, mockservices.SupportAnswer, *list[0].Answer)
@@ -522,6 +522,6 @@ func TestGoalStepsAndCompetency(t *testing.T) {
 	require.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodPatch, "/api/goals/"+g.ID, map[string]any{
 		"steps": []map[string]any{{"title": "Демо команде", "source": "lead"}},
 	}, &g))
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodPost, "/api/goals/"+g.ID+"/steps/"+g.Steps[0].ID, map[string]any{"done": true}, &g))
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodPost, "/api/goals/"+g.ID+"/steps/"+g.Steps[0].ID, map[string]any{"done": true}, &g))
 	assert.Equal(t, "Артемий подтвердил шаг «Демо команде» у Лизы", feedOf(t, e, "mentor_igor").Items[0].Text)
 }

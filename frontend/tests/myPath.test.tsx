@@ -8,7 +8,7 @@ import { loginAs, renderApp } from './test-utils'
 const T = { timeout: 3000 }
 
 describe('Мой путь', () => {
-  beforeEach(() => loginAs('intern_anna'))
+  beforeEach(() => loginAs('intern_maria'))
 
   it('показывает кольцо прогресса, этапы-карточки, следующий шаг и неделю', async () => {
     renderApp('/')

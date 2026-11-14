@@ -88,7 +88,7 @@ describe('материалы и справочник наставника', () =
 
 describe('стажер: конспект, чаты, профиль, счетчик заявок', () => {
   it('конспект встречи сохраняется в календаре', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/calendar')
     await userEvent.click(await screen.findByRole('button', { name: /Знакомство с DevOps/ }, T))
     const toggle = await screen.findByRole('button', { name: /Конспект встречи/ }, T)
@@ -99,7 +99,7 @@ describe('стажер: конспект, чаты, профиль, счетчи
   })
 
   it('AI-buddy добавляет в чаты команды и пишет «Готово»', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/chat?q=Добавь меня в чаты команды')
     await userEvent.click(await screen.findByRole('button', { name: 'Подтвердить' }, T))
     expect(await screen.findByText('Готово', {}, T)).toBeInTheDocument()
@@ -107,7 +107,7 @@ describe('стажер: конспект, чаты, профиль, счетчи
   })
 
   it('«Изменить» подставляет текст правки; устаревшая карточка – сообщение', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/chat?q=Как получить доступ к GitLab?')
     await userEvent.click(await screen.findByRole('button', { name: 'Изменить' }, T))
     expect(screen.getByLabelText('Сообщение')).toHaveValue('Измени в заявке: ')
@@ -122,7 +122,7 @@ describe('стажер: конспект, чаты, профиль, счетчи
   })
 
   it('в профиле наставник и неделя, на «Мои заявки» счетчик', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/profile')
     expect(await screen.findByText('Игорь', {}, T)).toBeInTheDocument()
     expect(await screen.findByText('неделя 2 из 24', {}, T)).toBeInTheDocument()
@@ -130,7 +130,7 @@ describe('стажер: конспект, чаты, профиль, счетчи
   })
 
   it('задача «Добавиться в чаты» ведет в чат с готовым запросом', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/?stage=05')
     expect(await screen.findByText('Пройти материалы по защите данных', {}, T)).toBeInTheDocument()
     expect(screen.getAllByText('месяцы 1–2').length).toBeGreaterThan(0)

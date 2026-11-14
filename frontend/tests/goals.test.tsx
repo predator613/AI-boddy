@@ -13,7 +13,7 @@ afterEach(() => resetGoalsMock())
 
 describe('Цели стажировки', () => {
   it('стажер видит цели с шагами; прогресс не кликается', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/')
     expect(await screen.findByText('Мои цели на стажировку', {}, T)).toBeInTheDocument()
     expect(screen.getByText(/согласованы с Артемием .* · от OKR команды/)).toBeInTheDocument()
@@ -58,7 +58,7 @@ describe('Цели стажировки', () => {
         }),
       ),
     )
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/')
     expect(await screen.findByLabelText('Цель без шагов: 40%', {}, T)).toBeInTheDocument()
   })
@@ -73,7 +73,7 @@ describe('Цели стажировки', () => {
   })
 
   it('руководитель видит цели стажера в его карточке', async () => {
-    loginAs('lead_oleg')
+    loginAs('lead_artemiy')
     renderApp('/interns/u-anna')
     expect(await screen.findByText('Цели стажировки', {}, T)).toBeInTheDocument()
     expect(screen.getByText('Самостоятельно закрывать задачи уровня junior')).toBeInTheDocument()
@@ -104,14 +104,14 @@ describe('Цели стажировки', () => {
 
 describe('Справочник: статья с сервера', () => {
   it('в окне статьи показывается текст целиком', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/kb?article=a-leave')
     const dialog = await screen.findByRole('dialog', {}, T)
     expect(await within(dialog).findByText(/Демо-текст статьи/, {}, T)).toBeInTheDocument()
   })
 
   it('поиск идет на сервер и показывает найденное', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/kb')
     await screen.findByText('Популярное', {}, T)
     await userEvent.type(screen.getByLabelText('Поиск по справочнику'), 'отгул')

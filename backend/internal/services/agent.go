@@ -354,7 +354,8 @@ func (a *Agent) systemPrompt(t *turn) string {
 Никогда не пиши «передал», «создал», «подготовлю», «оформлю», если не вызываешь инструмент в этом же ответе:
 действие происходит только через инструмент. Если стажер согласился («да», «давай») на твое предложение
 оформить заявку или передать вопрос, сразу вызови нужный инструмент с данными из переписки.
-В handoff_to_mentor в поле question передавай сам вопрос стажера целиком, а не его последнюю реплику.`,
+В handoff_to_mentor в поле question передавай сам вопрос стажера целиком, а не его последнюю реплику.
+У передачи вопроса наставнику кнопки «Подтвердить» нет: предлагая передать, проси ответить «да».`,
 		dayMonth(a.now().In(moscow))+", "+weekday(a.now().In(moscow)), t.viewer.Name, t.viewer.TeamName, a.peopleNote(t)) +
 		nextNote(t.next) + draftNote(t.draft) + styleNote(t.style)
 }
@@ -476,6 +477,10 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 			return err
 		}
 	}
+	// Отзыв заявки и вопрос о конкретной заявке – без модели: это действие и факты из базы.
+	if done, err := a.requestIntent(ctx, t, text); done {
+		return err
+	}
 	// Передача вопроса наставнику – без модели: стажер сначала видит, что именно уйдет, и соглашается.
 	switch intent, q := a.handoffIntent(t, text); intent {
 	case handoffSend:
@@ -510,8 +515,13 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 				"Если данных не хватает, задай один уточняющий вопрос и не обещай действие."})
 		resp = a.ask(ctx, t, llm.Request{Messages: retry, Tools: agentTools})
 		if len(resp.ToolCalls) == 0 && reClaim.MatchString(resp.Content) {
-			if reClaimHandoff.MatchString(resp.Content) {
+			switch {
+			case reClaimHandoff.MatchString(resp.Content):
 				return a.offerHandoff(ctx, t, "")
+			case reClaimLook.MatchString(resp.Content):
+				// «сейчас посмотрю» – ищем в справочнике сами
+				args, _ := json.Marshal(map[string]string{"query": text})
+				return a.searchAnswer(ctx, t, msgs, llm.ToolCall{ID: "look", Name: "search_kb", Arguments: args}, text)
 			}
 			return a.say(ctx, t, "text", "Карточку заявки подготовить не получилось. Напиши одной фразой, что нужно, например: «доступ к GitLab на чтение» или «отгул 20 ноября».", "think", nil)
 		}
@@ -521,6 +531,9 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 
 // reClaim – модель пишет, что сделала или сделает действие (передать, создать, оформить).
 var reClaim = regexp.MustCompile(`(?i)передал|передам|передаю|подготовлю|подготовил|созда(м|л|ю)|оформлю|оформил|отправлю|отправил|заявка готова|все готово|посмотрю|проверю|проверим|поищу|вернусь`)
+
+// reClaimLook – обещание поискать или проверить: вместо него агент сам ищет в справочнике.
+var reClaimLook = regexp.MustCompile(`(?i)посмотрю|проверю|проверим|поищу|вернусь`)
 
 // reClaimHandoff – обещание передать вопрос человеку.
 var reClaimHandoff = regexp.MustCompile(`(?i)передал|передам|передаю`)
@@ -555,6 +568,16 @@ func (a *Agent) dispatch(ctx context.Context, t *turn, msgs []llm.Message, resp 
 	case "list_requests":
 		return a.listRequests(ctx, t, args["number"])
 	case "handoff_to_mentor":
+		// Модель часто передает вопрос, не заглянув в справочник (особенно если такой вопрос уже
+		// передавали). Если ответ наставника или статья уже есть – отвечаем ими, а не тревожим наставника.
+		q := t.question
+		if isCommand(q) {
+			q = first(args["question"], q)
+		}
+		if a.kbCovers(ctx, t, q) {
+			args, _ := json.Marshal(map[string]string{"query": q})
+			return a.searchAnswer(ctx, t, msgs, llm.ToolCall{ID: call.ID, Name: "search_kb", Arguments: args}, q)
+		}
 		return a.offerHandoff(ctx, t, args["question"])
 	}
 	return a.noAnswer(ctx, t)
@@ -629,6 +652,121 @@ func (a *Agent) handoffIntent(t *turn, text string) (int, string) {
 		}
 	}
 	return handoffNone, ""
+}
+
+// reWithdraw – стажер хочет отозвать, отменить или удалить заявку.
+var reWithdraw = regexp.MustCompile(`(?i)(отозв|отзов|отмен|удал|аннулир)\S*`)
+
+// reRequestNo – номер заявки в сообщении: «№1043», «заявка 1043».
+var reRequestNo = regexp.MustCompile(`(?i)(?:№\s*|номер\s*|заявк\S*\s+)(\d{3,})`)
+
+// withdrawMarker – по этой фразе видно, что стажеру предложено отозвать заявку.
+var reWithdrawOffer = regexp.MustCompile(`Отозвать заявку №(\d+)`)
+
+// requestIntent – отзыв заявки (с согласием) и вопрос о конкретной заявке.
+func (a *Agent) requestIntent(ctx context.Context, t *turn, text string) (bool, error) {
+	low := strings.ToLower(strings.TrimSpace(text))
+	var last llm.Message
+	if len(t.history) > 0 {
+		last = t.history[len(t.history)-1]
+	}
+	if m := reWithdrawOffer.FindStringSubmatch(last.Content); last.Role == "assistant" && m != nil {
+		switch {
+		case reAgree.MatchString(low):
+			return true, a.withdraw(ctx, t, m[1])
+		case reDecline.MatchString(low):
+			return true, a.say(ctx, t, "text", "Хорошо, заявка остается на согласовании.", "calm", nil)
+		}
+	}
+	mentionsRequest := strings.Contains(low, "заявк")
+	number := ""
+	if m := reRequestNo.FindStringSubmatch(text); m != nil {
+		number = m[1]
+	}
+	// «а можно ее отозвать?» – о заявке из прошлого сообщения
+	if number == "" && reWithdraw.MatchString(low) && last.Role == "assistant" {
+		if m := regexp.MustCompile(`№(\d{3,})`).FindStringSubmatch(last.Content); m != nil {
+			number, mentionsRequest = m[1], true
+		}
+	}
+	if !mentionsRequest && number == "" {
+		return false, nil
+	}
+	if reWithdraw.MatchString(low) && t.draft == nil {
+		return true, a.offerWithdraw(ctx, t, number)
+	}
+	if number != "" && t.draft == nil {
+		return true, a.listRequests(ctx, t, number)
+	}
+	return false, nil
+}
+
+// offerWithdraw – какую заявку отозвать: показать ее и дождаться «да».
+func (a *Agent) offerWithdraw(ctx context.Context, t *turn, number string) error {
+	list, err := a.reqs.ListByRequester(ctx, t.viewer.ID)
+	if err != nil {
+		return err
+	}
+	var waiting []*models.Request
+	for _, q := range list {
+		if q.Status == "waiting" && (number == "" || fmt.Sprint(q.Number) == number) {
+			waiting = append(waiting, q)
+		}
+	}
+	switch {
+	case len(waiting) == 0 && number != "":
+		return a.say(ctx, t, "text", fmt.Sprintf("Заявку №%s отозвать нельзя: она уже не на согласовании или не твоя. Статус – на странице «Мои заявки». Если нужно другое, оформи новую заявку.", number), "think", nil)
+	case len(waiting) == 0:
+		return a.say(ctx, t, "text", "У тебя нет заявок на согласовании, отзывать нечего. Выполненную или отклоненную заявку отозвать нельзя, но можно оформить новую.", "calm", nil)
+	case len(waiting) > 1:
+		var lines []string
+		for _, q := range waiting {
+			lines = append(lines, fmt.Sprintf("– №%d %s", q.Number, RequestTitle(q)))
+		}
+		return a.say(ctx, t, "text", "На согласовании несколько заявок:\n"+strings.Join(lines, "\n")+"\nНапиши, какую отозвать, например: «отзови заявку №"+fmt.Sprint(waiting[0].Number)+"».", "think", nil)
+	}
+	q := waiting[0]
+	return a.say(ctx, t, "text", fmt.Sprintf(
+		"Отозвать заявку №%d «%s»? Она закроется и в %s, задача на «Моем пути» снова будет «в работе», заявку можно оформить заново. Напиши «да» или «нет».",
+		q.Number, RequestTitle(q), integrations.JiraName), "think", nil)
+}
+
+// withdraw – отозвать заявку после «да».
+func (a *Agent) withdraw(ctx context.Context, t *turn, number string) error {
+	list, err := a.reqs.ListByRequester(ctx, t.viewer.ID)
+	if err != nil {
+		return err
+	}
+	for _, q := range list {
+		if fmt.Sprint(q.Number) != number {
+			continue
+		}
+		err := withdrawRequest(ctx, a.reqs, a.corp, t.viewer.ID, q.ID)
+		var c *ConflictError
+		if errors.As(err, &c) {
+			return a.say(ctx, t, "text", fmt.Sprintf("Заявку №%s уже нельзя отозвать: по ней успели принять решение. Статус – на странице «Мои заявки».", number), "think", nil)
+		}
+		if err != nil {
+			return err
+		}
+		a.logCall(ctx, t.conv, "requests", "withdraw", map[string]string{"number": number}, "ok", nil, a.now())
+		return a.say(ctx, t, "text", fmt.Sprintf("Готово: заявка №%s «%s» отозвана. Если понадобится, оформлю новую.", number, RequestTitle(q)), "calm", nil)
+	}
+	return a.say(ctx, t, "text", fmt.Sprintf("Не нашел заявку №%s среди твоих.", number), "think", nil)
+}
+
+// kbCovers – есть ли в справочнике статья, где нашлась хотя бы половина слов вопроса.
+func (a *Agent) kbCovers(ctx context.Context, t *turn, q string) bool {
+	found, err := a.kb.Search(ctx, t.viewer.TeamID, t.viewer.ID, q, 3, true)
+	if err != nil {
+		return false
+	}
+	for _, f := range found {
+		if f.Coverage >= minCoverage {
+			return true
+		}
+	}
+	return false
 }
 
 // offerHandoff – показать стажеру, в каком виде вопрос уйдет наставнику, и дождаться «да».
@@ -1065,7 +1203,7 @@ func (a *Agent) listRequests(ctx context.Context, t *turn, number string) error 
 	if err != nil {
 		return err
 	}
-	status := map[string]string{"waiting": "на согласовании", "approved": "одобрена", "done": "выполнена", "rejected": "отклонена"}
+	status := map[string]string{"waiting": "на согласовании", "approved": "одобрена", "done": "выполнена", "rejected": "отклонена", "cancelled": "отозвана"}
 	var lines []string
 	for _, q := range list {
 		if number != "" && fmt.Sprint(q.Number) != number {

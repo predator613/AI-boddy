@@ -72,14 +72,14 @@ func (e *chatEnv) multipartCall(user string, fields map[string]string, file stri
 func TestMentorThreadsAndHandoff(t *testing.T) {
 	e := newMentorEnv(t)
 
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodGet, "/api/mentor/threads", nil, nil))
-	assert.Equal(t, http.StatusForbidden, e.call("lead_oleg", http.MethodGet, "/api/mentor/threads", nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodGet, "/api/mentor/threads", nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("lead_artemiy", http.MethodGet, "/api/mentor/threads", nil, nil))
 	assert.Equal(t, http.StatusForbidden, e.call("mentor_igor", http.MethodGet, "/api/me/mentor-thread", nil, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("intern_pavel", http.MethodGet, "/api/me/mentor-thread", nil, nil), "без наставника")
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodGet, "/api/mentor/threads/"+pavelID, nil, nil))
 
-	e.say("intern_anna", map[string]any{"text": "передай наставнику: где взять пример конфига для auth-service?"})
-	e.say("intern_anna", map[string]any{"text": "да"}) // передача только после согласия стажера
+	e.say("intern_maria", map[string]any{"text": "передай наставнику: где взять пример конфига для auth-service?"})
+	e.say("intern_maria", map[string]any{"text": "да"}) // передача только после согласия стажера
 
 	var list []models.ThreadSummary
 	require.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodGet, "/api/mentor/threads", nil, &list))
@@ -104,7 +104,7 @@ func TestMentorThreadsAndHandoff(t *testing.T) {
 
 	// Ответ пришел стажеру в чат AI-buddy.
 	var h models.ChatReply
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/chat/messages", nil, &h))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/chat/messages", nil, &h))
 	assert.Contains(t, h.Messages[len(h.Messages)-1].Text, "Игорь ответил на твой вопрос: Пример конфига")
 
 	// Ответ в справочнике и в материалах.
@@ -113,22 +113,32 @@ func TestMentorThreadsAndHandoff(t *testing.T) {
 	assert.Equal(t, "answer", mats[0].Kind)
 	assert.Equal(t, "Ответы наставников", *mats[0].Section)
 	var found models.KBSearch
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/kb/search?q=пример+конфига+deploy", nil, &found))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/kb/search?q=пример+конфига+deploy", nil, &found))
 	assert.NotEmpty(t, found.Results)
 
+	// Тот же вопрос в чате другими словами: AI-buddy отвечает ответом наставника сам, без передачи.
+	again := e.say("intern_maria", map[string]any{"text": "где найти пример конфига для auth-service?"})
+	assert.Contains(t, again[0].Text, "deploy/example", "ответ из справочника, а не новая передача")
+	require.NotNil(t, again[0].Source)
+
+	// Наставник удаляет материал, на который AI-buddy уже сослался в чате: удаление проходит, история чата цела.
+	assert.Equal(t, http.StatusNoContent, e.call("mentor_igor", http.MethodDelete, "/api/materials/"+mats[0].ID, nil, nil))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/chat/messages", nil, &h))
+	assert.NotEmpty(t, h.Messages)
+
 	// Стажер пишет сам и подтверждает карточку изменения.
-	assert.Equal(t, http.StatusBadRequest, e.call("intern_anna", http.MethodPost, "/api/me/mentor-thread/messages", map[string]any{"text": ""}, nil))
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/me/mentor-thread/messages", map[string]any{"text": "Спасибо, нашла!"}, &th))
+	assert.Equal(t, http.StatusBadRequest, e.call("intern_maria", http.MethodPost, "/api/me/mentor-thread/messages", map[string]any{"text": ""}, nil))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPost, "/api/me/mentor-thread/messages", map[string]any{"text": "Спасибо, нашла!"}, &th))
 	assert.Equal(t, "intern", th.Messages[len(th.Messages)-1].Author)
 	assert.Equal(t, http.StatusNoContent, e.call("mentor_igor", http.MethodPost, "/api/mentor/threads/"+annaID+"/read", nil, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodPost, "/api/mentor/threads/"+pavelID+"/read", nil, nil))
-	assert.Equal(t, http.StatusNotFound, e.call("intern_anna", http.MethodPost, "/api/me/mentor-thread/updates/"+th.Messages[0].ID+"/ack", nil, nil), "не карточка")
+	assert.Equal(t, http.StatusNotFound, e.call("intern_maria", http.MethodPost, "/api/me/mentor-thread/updates/"+th.Messages[0].ID+"/ack", nil, nil), "не карточка")
 }
 
 func TestMentorMaterials(t *testing.T) {
 	e := newMentorEnv(t)
 	var m models.Material
-	assert.Equal(t, http.StatusForbidden, e.multipartCall("intern_anna", map[string]string{"title": "x", "url": "https://x.ru"}, "", nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.multipartCall("intern_maria", map[string]string{"title": "x", "url": "https://x.ru"}, "", nil, nil))
 	assert.Equal(t, http.StatusBadRequest, e.multipartCall("mentor_igor", map[string]string{"title": "x"}, "", nil, nil), "ни файла, ни ссылки")
 	assert.Equal(t, http.StatusBadRequest, e.multipartCall("mentor_igor", map[string]string{"title": "x", "url": "ftp://x"}, "", nil, nil))
 	assert.Equal(t, http.StatusBadRequest, e.multipartCall("mentor_igor", map[string]string{"title": "x"}, "a.exe", []byte("x"), nil))
@@ -145,26 +155,26 @@ func TestMentorMaterials(t *testing.T) {
 
 	// Новый раздел появился в справочнике стажера, AI-buddy находит текст, стажеру пришла карточка.
 	var kb models.KnowledgeBase
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/kb", nil, &kb))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/kb", nil, &kb))
 	titles := map[string]bool{}
 	for _, s := range kb.Sections {
 		titles[s.Title] = true
 	}
 	assert.True(t, titles["Деплой и стенды"])
 	var found models.KBSearch
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/kb/search?q=канареечный+выкат", nil, &found))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/kb/search?q=канареечный+выкат", nil, &found))
 	assert.NotEmpty(t, found.Results)
 	var th models.Thread
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/me/mentor-thread", nil, &th))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/me/mentor-thread", nil, &th))
 	card := th.Messages[len(th.Messages)-1]
 	require.Equal(t, "update", card.Kind)
 	assert.Equal(t, "material", card.Update.Type)
 	assert.False(t, card.Update.Acked)
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/me/mentor-thread/updates/"+card.ID+"/ack", nil, &th))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPost, "/api/me/mentor-thread/updates/"+card.ID+"/ack", nil, &th))
 	assert.True(t, th.Messages[len(th.Messages)-1].Update.Acked)
 
 	var link models.Material
-	require.Equal(t, http.StatusCreated, e.multipartCall("lead_oleg", map[string]string{"title": "Гайд по ревью", "url": "https://example.com/review", "useInAi": "false"}, "", nil, &link))
+	require.Equal(t, http.StatusCreated, e.multipartCall("lead_artemiy", map[string]string{"title": "Гайд по ревью", "url": "https://example.com/review", "useInAi": "false"}, "", nil, &link))
 	assert.Equal(t, "link", link.Kind)
 	assert.Equal(t, "Материалы наставника", *link.Section)
 	var pdf models.Material
@@ -185,7 +195,7 @@ func TestMentorMeetingsAndStats(t *testing.T) {
 	start := time.Now().Add(72 * time.Hour).Truncate(time.Minute)
 	from, to := isoURL(time.Now().Add(-time.Hour)), isoURL(time.Now().Add(10*24*time.Hour))
 
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodGet, "/api/mentor/meetings?from="+from+"&to="+to, nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodGet, "/api/mentor/meetings?from="+from+"&to="+to, nil, nil))
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodGet, "/api/mentor/meetings?from=x&to=y", nil, nil))
 
 	var m models.MentorMeeting
@@ -227,7 +237,7 @@ func TestMentorMeetingsAndStats(t *testing.T) {
 
 	// Стажер получил карточки: новая, перенесена, отменена.
 	var th models.Thread
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/me/mentor-thread", nil, &th))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/me/mentor-thread", nil, &th))
 	n := len(th.Messages)
 	require.GreaterOrEqual(t, n, 3)
 	assert.Contains(t, th.Messages[n-3].Update.Title, "Новая встреча")
@@ -235,7 +245,7 @@ func TestMentorMeetingsAndStats(t *testing.T) {
 	assert.Contains(t, th.Messages[n-1].Update.Title, "отменена")
 
 	// Статистика и метрики.
-	e.say("intern_anna", map[string]any{"text": "как оформить отпуск"})
+	e.say("intern_maria", map[string]any{"text": "как оформить отпуск"})
 	var st models.MentorStats
 	require.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodGet, "/api/mentor/stats", nil, &st))
 	assert.Equal(t, 7, st.PeriodDays)
@@ -243,11 +253,11 @@ func TestMentorMeetingsAndStats(t *testing.T) {
 	assert.Equal(t, st.AnsweredByBuddy*12, st.SavedMinutes)
 	assert.Equal(t, 44, st.MentorHoursPlan)
 	var mt models.MentorMetrics
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodGet, "/api/mentor/metrics", nil, &mt))
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodGet, "/api/mentor/metrics", nil, &mt))
 	assert.Equal(t, 12, mt.MinutesPerQuestion)
 	assert.NotNil(t, mt.AccessHours, "в демо есть выданные доступы")
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodGet, "/api/mentor/metrics", nil, nil))
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodGet, "/api/mentor/stats", nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodGet, "/api/mentor/metrics", nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodGet, "/api/mentor/stats", nil, nil))
 }
 
 func isoURL(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05Z") }
@@ -268,7 +278,7 @@ func TestMentorAutomations(t *testing.T) {
 	assert.False(t, list[0].Enabled)
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPatch, "/api/mentor/automations/overdue_alert", map[string]any{}, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodPatch, "/api/mentor/automations/nope", map[string]any{"enabled": true}, nil))
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodGet, "/api/mentor/automations", nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodGet, "/api/mentor/automations", nil, nil))
 
 	// Проход правил: у Дмитрия (старт в октябре) есть просроченные задачи – Игорю приходит сигнал,
 	// повторный проход ничего не дублирует.

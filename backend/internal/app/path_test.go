@@ -35,7 +35,7 @@ type env struct {
 func newEnv(t *testing.T) *env {
 	srv := newServer(t, true)
 	e := &env{t: t, base: srv.URL, tok: map[string]string{}}
-	for _, u := range []string{"intern_anna", "intern_pavel", "intern_dima", "intern_liza", "mentor_igor", "lead_oleg", "lead_nina"} {
+	for _, u := range []string{"intern_maria", "intern_pavel", "intern_dima", "intern_liza", "mentor_igor", "lead_artemiy", "lead_nina"} {
 		code, token, _ := login(t, srv.URL, u, "demo123")
 		require.Equal(t, http.StatusOK, code)
 		e.tok[u] = token
@@ -64,7 +64,7 @@ func (e *env) path(user string) models.PathView {
 
 func TestMyPathForAnna(t *testing.T) {
 	e := newEnv(t)
-	v := e.path("intern_anna")
+	v := e.path("intern_maria")
 
 	assert.Equal(t, "Мария", v.Intern.Name)
 	require.NotNil(t, v.Intern.Mentor)
@@ -105,7 +105,7 @@ func TestPathPermissions(t *testing.T) {
 	for _, it := range list {
 		byLogin[it.Login] = it
 	}
-	assert.Equal(t, "02", byLogin["intern_anna"].StageCode)
+	assert.Equal(t, "02", byLogin["intern_maria"].StageCode)
 	assert.Equal(t, "04", byLogin["intern_dima"].StageCode)
 	assert.Equal(t, 6, byLogin["intern_dima"].Week)
 	assert.Equal(t, "01", byLogin["intern_liza"].StageCode)
@@ -118,7 +118,7 @@ func TestPathPermissions(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, e.call("mentor_igor", http.MethodPost, "/api/path/tasks/"+envTask+"/complete", nil, nil))
 
 	// Артемий видит стажеров своей команды.
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodGet, "/api/interns", nil, &list))
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodGet, "/api/interns", nil, &list))
 	assert.Len(t, list, 3)
 
 	// Без токена – 401.
@@ -127,14 +127,14 @@ func TestPathPermissions(t *testing.T) {
 
 func TestInternCompletesTaskAndMentorChangesStatus(t *testing.T) {
 	e := newEnv(t)
-	before := e.path("intern_anna").Progress
+	before := e.path("intern_maria").Progress
 	t.Cleanup(func() {
 		// вернуть задачу в «впереди»
 		e.call("mentor_igor", http.MethodPut, "/api/interns/"+annaID+"/tasks/"+envTask, map[string]string{"status": "todo"}, nil)
 	})
 
 	var v models.PathView
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodPost, "/api/path/tasks/"+envTask+"/complete", nil, &v))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPost, "/api/path/tasks/"+envTask+"/complete", nil, &v))
 	assert.Equal(t, before.Done+1, v.Progress.Done)
 
 	note := "  Проверено на встрече  "
@@ -145,7 +145,7 @@ func TestInternCompletesTaskAndMentorChangesStatus(t *testing.T) {
 
 	// Пустая пометка = вернуть текст из шаблона.
 	empty := " "
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodPut, "/api/interns/"+annaID+"/tasks/"+envTask,
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodPut, "/api/interns/"+annaID+"/tasks/"+envTask,
 		map[string]any{"status": "in_progress", "note": empty}, &v))
 	assert.Equal(t, "Репозиторий, Docker, локальный запуск", v.Stages[2].Tasks[0].Note)
 
@@ -160,7 +160,7 @@ func TestInternCompletesTaskAndMentorChangesStatus(t *testing.T) {
 	// Задача команды Frontend Марии не принадлежит.
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodPut, "/api/interns/"+annaID+"/tasks/b7000000-0000-4000-8000-000000001201",
 		map[string]string{"status": "done"}, nil))
-	assert.Equal(t, http.StatusNotFound, e.call("intern_anna", http.MethodPost, "/api/path/tasks/not-a-task/complete", nil, nil))
+	assert.Equal(t, http.StatusNotFound, e.call("intern_maria", http.MethodPost, "/api/path/tasks/not-a-task/complete", nil, nil))
 }
 
 func TestMeetings(t *testing.T) {
@@ -173,7 +173,7 @@ func TestMeetings(t *testing.T) {
 	assert.Equal(t, "Встреча 1:1", m.Title, "название по умолчанию")
 	assert.Equal(t, "Игорь", m.HostName)
 
-	v := e.path("intern_anna")
+	v := e.path("intern_maria")
 	require.NotNil(t, v.NextMeeting)
 	assert.Equal(t, m.ID, v.NextMeeting.ID, "новая встреча ближайшая")
 
@@ -183,7 +183,7 @@ func TestMeetings(t *testing.T) {
 		map[string]any{"startsAt": time.Now().Add(-48 * time.Hour)}, nil))
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, "/api/interns/"+annaID+"/meetings",
 		map[string]any{"title": string(make([]byte, 121)), "startsAt": start}, nil))
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodPost, "/api/interns/"+annaID+"/meetings",
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodPost, "/api/interns/"+annaID+"/meetings",
 		map[string]any{"startsAt": start}, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodPost, "/api/interns/"+pavelID+"/meetings",
 		map[string]any{"startsAt": start}, nil))
@@ -208,16 +208,16 @@ func TestConsoleTemplatesLifecycle(t *testing.T) {
 	var st models.StageTemplate
 	require.Equal(t, http.StatusCreated, e.call("mentor_igor", http.MethodPost, "/api/console/stages",
 		map[string]any{"title": "Итоги", "color": "#FFFFFF", "suggestions": []string{"Как готовиться к отзыву?"}}, &st))
-	t.Cleanup(func() { e.call("lead_oleg", http.MethodDelete, "/api/console/stages/"+st.ID, nil, nil) })
+	t.Cleanup(func() { e.call("lead_artemiy", http.MethodDelete, "/api/console/stages/"+st.ID, nil, nil) })
 	assert.Equal(t, stagesBefore+1, st.Position)
 
 	// Изменить этап.
-	require.Equal(t, http.StatusOK, e.call("lead_oleg", http.MethodPut, "/api/console/stages/"+st.ID,
+	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodPut, "/api/console/stages/"+st.ID,
 		map[string]any{"title": "Итоги стажировки", "color": "#F7C1C5", "position": st.Position}, &st))
 	assert.Equal(t, "Итоги стажировки", st.Title)
-	assert.Equal(t, http.StatusBadRequest, e.call("lead_oleg", http.MethodPut, "/api/console/stages/"+st.ID,
+	assert.Equal(t, http.StatusBadRequest, e.call("lead_artemiy", http.MethodPut, "/api/console/stages/"+st.ID,
 		map[string]any{"title": "x", "position": 0}, nil))
-	assert.Equal(t, http.StatusBadRequest, e.call("lead_oleg", http.MethodPut, "/api/console/stages/"+st.ID,
+	assert.Equal(t, http.StatusBadRequest, e.call("lead_artemiy", http.MethodPut, "/api/console/stages/"+st.ID,
 		map[string]any{"title": ""}, nil))
 
 	// Задача с действием AI-buddy.
@@ -294,7 +294,7 @@ func TestConsoleTemplatesLifecycle(t *testing.T) {
 	}
 
 	// Мария видит новый этап с задачей и карточкой.
-	v := e.path("intern_anna")
+	v := e.path("intern_maria")
 	last := v.Stages[len(v.Stages)-1]
 	assert.Equal(t, "Итоги стажировки", last.Title)
 	require.Len(t, last.Tasks, 1)
@@ -302,9 +302,9 @@ func TestConsoleTemplatesLifecycle(t *testing.T) {
 	assert.Equal(t, "не запрошен", last.Resources[0].Tag)
 
 	// Чужие и запрещенные операции.
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodPost, "/api/console/stages", map[string]any{"title": "x"}, nil))
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodPut, "/api/console/stages/"+st.ID, map[string]any{"title": "x", "position": 1}, nil))
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodDelete, "/api/console/tasks/"+task.ID, nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodPost, "/api/console/stages", map[string]any{"title": "x"}, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodPut, "/api/console/stages/"+st.ID, map[string]any{"title": "x", "position": 1}, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodDelete, "/api/console/tasks/"+task.ID, nil, nil))
 	assert.Equal(t, http.StatusForbidden, e.call("intern_pavel", http.MethodDelete, "/api/console/resources/"+res.ID, nil, nil))
 	assert.Equal(t, http.StatusNotFound, e.call("mentor_igor", http.MethodPost, "/api/console/stages/b5000000-0000-4000-8000-000000000011/tasks",
 		map[string]any{"title": "чужая команда"}, nil))
@@ -325,7 +325,7 @@ func TestConsoleTemplatesLifecycle(t *testing.T) {
 	// Создание этапа с ошибками.
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, "/api/console/stages", map[string]any{"title": "x", "color": "red"}, nil))
 	assert.Equal(t, http.StatusBadRequest, e.call("mentor_igor", http.MethodPost, "/api/console/stages", map[string]any{"title": "x", "extra": 1}, nil))
-	assert.Equal(t, http.StatusForbidden, e.call("intern_anna", http.MethodGet, "/api/console/templates", nil, nil))
+	assert.Equal(t, http.StatusForbidden, e.call("intern_maria", http.MethodGet, "/api/console/templates", nil, nil))
 }
 
 func testPool(t *testing.T) *pgxpool.Pool {

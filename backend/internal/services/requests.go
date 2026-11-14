@@ -33,6 +33,7 @@ type RequestStore interface {
 	Notify(ctx context.Context, userID, kind, text, link string, requestID *string) error
 	Submit(ctx context.Context, id, actorID, status, externalRef, taskNote string) error
 	Cancel(ctx context.Context, id, actorID string) error
+	Withdraw(ctx context.Context, id, requesterID string) error
 	ApplyDecision(ctx context.Context, id, status string, reason *string, taskNote, notice string, actorID *string) (bool, error)
 	Get(ctx context.Context, id string) (*models.Request, error)
 	ListByRequester(ctx context.Context, requesterID string) ([]*models.Request, error)
@@ -87,6 +88,44 @@ func (s *Requests) List(ctx context.Context, viewerID string) ([]models.RequestI
 		out[i] = RequestItem(q, byID[q.ID], s.now())
 	}
 	return out, nil
+}
+
+// Withdraw – стажер отзывает свою заявку, пока она на согласовании: заявка закрывается и в сервисе
+// заявок, и в AI-buddy, задача пути возвращается «в работу».
+func (s *Requests) Withdraw(ctx context.Context, viewerID, id string) (*models.RequestItem, error) {
+	if err := withdrawRequest(ctx, s.store, s.corp, viewerID, id); err != nil {
+		return nil, err
+	}
+	list, err := s.List(ctx, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		if list[i].ID == id {
+			return &list[i], nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+// withdrawRequest – общая логика отзыва для страницы «Заявки» и чата.
+func withdrawRequest(ctx context.Context, store RequestStore, corp integrations.Corporate, viewerID, id string) error {
+	q, err := store.Get(ctx, id)
+	if err != nil {
+		return mapNotFound(err)
+	}
+	if q.RequesterID != viewerID {
+		return ErrNotFound
+	}
+	if q.Status != "waiting" {
+		return conflict("Отозвать можно только заявку, которая ждет решения")
+	}
+	if q.ExternalRef != nil && corp != nil {
+		if _, err := corp.Decide(ctx, *q.ExternalRef, false, "Отозвана стажером"); err != nil && !errors.Is(err, integrations.ErrUnknownTicket) {
+			return err
+		}
+	}
+	return mapNotFound(store.Withdraw(ctx, id, viewerID))
 }
 
 // SyncOnce забирает решения по ожидающим заявкам. Возвращает, сколько заявок изменилось.
@@ -339,6 +378,11 @@ func RequestItem(q *models.Request, events []models.RequestEvent, now time.Time)
 			}
 		case "rejected":
 			h.Title, h.State = "Отклонена", "rejected"
+		case "cancelled":
+			if q.Status != "cancelled" {
+				continue
+			}
+			h.Title, h.State = "Отозвана стажером", "rejected"
 		default:
 			continue
 		}

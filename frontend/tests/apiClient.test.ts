@@ -43,7 +43,7 @@ describe('api/client', () => {
   })
 
   it('при 401 на вход (без токена) не трогает store', async () => {
-    const error = await login({ login: 'intern_anna', password: 'wrong' }).catch((e: unknown) => e)
+    const error = await login({ login: 'intern_maria', password: 'wrong' }).catch((e: unknown) => e)
     expect((error as ApiError).status).toBe(401)
     expect((error as ApiError).code).toBe('invalid_credentials')
   })
@@ -79,14 +79,14 @@ describe('api/client', () => {
 
 describe('api/auth', () => {
   it('login возвращает токен и пользователя', async () => {
-    const res = await login({ login: 'intern_anna', password: 'demo123' })
-    expect(res.token).toBe(mockToken('intern_anna'))
+    const res = await login({ login: 'intern_maria', password: 'demo123' })
+    expect(res.token).toBe(mockToken('intern_maria'))
     expect(res.user.name).toBe('Мария')
   })
 
   it('getMe возвращает пользователя по токену', async () => {
-    useAuthStore.setState({ token: mockToken('lead_oleg') })
-    await expect(getMe()).resolves.toMatchObject({ login: 'lead_oleg', role: 'lead' })
+    useAuthStore.setState({ token: mockToken('lead_artemiy') })
+    await expect(getMe()).resolves.toMatchObject({ login: 'lead_artemiy', role: 'lead' })
   })
 
   it('getTestUsers возвращает список', async () => {

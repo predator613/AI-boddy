@@ -802,7 +802,7 @@ export const mockInterns = () => {
   return [
     {
       id: 'u-anna',
-      login: 'intern_anna',
+      login: 'intern_maria',
       name: 'Мария',
       teamName: 'Backend',
       mentor: { id: 'u-igor', name: 'Игорь' },

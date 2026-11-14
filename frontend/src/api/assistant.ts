@@ -49,6 +49,11 @@ export function getRequests() {
   return apiRequest('/api/requests', z.array(RequestItem))
 }
 
+/** POST /api/requests/{id}/withdraw – отозвать свою заявку, пока она на согласовании. */
+export function withdrawRequest(id: string) {
+  return apiRequest(`/api/requests/${id}/withdraw`, RequestItem, { method: 'POST' })
+}
+
 /** GET /api/kb – разделы, статьи и словарик справочника. */
 export function getKnowledgeBase() {
   return apiRequest('/api/kb', KnowledgeBase)

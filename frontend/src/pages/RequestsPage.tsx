@@ -1,9 +1,11 @@
 import { Anchor, Button, Group, Paper, Stack, Text, UnstyledButton } from '@mantine/core'
 import { IconCalendar, IconFileText, IconKey, IconPlus } from '@tabler/icons-react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
-import { getRequests } from '../api/assistant'
+import { getRequests, withdrawRequest } from '../api/assistant'
+import { errorText } from '../lib/errors'
+import { toast } from '../store/toastStore'
 import { PageHeader } from '../components/PageHeader'
 import { Page } from '../components/Page'
 import { ErrorBlock, LoadingBlocks } from '../components/QueryState'
@@ -16,6 +18,7 @@ const REQUEST_STATUS: Record<TRequestStatus, { label: string; bg: string }> = {
   approved: { label: 'одобрена', bg: '#C9FFBF' },
   done: { label: 'выполнена', bg: '#C9FFBF' },
   rejected: { label: 'отклонена', bg: '#F7C1C5' },
+  cancelled: { label: 'отозвана', bg: '#EDEDED' },
 }
 
 type Filter = 'all' | 'waiting' | 'approved' | 'rejected'
@@ -23,11 +26,14 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'Все' },
   { id: 'waiting', label: 'На согласовании' },
   { id: 'approved', label: 'Одобрены' },
-  { id: 'rejected', label: 'Отклонены' },
+  { id: 'rejected', label: 'Отклонены и отозваны' },
 ]
 
 const matches = (f: Filter, r: TRequestItem) =>
-  f === 'all' || r.status === f || (f === 'approved' && r.status === 'done')
+  f === 'all' ||
+  r.status === f ||
+  (f === 'approved' && r.status === 'done') ||
+  (f === 'rejected' && r.status === 'cancelled')
 const VIA = { buddy: 'через AI-buddy', auto: 'автоматически', manual: 'вручную' } as const
 
 export function RequestsPage({
@@ -303,7 +309,7 @@ function RequestDetail({ item }: { item: TRequestItem }) {
       )}
       <Button
         renderRoot={(p) => (
-          <Link {...p} to="/chat" search={{ q: `Расскажи про заявку ${requestRef(item)}` }} />
+          <Link {...p} to="/chat" search={{ q: `Расскажи про заявку №${item.number}` }} />
         )}
         variant="outline"
         color="ink"
@@ -311,7 +317,69 @@ function RequestDetail({ item }: { item: TRequestItem }) {
       >
         Обсудить в чате
       </Button>
+      {item.status === 'waiting' && <WithdrawControl item={item} />}
     </Paper>
+  )
+}
+
+// Отзыв заявки: сначала спрашиваем, точно ли, – действие нельзя отменить.
+function WithdrawControl({ item }: { item: TRequestItem }) {
+  const [asking, setAsking] = useState(false)
+  const qc = useQueryClient()
+  const withdraw = useMutation({
+    mutationFn: () => withdrawRequest(item.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['requests'] })
+      qc.invalidateQueries({ queryKey: ['path'] })
+      toast(`Заявка №${item.number} отозвана`)
+      setAsking(false)
+    },
+  })
+  if (!asking) {
+    return (
+      <UnstyledButton
+        onClick={() => setAsking(true)}
+        style={{
+          alignSelf: 'flex-start',
+          fontSize: 13,
+          color: '#5C5C5C',
+          textDecoration: 'underline',
+        }}
+      >
+        Отозвать заявку
+      </UnstyledButton>
+    )
+  }
+  return (
+    <Stack
+      gap={10}
+      role="group"
+      aria-label="Отзыв заявки"
+      style={{ background: '#F4F4F4', padding: '12px 14px' }}
+    >
+      <Text size="sm">
+        Отозвать заявку? Она закроется и в {JIRA}, задача на «Моем пути» снова будет «в работе».
+        Заявку можно будет оформить заново.
+      </Text>
+      {withdraw.isError && (
+        <Text size="sm" c="red.8" role="alert">
+          {errorText(withdraw.error)}
+        </Text>
+      )}
+      <Group gap={8}>
+        <Button
+          size="xs"
+          color="red"
+          loading={withdraw.isPending}
+          onClick={() => withdraw.mutate()}
+        >
+          Отозвать
+        </Button>
+        <Button size="xs" variant="default" onClick={() => setAsking(false)}>
+          Оставить
+        </Button>
+      </Group>
+    </Stack>
   )
 }
 

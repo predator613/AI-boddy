@@ -41,7 +41,7 @@ func (f *fakeAuth) CurrentUser(_ context.Context, id string) (*models.User, erro
 	if f.userErr != nil {
 		return nil, f.userErr
 	}
-	return &models.User{ID: id, Login: "intern_anna"}, nil
+	return &models.User{ID: id, Login: "intern_maria"}, nil
 }
 
 func (f *fakeAuth) TestUsers(context.Context) ([]models.TestUser, error) {
@@ -71,9 +71,9 @@ func postLogin(h *Auth, body string) *httptest.ResponseRecorder {
 
 func TestLoginOK(t *testing.T) {
 	f := &fakeAuth{}
-	rec := postLogin(NewAuth(f, false, quietLog), `{"login":"  intern_anna ","password":"demo123"}`)
+	rec := postLogin(NewAuth(f, false, quietLog), `{"login":"  intern_maria ","password":"demo123"}`)
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "intern_anna", f.gotLogin, "login must be trimmed")
+	assert.Equal(t, "intern_maria", f.gotLogin, "login must be trimmed")
 	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 
 	var resp struct {
@@ -92,7 +92,7 @@ func TestLoginValidation(t *testing.T) {
 		"empty body":     ``,
 		"empty fields":   `{"login":"","password":""}`,
 		"spaces login":   `{"login":"   ","password":"x"}`,
-		"empty password": `{"login":"intern_anna","password":""}`,
+		"empty password": `{"login":"intern_maria","password":""}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			rec := postLogin(h, body)
@@ -104,14 +104,14 @@ func TestLoginValidation(t *testing.T) {
 
 func TestLoginInvalidCredentials(t *testing.T) {
 	rec := postLogin(NewAuth(&fakeAuth{loginErr: services.ErrInvalidCredentials}, false, quietLog),
-		`{"login":"intern_anna","password":"bad"}`)
+		`{"login":"intern_maria","password":"bad"}`)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.Equal(t, "invalid_credentials", errorCode(t, rec))
 }
 
 func TestLoginInternalError(t *testing.T) {
 	rec := postLogin(NewAuth(&fakeAuth{loginErr: errors.New("db down")}, false, quietLog),
-		`{"login":"intern_anna","password":"demo123"}`)
+		`{"login":"intern_maria","password":"demo123"}`)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Equal(t, "internal_error", errorCode(t, rec))
 }
@@ -158,7 +158,7 @@ func TestTestUsersDemoOff(t *testing.T) {
 }
 
 func TestTestUsersDemoOn(t *testing.T) {
-	rec := getTestUsers(NewAuth(&fakeAuth{list: []models.TestUser{{Login: "intern_anna"}}}, true, quietLog))
+	rec := getTestUsers(NewAuth(&fakeAuth{list: []models.TestUser{{Login: "intern_maria"}}}, true, quietLog))
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.NotContains(t, rec.Body.String(), "password")
 

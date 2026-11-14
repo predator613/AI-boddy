@@ -46,7 +46,7 @@ func (f *fakeStore) GetByID(_ context.Context, id string) (*models.User, error) 
 }
 
 func (f *fakeStore) ListTestUsers(context.Context) ([]models.TestUser, error) {
-	return []models.TestUser{{Login: "intern_anna"}}, f.err
+	return []models.TestUser{{Login: "intern_maria"}}, f.err
 }
 
 func newStore(t *testing.T) *fakeStore {
@@ -54,8 +54,8 @@ func newStore(t *testing.T) *fakeStore {
 	hash, err := bcrypt.GenerateFromPassword([]byte("demo123"), bcrypt.MinCost)
 	require.NoError(t, err)
 	return &fakeStore{users: map[string]*models.UserWithPassword{
-		"intern_anna": {
-			User:         models.User{ID: "u-1", Login: "intern_anna", Name: "Мария", Role: models.RoleIntern},
+		"intern_maria": {
+			User:         models.User{ID: "u-1", Login: "intern_maria", Name: "Мария", Role: models.RoleIntern},
 			PasswordHash: string(hash),
 		},
 	}}
@@ -63,7 +63,7 @@ func newStore(t *testing.T) *fakeStore {
 
 func TestLoginSuccess(t *testing.T) {
 	svc := NewAuth(newStore(t), secret, time.Hour)
-	token, user, err := svc.Login(context.Background(), "intern_anna", "demo123")
+	token, user, err := svc.Login(context.Background(), "intern_maria", "demo123")
 	require.NoError(t, err)
 	assert.Equal(t, "u-1", user.ID)
 
@@ -75,7 +75,7 @@ func TestLoginSuccess(t *testing.T) {
 
 func TestLoginWrongPassword(t *testing.T) {
 	svc := NewAuth(newStore(t), secret, time.Hour)
-	_, _, err := svc.Login(context.Background(), "intern_anna", "wrong")
+	_, _, err := svc.Login(context.Background(), "intern_maria", "wrong")
 	assert.ErrorIs(t, err, ErrInvalidCredentials)
 }
 
@@ -87,7 +87,7 @@ func TestLoginUnknownUser(t *testing.T) {
 
 func TestLoginStoreError(t *testing.T) {
 	svc := NewAuth(&fakeStore{err: errors.New("db down")}, secret, time.Hour)
-	_, _, err := svc.Login(context.Background(), "intern_anna", "demo123")
+	_, _, err := svc.Login(context.Background(), "intern_maria", "demo123")
 	assert.Error(t, err)
 	assert.NotErrorIs(t, err, ErrInvalidCredentials)
 }
@@ -148,7 +148,7 @@ func TestCurrentUser(t *testing.T) {
 
 	u, err := svc.CurrentUser(context.Background(), "u-1")
 	require.NoError(t, err)
-	assert.Equal(t, "intern_anna", u.Login)
+	assert.Equal(t, "intern_maria", u.Login)
 
 	_, err = svc.CurrentUser(context.Background(), "deleted")
 	assert.ErrorIs(t, err, ErrInvalidToken)

@@ -54,7 +54,7 @@ $b = '{"model":"gpt://<ID_каталога>/yandexgpt/latest","messages":[{"role
 Invoke-RestMethod -Method Post -Uri https://llm.api.cloud.yandex.net/v1/chat/completions -Headers $h -ContentType "application/json; charset=utf-8" -Body ([Text.Encoding]::UTF8.GetBytes($b))
 ```
 
-9. В интерфейсе войдите как `intern_anna` и спросите в чате что-нибудь свободной формулировкой, например «кто посмотрит мой код перед релизом?». Ответ придет со ссылкой на статью «Как устроено код-ревью в команде».
+9. В интерфейсе войдите как `intern_maria` и спросите в чате что-нибудь свободной формулировкой, например «кто посмотрит мой код перед релизом?». Ответ придет со ссылкой на статью «Как устроено код-ревью в команде».
 
 ## Вариант 2. Cloud.ru Foundation Models
 

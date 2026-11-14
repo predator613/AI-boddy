@@ -23,7 +23,7 @@ const (
 func TestKnowledgeBaseForAnna(t *testing.T) {
 	e := newEnv(t)
 	var kb models.KnowledgeBase
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/kb", nil, &kb))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/kb", nil, &kb))
 
 	require.Len(t, kb.Sections, 8)
 	assert.Equal(t, "s-start", kb.Sections[0].ID)
@@ -63,7 +63,7 @@ func TestKnowledgeBaseForPavel(t *testing.T) {
 func TestKnowledgeArticle(t *testing.T) {
 	e := newEnv(t)
 	var a models.KBArticleDetail
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/kb/articles/"+accessArticle, nil, &a))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/kb/articles/"+accessArticle, nil, &a))
 	assert.Equal(t, "Как запросить доступ к сервису", a.Title)
 	assert.Contains(t, a.Body, "\n\n")
 	assert.Equal(t, "seed", a.Source)
@@ -74,8 +74,8 @@ func TestKnowledgeArticle(t *testing.T) {
 	require.NotNil(t, answer.AuthorName)
 	assert.Equal(t, "Игорь", *answer.AuthorName)
 
-	assert.Equal(t, http.StatusNotFound, e.call("intern_anna", http.MethodGet, "/api/kb/articles/"+frontendOnlyArticle, nil, nil))
-	assert.Equal(t, http.StatusNotFound, e.call("intern_anna", http.MethodGet, "/api/kb/articles/not-an-id", nil, nil))
+	assert.Equal(t, http.StatusNotFound, e.call("intern_maria", http.MethodGet, "/api/kb/articles/"+frontendOnlyArticle, nil, nil))
+	assert.Equal(t, http.StatusNotFound, e.call("intern_maria", http.MethodGet, "/api/kb/articles/not-an-id", nil, nil))
 	assert.Equal(t, http.StatusUnauthorized, e.call("nobody", http.MethodGet, "/api/kb", nil, nil))
 }
 
@@ -89,7 +89,7 @@ func TestKnowledgePersonalized(t *testing.T) {
 		assert.NotContains(t, a.Body, "{{")
 		return a
 	}
-	anna := article("intern_anna", backendOnlyArticle)
+	anna := article("intern_maria", backendOnlyArticle)
 	assert.Contains(t, anna.Body, "Наставник (Игорь)")
 	assert.Contains(t, anna.Body, "Руководитель команды (Артемий)")
 
@@ -110,7 +110,7 @@ func TestKnowledgePersonalized(t *testing.T) {
 
 	// Контакты для «Поддержки»: свои люди и отделы.
 	var c models.Contacts
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/me/contacts", nil, &c))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/me/contacts", nil, &c))
 	require.NotNil(t, c.Mentor)
 	assert.Equal(t, "Игорь", c.Mentor.Name)
 	require.NotNil(t, c.Lead)
@@ -135,7 +135,7 @@ func TestKnowledgeSearch(t *testing.T) {
 		return res
 	}
 
-	res := search("intern_anna", "как получить доступ к тестовому стенду")
+	res := search("intern_maria", "как получить доступ к тестовому стенду")
 	require.NotEmpty(t, res.Results)
 	top := []string{}
 	for _, m := range res.Results[:min(3, len(res.Results))] {
@@ -145,16 +145,16 @@ func TestKnowledgeSearch(t *testing.T) {
 	assert.Contains(t, top, accessArticle, "статья про доступы в первой тройке")
 	assert.Contains(t, strings.ToLower(res.Results[0].Title), "стенд")
 
-	res = search("intern_anna", "как взять отгул")
+	res = search("intern_maria", "как взять отгул")
 	require.NotEmpty(t, res.Results)
 	assert.Equal(t, "Как взять отгул", res.Results[0].Title)
 
 	// Морфология: «ревью» и «ревьюер» находят статью про код-ревью.
-	res = search("intern_anna", "код-ревью")
+	res = search("intern_maria", "код-ревью")
 	require.NotEmpty(t, res.Results)
 
 	// Чужая команда не попадает в выдачу.
-	for _, m := range search("intern_anna", "руководитель Frontend Нина").Results {
+	for _, m := range search("intern_maria", "руководитель Frontend Нина").Results {
 		assert.NotEqual(t, frontendOnlyArticle, m.ArticleID)
 	}
 	found := false
@@ -164,18 +164,18 @@ func TestKnowledgeSearch(t *testing.T) {
 	assert.True(t, found)
 
 	// Ничего не найдено – пустой список, не ошибка.
-	assert.Empty(t, search("intern_anna", "квантовая хромодинамика").Results)
+	assert.Empty(t, search("intern_maria", "квантовая хромодинамика").Results)
 
 	var limited models.KBSearch
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/kb/search?limit=1&q=доступ", nil, &limited))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/kb/search?limit=1&q=доступ", nil, &limited))
 	assert.Len(t, limited.Results, 1)
-	require.Equal(t, http.StatusOK, e.call("intern_anna", http.MethodGet, "/api/kb/search?limit=500&q=доступ", nil, &limited))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodGet, "/api/kb/search?limit=500&q=доступ", nil, &limited))
 	assert.LessOrEqual(t, len(limited.Results), 20)
 
-	assert.Equal(t, http.StatusBadRequest, e.call("intern_anna", http.MethodGet, "/api/kb/search?q=%20", nil, nil))
+	assert.Equal(t, http.StatusBadRequest, e.call("intern_maria", http.MethodGet, "/api/kb/search?q=%20", nil, nil))
 	long := make([]byte, 201)
 	for i := range long {
 		long[i] = 'a'
 	}
-	assert.Equal(t, http.StatusBadRequest, e.call("intern_anna", http.MethodGet, "/api/kb/search?q="+string(long), nil, nil))
+	assert.Equal(t, http.StatusBadRequest, e.call("intern_maria", http.MethodGet, "/api/kb/search?q="+string(long), nil, nil))
 }

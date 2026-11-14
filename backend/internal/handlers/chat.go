@@ -25,6 +25,7 @@ type ChatService interface {
 // RequestsService – страница «Заявки».
 type RequestsService interface {
 	List(ctx context.Context, viewerID string) ([]models.RequestItem, error)
+	Withdraw(ctx context.Context, viewerID, id string) (*models.RequestItem, error)
 }
 
 // Chat – обработчики /api/chat и /api/requests.
@@ -110,6 +111,16 @@ func (h *Chat) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v, err := h.svc.Cancel(r.Context(), id, chi.URLParam(r, "actionId"))
+	reply(w, h.log, http.StatusOK, v, err)
+}
+
+// Withdraw – POST /api/requests/{id}/withdraw: стажер отзывает свою заявку на согласовании.
+func (h *Chat) Withdraw(w http.ResponseWriter, r *http.Request) {
+	id, ok := viewerID(w, r)
+	if !ok {
+		return
+	}
+	v, err := h.reqs.Withdraw(r.Context(), id, chi.URLParam(r, "id"))
 	reply(w, h.log, http.StatusOK, v, err)
 }
 

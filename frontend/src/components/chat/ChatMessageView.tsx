@@ -21,6 +21,7 @@ const STATUS_TEXT = {
   approved: 'одобрена',
   done: 'выполнена',
   rejected: 'отклонена',
+  cancelled: 'отозвана',
 } as const
 
 export function ChatMessageView({

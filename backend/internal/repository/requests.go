@@ -334,6 +334,27 @@ func (r *Requests) Cancel(ctx context.Context, id, actorID string) error {
 	})
 }
 
+// Withdraw – стажер отозвал свою заявку, пока она ждала решения. Задача пути снова «в работе».
+func (r *Requests) Withdraw(ctx context.Context, id, requesterID string) error {
+	return pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		var taskID *string
+		err := tx.QueryRow(ctx, `
+			UPDATE requests SET status = 'cancelled', decided_at = now()
+			WHERE id::text = $1 AND requester_id::text = $2 AND status = 'waiting'
+			RETURNING task_id::text`, id, requesterID).Scan(&taskID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if err := addEvent(ctx, tx, id, "cancelled", "user", &requesterID, "Отозвана стажером"); err != nil {
+			return err
+		}
+		return updateTask(ctx, tx, requesterID, taskID, "cancelled", "Заявка отозвана, можно оформить заново")
+	})
+}
+
 // ApplyDecision – решение внешней системы: статус, история, задача пути, уведомление и сообщение
 // помощника в чат стажера. Возвращает false, если заявка уже не ждала решения.
 // actorID – согласующий, если решение принято в AI-buddy; nil – решил сервис заявок.
@@ -392,7 +413,7 @@ func updateTask(ctx context.Context, tx pgx.Tx, internID string, taskID *string,
 	if taskID == nil {
 		return nil
 	}
-	taskStatus := map[string]string{"waiting": "waiting", "approved": "done", "done": "done", "rejected": "in_progress"}[status]
+	taskStatus := map[string]string{"waiting": "waiting", "approved": "done", "done": "done", "rejected": "in_progress", "cancelled": "in_progress"}[status]
 	if taskStatus == "" {
 		return nil
 	}
@@ -478,7 +499,8 @@ func (r *Requests) Get(ctx context.Context, id string) (*models.Request, error) 
 // ListByRequester – заявки пользователя без черновиков и отмененных, новые сверху.
 func (r *Requests) ListByRequester(ctx context.Context, requesterID string) ([]*models.Request, error) {
 	rows, err := r.db.Query(ctx, requestSelect+`
-		WHERE q.requester_id::text = $1 AND q.status NOT IN ('draft', 'cancelled')
+		WHERE q.requester_id::text = $1 AND q.status <> 'draft'
+		  AND (q.status <> 'cancelled' OR q.decided_at IS NOT NULL) -- отозванные видны, отмененные черновики нет
 		ORDER BY q.created_at DESC, q.number DESC`, requesterID)
 	if err != nil {
 		return nil, err

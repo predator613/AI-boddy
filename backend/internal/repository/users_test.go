@@ -30,7 +30,7 @@ func newRepo(t *testing.T) *Users {
 
 func TestGetByLogin(t *testing.T) {
 	repo := newRepo(t)
-	u, err := repo.GetByLogin(context.Background(), "intern_anna")
+	u, err := repo.GetByLogin(context.Background(), "intern_maria")
 	require.NoError(t, err)
 	assert.Equal(t, "Мария", u.Name)
 	assert.Equal(t, "intern", u.Role)
@@ -53,12 +53,12 @@ func TestGetByLogin(t *testing.T) {
 
 func TestGetByID(t *testing.T) {
 	repo := newRepo(t)
-	anna, err := repo.GetByLogin(context.Background(), "intern_anna")
+	anna, err := repo.GetByLogin(context.Background(), "intern_maria")
 	require.NoError(t, err)
 
 	u, err := repo.GetByID(context.Background(), anna.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "intern_anna", u.Login)
+	assert.Equal(t, "intern_maria", u.Login)
 
 	_, err = repo.GetByID(context.Background(), "00000000-0000-0000-0000-000000000000")
 	assert.ErrorIs(t, err, ErrNotFound)
@@ -73,9 +73,9 @@ func TestListTestUsers(t *testing.T) {
 	for _, u := range list {
 		logins[u.Login] = u.TeamName
 	}
-	assert.Equal(t, "Backend", logins["intern_anna"])
+	assert.Equal(t, "Backend", logins["intern_maria"])
 	assert.Equal(t, "Backend", logins["mentor_igor"])
-	assert.Equal(t, "Backend", logins["lead_oleg"])
+	assert.Equal(t, "Backend", logins["lead_artemiy"])
 	assert.Equal(t, "Frontend", logins["intern_pavel"])
 	assert.NotContains(t, logins, "devops_kirill", "роль staff не показывается в демо-входе")
 	for _, u := range list {
@@ -87,7 +87,7 @@ func TestQueryErrorsWhenPoolClosed(t *testing.T) {
 	repo := newRepo(t)
 	repo.db.Close()
 
-	_, err := repo.GetByLogin(context.Background(), "intern_anna")
+	_, err := repo.GetByLogin(context.Background(), "intern_maria")
 	assert.Error(t, err)
 	assert.NotErrorIs(t, err, ErrNotFound)
 

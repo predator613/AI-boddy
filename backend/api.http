@@ -12,7 +12,7 @@ GET {{base}}/api/auth/test-users
 POST {{base}}/api/auth/login
 Content-Type: application/json
 
-{ "login": "intern_anna", "password": "demo123" }
+{ "login": "intern_maria", "password": "demo123" }
 
 ### Кто я (токен берется из ответа на запрос выше)
 GET {{base}}/api/auth/me
@@ -22,7 +22,7 @@ Authorization: Bearer {{login.response.body.token}}
 POST {{base}}/api/auth/login
 Content-Type: application/json
 
-{ "login": "intern_anna", "password": "wrong" }
+{ "login": "intern_maria", "password": "wrong" }
 
 ### Пустые поля → 400 validation_error
 POST {{base}}/api/auth/login
@@ -117,7 +117,7 @@ Authorization: Bearer {{mentor.response.body.token}}
 POST {{base}}/api/auth/login
 Content-Type: application/json
 
-{ "login": "lead_oleg", "password": "demo123" }
+{ "login": "lead_artemiy", "password": "demo123" }
 
 ### Стажер Лиза (цели еще не согласованы)
 # @name liza

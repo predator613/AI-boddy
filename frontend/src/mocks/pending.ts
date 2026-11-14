@@ -547,6 +547,31 @@ export const assistantHandlers = [
 
   http.get(`${API_URL}/api/requests`, () => HttpResponse.json(requests)),
 
+  http.post(`${API_URL}/api/requests/:id/withdraw`, ({ params }) => {
+    const r = requests.find((x) => x.id === params.id)
+    if (!r) return notFound()
+    if (r.status !== 'waiting')
+      return HttpResponse.json(
+        {
+          error: {
+            code: 'conflict',
+            message: 'Отозвать можно только заявку, которая ждет решения',
+          },
+        },
+        { status: 409 },
+      )
+    const done = {
+      ...r,
+      status: 'cancelled' as const,
+      history: [
+        ...r.history.filter((h) => h.state !== 'now'),
+        { title: 'Отозвана стажером', at: 'только что', state: 'rejected' as const },
+      ],
+    }
+    requests = requests.map((x) => (x.id === r.id ? done : x))
+    return HttpResponse.json(done)
+  }),
+
   http.get(`${API_URL}/api/chat/messages`, () => HttpResponse.json({ messages: chatLog })),
 
   http.get(`${API_URL}/api/chat/dialogs`, () =>

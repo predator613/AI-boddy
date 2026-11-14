@@ -14,7 +14,7 @@ async function send(text: string) {
 }
 
 describe('Чат', () => {
-  beforeEach(() => loginAs('intern_anna'))
+  beforeEach(() => loginAs('intern_maria'))
 
   it('пустой чат приветствует и предлагает вопросы', async () => {
     renderApp('/chat')
@@ -117,7 +117,7 @@ describe('Чат', () => {
 
 describe('история диалогов', () => {
   it('прошлый диалог открывается только для чтения, «Новый диалог» переносит текущий в историю', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/chat')
     const side = await screen.findByRole('complementary', { name: 'Диалоги' }, { timeout: 3000 })
     await userEvent.click(await within(side).findByRole('button', { name: /Отгул на 14 ноября/ }))
@@ -140,7 +140,7 @@ describe('история диалогов', () => {
     server.use(
       http.get(`${API_URL}/api/chat/dialogs`, () => new HttpResponse(null, { status: 404 })),
     )
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/chat')
     const side = await screen.findByRole('complementary', { name: 'Диалоги' }, { timeout: 3000 })
     expect(within(side).getByRole('button', { name: /Текущий диалог/ })).toBeInTheDocument()
@@ -197,7 +197,7 @@ describe('стиль ответа из профиля', () => {
         return HttpResponse.json({ messages: [] })
       }),
     )
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     useSettingsStore.getState().setAnswerStyle('short')
     const { sendMessage } = await import('../src/api/assistant')
     await sendMessage({ text: 'что такое спринт' })

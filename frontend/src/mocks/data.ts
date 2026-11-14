@@ -6,7 +6,7 @@ export const MOCK_PASSWORD = 'demo123'
 export const mockUsers: User[] = [
   {
     id: '11111111-1111-4111-8111-111111111111',
-    login: 'intern_anna',
+    login: 'intern_maria',
     name: 'Мария',
     role: 'intern',
     teamId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -24,7 +24,7 @@ export const mockUsers: User[] = [
   },
   {
     id: '33333333-3333-4333-8333-333333333333',
-    login: 'lead_oleg',
+    login: 'lead_artemiy',
     name: 'Артемий',
     role: 'lead',
     teamId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',

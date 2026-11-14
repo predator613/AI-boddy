@@ -167,6 +167,7 @@ func NewRouter(cfg config.Config, svc Services, log *slog.Logger) http.Handler {
 			r.Post("/chat/actions/{actionId}/confirm", chatH.Confirm)
 			r.Post("/chat/actions/{actionId}/cancel", chatH.Cancel)
 			r.Get("/requests", chatH.Requests)
+			r.Post("/requests/{id}/withdraw", chatH.Withdraw)
 
 			// Свои люди (наставник, руководитель) и отделы – для «Поддержки».
 			r.Get("/me/contacts", peopleH.Contacts)

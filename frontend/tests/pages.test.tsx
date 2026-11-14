@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { API_URL } from '../src/api/client'
@@ -10,7 +10,7 @@ import { loginAs, renderApp } from './test-utils'
 const T = { timeout: 3000 }
 
 describe('Заявки', () => {
-  beforeEach(() => loginAs('intern_anna'))
+  beforeEach(() => loginAs('intern_maria'))
 
   it('список, фильтры и детали заявки', async () => {
     renderApp('/requests')
@@ -33,6 +33,36 @@ describe('Заявки', () => {
     ).toHaveLength(2)
   })
 
+  it('заявку на согласовании можно отозвать, с подтверждением', async () => {
+    renderApp('/requests')
+    const detail = await screen.findByRole('complementary', { name: 'Детали заявки' }, T)
+    expect(detail).toHaveTextContent('на согласовании')
+    // «Обсудить в чате» спрашивает по внутреннему номеру – его помощник находит в базе
+    expect(within(detail).getByRole('link', { name: 'Обсудить в чате' })).toHaveAttribute(
+      'href',
+      expect.stringContaining(encodeURIComponent('№1038')),
+    )
+    await userEvent.click(within(detail).getByRole('button', { name: 'Отозвать заявку' }))
+    // «Оставить» ничего не меняет
+    await userEvent.click(within(detail).getByRole('button', { name: 'Оставить' }))
+    expect(detail).toHaveTextContent('на согласовании')
+    await userEvent.click(within(detail).getByRole('button', { name: 'Отозвать заявку' }))
+    expect(within(detail).getByRole('group', { name: 'Отзыв заявки' })).toHaveTextContent(
+      'оформить заново',
+    )
+    await userEvent.click(within(detail).getByRole('button', { name: 'Отозвать' }))
+    await waitFor(() => expect(detail).toHaveTextContent('отозвана'), T)
+    expect(detail).toHaveTextContent('Отозвана стажером')
+    expect(
+      within(detail).queryByRole('button', { name: 'Отозвать заявку' }),
+    ).not.toBeInTheDocument()
+    // отозванные – в фильтре вместе с отклоненными
+    await userEvent.click(screen.getByRole('tab', { name: /Отклонены и отозваны/ }))
+    expect(
+      within(screen.getByRole('list', { name: 'Список заявок' })).getAllByRole('listitem'),
+    ).toHaveLength(2)
+  })
+
   it('пустой фильтр и ошибка загрузки', async () => {
     server.use(http.get(`${API_URL}/api/requests`, () => HttpResponse.json([])))
     renderApp('/requests')
@@ -47,7 +77,7 @@ describe('Заявки', () => {
 })
 
 describe('Справочник', () => {
-  beforeEach(() => loginAs('intern_anna'))
+  beforeEach(() => loginAs('intern_maria'))
 
   it('разделы, поиск и статья', async () => {
     renderApp('/kb')
@@ -90,7 +120,7 @@ describe('Справочник', () => {
 
 describe('Поддержка', () => {
   it('частые вопросы и форма', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/support')
     expect(await screen.findByText('Кому написать', {}, T)).toBeInTheDocument()
     expect(await screen.findByText('Игорь', {}, T)).toBeInTheDocument()
@@ -122,7 +152,7 @@ describe('Поддержка', () => {
         ),
       ),
     )
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/support')
     await userEvent.type(await screen.findByLabelText('Подробности', {}, T), 'Не создалась заявка')
     await userEvent.click(screen.getByRole('button', { name: 'Отправить' }))
@@ -149,9 +179,9 @@ describe('Поддержка', () => {
 
 describe('Профиль', () => {
   it('настройки сохраняются, выход из аккаунта', async () => {
-    loginAs('intern_anna')
+    loginAs('intern_maria')
     renderApp('/profile')
-    expect(await screen.findByText('intern_anna', {}, T)).toBeInTheDocument()
+    expect(await screen.findByText('intern_maria', {}, T)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('switch', { name: 'Подсказки AI-buddy' }))
     expect(useSettingsStore.getState().notifications.tips).toBe(true)
     await userEvent.click(screen.getByText('Подробно'))

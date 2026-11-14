@@ -26,7 +26,7 @@ describe('LoginForm', () => {
 
   it('неверный пароль (401) – «Неверный логин или пароль»', async () => {
     renderWithProviders(<LoginForm />)
-    await fillAndSubmit('intern_anna', 'wrong')
+    await fillAndSubmit('intern_maria', 'wrong')
     expect(await screen.findByRole('alert')).toHaveTextContent('Неверный логин или пароль')
     expect(useAuthStore.getState().token).toBeNull()
   })
@@ -34,16 +34,16 @@ describe('LoginForm', () => {
   it('успешный вход – токен в store и вызов onSuccess', async () => {
     const onSuccess = vi.fn()
     renderWithProviders(<LoginForm onSuccess={onSuccess} />)
-    await fillAndSubmit('  intern_anna  ', 'demo123')
+    await fillAndSubmit('  intern_maria  ', 'demo123')
     await vi.waitFor(() => expect(onSuccess).toHaveBeenCalled())
-    expect(useAuthStore.getState().token).toBe(mockToken('intern_anna'))
+    expect(useAuthStore.getState().token).toBe(mockToken('intern_maria'))
     expect(useAuthStore.getState().user?.name).toBe('Мария')
   })
 
   it('сервер недоступен – понятный текст ошибки', async () => {
     server.use(http.post(`${API_URL}/api/auth/login`, () => HttpResponse.error()))
     renderWithProviders(<LoginForm />)
-    await fillAndSubmit('intern_anna', 'demo123')
+    await fillAndSubmit('intern_maria', 'demo123')
     expect(await screen.findByRole('alert')).toHaveTextContent('Сервер недоступен')
   })
 
@@ -52,7 +52,7 @@ describe('LoginForm', () => {
       http.post(`${API_URL}/api/auth/login`, () => new HttpResponse(null, { status: 500 })),
     )
     renderWithProviders(<LoginForm />)
-    await fillAndSubmit('intern_anna', 'demo123')
+    await fillAndSubmit('intern_maria', 'demo123')
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось войти')
   })
 })
