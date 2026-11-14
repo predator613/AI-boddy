@@ -16,6 +16,9 @@ var (
 		"четверг": time.Thursday, "пятниц": time.Friday, "суббот": time.Saturday, "воскресень": time.Sunday}
 )
 
+// reYearAfter – год сразу после даты: «1 января 2027», «1 января 2027 г.».
+var reYearAfter = regexp.MustCompile(`^\S*\s+(20\d\d)\b`)
+
 // ParseLeaveDate ищет дату в тексте: «14 ноября», «14.11», «завтра», «послезавтра», «в пятницу».
 // Дата без года берется ближайшая будущая. ok = false – даты в тексте нет.
 func ParseLeaveDate(text string, today time.Time) (time.Time, bool) {
@@ -26,11 +29,23 @@ func ParseLeaveDate(text string, today time.Time) (time.Time, bool) {
 		return today.AddDate(0, 0, 2), true
 	case strings.Contains(t, "завтра"):
 		return today.AddDate(0, 0, 1), true
+	case strings.Contains(t, "позавчера"):
+		return today.AddDate(0, 0, -2), true
+	case strings.Contains(t, "вчера"):
+		return today.AddDate(0, 0, -1), true
+	case strings.Contains(t, "сегодня"):
+		return today, true
 	}
 	if m := reDayMonth.FindStringSubmatch(t); m != nil {
 		day, _ := strconv.Atoi(m[1])
 		for i, stem := range monthStems {
 			if strings.HasPrefix(m[2], stem) {
+				// «1 января 2027» – год указан явно.
+				if y := reYearAfter.FindStringSubmatch(t[strings.Index(t, m[0])+len(m[0]):]); y != nil {
+					year, _ := strconv.Atoi(y[1])
+					d := time.Date(year, time.Month(i+1), day, 0, 0, 0, 0, today.Location())
+					return d, d.Day() == day
+				}
 				return future(today, time.Month(i+1), day)
 			}
 		}

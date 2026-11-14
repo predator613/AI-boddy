@@ -525,3 +525,24 @@ func TestGoalStepsAndCompetency(t *testing.T) {
 	require.Equal(t, http.StatusOK, e.call("lead_artemiy", http.MethodPost, "/api/goals/"+g.ID+"/steps/"+g.Steps[0].ID, map[string]any{"done": true}, &g))
 	assert.Equal(t, "Артемий подтвердил шаг «Демо команде» у Лизы", feedOf(t, e, "mentor_igor").Items[0].Text)
 }
+
+// Ключ заявки – номер заявки в AI-buddy: после перезапуска имитации ключи не повторяются.
+func TestMockKeysSurviveRestart(t *testing.T) {
+	ctx := context.Background()
+	o := integrationsOrder("access")
+	o.RequestNumber = 1042
+	a, err := mockservices.NewStore(0).Submit(ctx, o)
+	require.NoError(t, err)
+	assert.Equal(t, "ACCESS-1042", a.Ref)
+	restarted := mockservices.NewStore(0)
+	b, err := restarted.Submit(ctx, integrationsOrder("support"))
+	require.NoError(t, err)
+	c, err := restarted.Submit(ctx, integrationsOrder("support"))
+	require.NoError(t, err)
+	assert.NotEqual(t, b.Ref, c.Ref)
+	dup, err := restarted.Submit(ctx, o)
+	require.NoError(t, err)
+	again, err := restarted.Submit(ctx, o)
+	require.NoError(t, err)
+	assert.NotEqual(t, dup.Ref, again.Ref, "повторный номер не перезаписывает заявку")
+}

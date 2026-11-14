@@ -270,7 +270,10 @@ func TestAssistantAnswersAndLimits(t *testing.T) {
 	// Ответа нет – помощник не выдумывает, а предлагает передать вопрос.
 	msgs = e.say("intern_maria", map[string]any{"text": "сколько стоит квантовый компьютер"})
 	assert.Nil(t, msgs[0].Source)
-	assert.Contains(t, msgs[0].Text, "передай наставнику")
+	assert.Contains(t, msgs[0].Text, "Передать вопрос наставнику")
+	// «нет» на предложение – вопрос не уходит.
+	msgs = e.say("intern_maria", map[string]any{"text": "нет"})
+	assert.Contains(t, msgs[0].Text, "Хорошо, не передаю")
 
 	// Доступ, запрещенный роли, не оформляется.
 	msgs = e.say("intern_maria", map[string]any{"text": "дай доступ к логам продакшена"})
@@ -1005,4 +1008,40 @@ func TestWithdrawRequest(t *testing.T) {
 	var item models.RequestItem
 	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPost, "/api/requests/"+r.Messages[0].Result.RequestID+"/withdraw", nil, &item))
 	assert.Equal(t, "cancelled", item.Status)
+}
+
+// Отгул на прошедшую или слишком далекую дату не оформляется; отзыв по номеру работает
+// и при открытой карточке другой заявки.
+func TestLeaveDatesAndWithdrawWithDraft(t *testing.T) {
+	e := newChatEnv(t, "")
+	for _, q := range []string{"хочу отгул вчера", "хочу отгул 1 января 2020"} {
+		msgs := e.say("intern_maria", map[string]any{"text": q})
+		assert.Contains(t, msgs[0].Text, "уже прошла", q)
+	}
+	msgs := e.say("intern_maria", map[string]any{"text": "хочу отгул 2 декабря 2028"})
+	assert.Contains(t, msgs[0].Text, "не дальше чем на год", "далекая дата")
+
+	card := confirmOf(t, e.say("intern_maria", map[string]any{"text": "нужен монитор"}))
+	var r models.ChatReply
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPost, "/api/chat/actions/"+card.ActionID+"/confirm", nil, &r))
+	number := r.Messages[0].Result.Number
+	confirmOf(t, e.say("intern_maria", map[string]any{"text": "нужна клавиатура и мышь"}))
+	offer := e.say("intern_maria", map[string]any{"text": "отзови заявку №" + number})
+	assert.Contains(t, offer[0].Text, "Отозвать заявку №"+number)
+	assert.NotContains(t, offer[0].Text, "Моем пути", "у заявки в отдел нет задачи пути")
+	done := e.say("intern_maria", map[string]any{"text": "да"})
+	assert.Contains(t, done[0].Text, "отозвана")
+}
+
+// «отмена» текстом при открытой карточке отменяет ее; отгул с датой заменяет любую открытую карточку.
+func TestCancelDraftByText(t *testing.T) {
+	e := newChatEnv(t, "")
+	card := confirmOf(t, e.say("intern_maria", map[string]any{"text": "нужен монитор"}))
+	msgs := e.say("intern_maria", map[string]any{"text": "отмена"})
+	assert.Contains(t, msgs[0].Text, "заявку не создаю")
+	var r models.ChatReply
+	assert.Equal(t, http.StatusNotFound, e.call("intern_maria", http.MethodPost, "/api/chat/actions/"+card.ActionID+"/confirm", nil, &r))
+	confirmOf(t, e.say("intern_maria", map[string]any{"text": "нужна гарнитура"}))
+	leave := e.say("intern_maria", map[string]any{"text": "хочу отгул вчера"})
+	assert.Contains(t, leave[0].Text, "уже прошла")
 }

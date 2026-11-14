@@ -375,7 +375,7 @@ func TestConsoleTaskDetails(t *testing.T) {
 	assert.Empty(t, task.Helper)
 
 	var details *models.TaskDetails
-	for _, s := range e.path("intern_anna").Stages {
+	for _, s := range e.path("intern_maria").Stages {
 		for _, x := range s.Tasks {
 			if x.ID == task.ID {
 				details = x.Details

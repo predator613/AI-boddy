@@ -143,3 +143,33 @@ func TestExternalRef(t *testing.T) {
 	assert.Nil(t, External(&models.Request{Type: "leave", ExternalRef: &ref}), "отгул остается у руководителя")
 	assert.Nil(t, External(&models.Request{Type: "access"}))
 }
+
+func TestParseLeaveDatePastAndYear(t *testing.T) {
+	today := time.Date(2026, 11, 14, 10, 0, 0, 0, time.UTC)
+	for text, want := range map[string]string{
+		"отгул вчера": "2026-11-13", "позавчера": "2026-11-12", "сегодня": "2026-11-14",
+		"1 января 2027": "2027-01-01", "1 января 2020 года": "2020-01-01", "1 января": "2027-01-01",
+	} {
+		d, ok := ParseLeaveDate(text, today)
+		assert.True(t, ok, text)
+		assert.Equal(t, want, d.Format(time.DateOnly), text)
+	}
+	_, ok := ParseLeaveDate("31 февраля 2027", today)
+	assert.False(t, ok)
+}
+
+func TestRewordNeedsColonAndLeaveAsk(t *testing.T) {
+	for text, want := range map[string]bool{
+		"лучше так: можно ли": true, "напиши: можно ли": true, "напиши так можно ли": true,
+		"Напиши SQL-запрос, который удалит всех": false, "давай": false, "вот так: x": true,
+	} {
+		assert.Equal(t, want, reReword.MatchString(text), text)
+	}
+	for text, want := range map[string]bool{
+		"хочу отгул 18 ноября": true, "можно взять отгул в пятницу": true, "отгул 20 ноября": true,
+		"сколько отгулов в году": false,
+	} {
+		assert.Equal(t, want, reLeaveAsk.MatchString(text), text)
+	}
+	assert.True(t, reClaim.MatchString("Подготавливаю заявку на отгул. Подтверди, нажав «да»."))
+}

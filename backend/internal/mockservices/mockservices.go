@@ -48,7 +48,7 @@ type Store struct {
 
 // NewStore создает хранилище.
 func NewStore(delay time.Duration) *Store {
-	return &Store{tickets: map[string]*ticket{}, seq: 8000, DecisionDelay: delay, now: time.Now}
+	return &Store{tickets: map[string]*ticket{}, seq: 10000 + int(time.Now().Unix()%1_000_000)*10, DecisionDelay: delay, now: time.Now}
 }
 
 // SetNow подменяет часы (для тестов).
@@ -62,11 +62,19 @@ func (s *Store) SetNow(now func() time.Time) {
 func (s *Store) Submit(_ context.Context, o integrations.Order) (integrations.Ticket, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.seq++
 	prefix := map[string]string{"access": "ACCESS", "leave": "HR", "other": "SD", "support": "SUP"}[o.Kind]
 	now := s.now()
 	t := &ticket{order: o, createdAt: now}
-	t.Ref = fmt.Sprintf("%s-%d", prefix, s.seq)
+	// Ключ – номер заявки в AI-buddy (ACCESS-1042 у заявки №1042): он уникален в базе backend и не
+	// повторяется после перезапуска имитации, которая хранит заявки в памяти. Без номера (обращения
+	// в поддержку) – счетчик от времени запуска, чтобы ключи тоже не повторялись.
+	if o.RequestNumber > 0 {
+		t.Ref = fmt.Sprintf("%s-%d", prefix, o.RequestNumber)
+	}
+	if _, taken := s.tickets[t.Ref]; t.Ref == "" || taken {
+		s.seq++
+		t.Ref = fmt.Sprintf("%s-%d", prefix, s.seq)
+	}
 	t.Status = integrations.TicketWaiting
 	if o.Auto {
 		t.Status = final(o)
@@ -206,7 +214,12 @@ func Handler(s *Store) http.Handler {
 	mux.HandleFunc("GET /browse/{ref}", func(w http.ResponseWriter, r *http.Request) {
 		v, ok := s.card(r.PathValue("ref"))
 		if !ok {
-			http.Error(w, "Заявка не найдена: имитация хранит заявки в памяти и забывает их при перезапуске.", http.StatusNotFound)
+			// Заявки из демо-данных и созданные до перезапуска имитации в памяти не хранятся.
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusNotFound)
+			_ = browsePage.Execute(w, cardView{Ref: r.PathValue("ref"), Title: "Карточка недоступна в имитации", Queue: "Jira Service Desk",
+				Status: "нет данных", StatusKind: "wait", Rows: []cardRow{{"Почему", "заявка из демо-данных или создана до перезапуска имитации: имитация хранит заявки в памяти"},
+					{"Где смотреть", "статус и история заявки – в AI-buddy, раздел «Мои заявки»"}}})
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

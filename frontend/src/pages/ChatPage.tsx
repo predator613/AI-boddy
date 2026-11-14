@@ -74,9 +74,10 @@ export function ChatPage({ initialQuestion, taskId }: ChatPageProps) {
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const path = useMyPath({ enabled: user?.role === 'intern' })
+  // Тот же этап, что «СЕЙЧАС» на «Моем пути», а не этап следующей задачи: иначе экраны расходятся.
   const stage =
-    path.data?.stages.find((s) => s.code === path.data?.nextStep?.stageCode) ??
-    path.data?.stages.find((s) => s.status === 'current')
+    path.data?.stages.find((s) => s.status === 'current') ??
+    path.data?.stages.find((s) => s.code === path.data?.nextStep?.stageCode)
   const autoSent = useRef(false)
 
   const history = useQuery({ queryKey: chatKey, queryFn: getChatHistory })

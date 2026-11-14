@@ -306,7 +306,7 @@ func (s *Mentor) Reply(ctx context.Context, viewerID, internID string, in ReplyI
 			stage, _ = s.store.StageByCode(ctx, i.TeamID, code)
 		}
 		mat, err := s.store.CreateMaterial(ctx, models.MaterialDraft{
-			AuthorID: m.ID, TeamID: m.TeamID, Title: clip(title, 120), Section: "Ответы наставников", Body: text, StageID: stage, UseInAI: true,
+			AuthorID: m.ID, TeamID: m.TeamID, Title: clip(title, 120), Section: "Ответы наставников", Body: answerBody(q, text), StageID: stage, UseInAI: true,
 		}, "mentor_answer")
 		if err != nil {
 			return nil, err
@@ -718,4 +718,13 @@ func mapInvalid(err error) error {
 		return invalid("Проверь поля формы")
 	}
 	return err
+}
+
+// answerBody – ответ наставника для справочника вместе с вопросом: короткий ответ без слов
+// вопроса иначе не находится поиском.
+func answerBody(question, answer string) string {
+	if strings.TrimSpace(question) == "" {
+		return answer
+	}
+	return answer + "\nВопрос стажера: " + strings.TrimSpace(question)
 }

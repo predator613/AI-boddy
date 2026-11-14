@@ -472,6 +472,14 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 	if reWho.MatchString(low) {
 		return a.whoAnswer(ctx, t)
 	}
+	// «отмена», «не надо» при открытой карточке – отменяем ее сами, модель этого не умеет.
+	if q := t.draft; q != nil && reDecline.MatchString(strings.TrimSpace(low)) {
+		if err := a.reqs.Cancel(ctx, q.ID, t.viewer.ID); err != nil && !errors.Is(err, repository.ErrNotFound) {
+			return err
+		}
+		t.draft = nil
+		return a.say(ctx, t, "text", "Хорошо, заявку не создаю. Если передумаешь, просто напиши.", "calm", nil)
+	}
 	if t.draft != nil && reEdit.MatchString(low) {
 		if done, err := a.editDraft(ctx, t, text); done {
 			return err
@@ -490,6 +498,12 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 	case handoffDecline:
 		return a.say(ctx, t, "text", "Хорошо, не передаю. Если передумаешь, напиши «передай наставнику».", "calm", nil)
 	}
+	// Отгул с датой – сразу карточка: модель иногда обещает заявку текстом и не вызывает инструмент.
+	if reLeaveAsk.MatchString(low) && !reHowTo.MatchString(low) {
+		if _, ok := ParseLeaveDate(text, a.now().In(moscow)); ok {
+			return a.prepareLeave(ctx, t, text, "", nil)
+		}
+	}
 	// «Нужно оборудование» без конкретного предмета: уточняем, что именно, по каталогу отдела.
 	if reNeed.MatchString(low) {
 		_, err := a.reqs.ResolveItem(ctx, text)
@@ -498,8 +512,8 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 			if done, err := a.departmentHelp(ctx, t, low); done {
 				return err
 			}
-		case err == nil && a.isMock():
-			// без модели предмет из каталога («нужна док-станция») сразу идет в заявку
+		case err == nil && !reHowTo.MatchString(low):
+			// предмет из каталога («нужна док-станция») сразу идет в заявку: модель иногда только обещает
 			return a.prepareService(ctx, t, text, "")
 		}
 	}
@@ -518,7 +532,7 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 			switch {
 			case reClaimHandoff.MatchString(resp.Content):
 				return a.offerHandoff(ctx, t, "")
-			case reClaimLook.MatchString(resp.Content):
+			case reClaimLook.MatchString(resp.Content) || reHowTo.MatchString(low):
 				// «сейчас посмотрю» – ищем в справочнике сами
 				args, _ := json.Marshal(map[string]string{"query": text})
 				return a.searchAnswer(ctx, t, msgs, llm.ToolCall{ID: "look", Name: "search_kb", Arguments: args}, text)
@@ -530,10 +544,16 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 }
 
 // reClaim – модель пишет, что сделала или сделает действие (передать, создать, оформить).
-var reClaim = regexp.MustCompile(`(?i)передал|передам|передаю|подготовлю|подготовил|созда(м|л|ю)|оформлю|оформил|отправлю|отправил|заявка готова|все готово|посмотрю|проверю|проверим|поищу|вернусь`)
+var reClaim = regexp.MustCompile(`(?i)подготавлива|оформля|отправля|нажа\S* «да»|ответь «да»|напиши «да»|передал|передам|передаю|подготовлю|подготовил|созда(м|л|ю)|оформлю|оформил|отправлю|отправил|заявка готова|все готово|посмотрю|проверю|проверим|поищу|вернусь`)
 
 // reClaimLook – обещание поискать или проверить: вместо него агент сам ищет в справочнике.
 var reClaimLook = regexp.MustCompile(`(?i)посмотрю|проверю|проверим|поищу|вернусь`)
+
+// reLeaveAsk – просьба об отгуле («хочу отгул 18 ноября»), а не вопрос о правилах.
+var reLeaveAsk = regexp.MustCompile(`(хочу|нужен|нужно|возьму|взять|оформи|оформить|можно)\s.{0,20}(отгул|выходной)|^отгул\s`)
+
+// reHowTo – вопрос «как сделать», на него отвечают по справочнику, а не заявкой.
+var reHowTo = regexp.MustCompile(`^(как|где|что|кто|когда|сколько|можно ли)\s`)
 
 // reClaimHandoff – обещание передать вопрос человеку.
 var reClaimHandoff = regexp.MustCompile(`(?i)передал|передам|передаю`)
@@ -610,7 +630,7 @@ const offerMarker = "в таком виде"
 var reDecline = regexp.MustCompile(`(?i)^(нет|не надо|не нужно|не передавай|не стоит|отмена|передумал[а]?)[.!)\s]*$`)
 
 // reReword – стажер правит предложенную формулировку: «лучше так: …», «напиши: …».
-var reReword = regexp.MustCompile(`(?i)^(нет,?\s*)?(лучше|напиши|исправь|поправь|переформулируй|давай|вот)(\s+так)?(\s|:|,|$)[\s:,–-]*`)
+var reReword = regexp.MustCompile(`(?i)^(нет,?\s*)?(?:(?:лучше|вот)(?:\s+так)?|(?:напиши|исправь|поправь|переформулируй|давай)(?:\s+так|\s*:))(\s|:|,|$)[\s:,–-]*`)
 
 // handoffIntent – нужно ли передать вопрос без модели и какой именно вопрос.
 func (a *Agent) handoffIntent(t *turn, text string) (int, string) {
@@ -645,10 +665,15 @@ func (a *Agent) handoffIntent(t *turn, text string) (int, string) {
 		}
 		return handoffOffer, ""
 	}
-	if reAgree.MatchString(text) && last.Role == "assistant" {
+	if last.Role == "assistant" {
 		low := strings.ToLower(last.Content)
 		if strings.Contains(low, "передать") && !strings.Contains(low, "[карточка") {
-			return handoffOffer, ""
+			switch {
+			case reAgree.MatchString(text):
+				return handoffOffer, ""
+			case reDecline.MatchString(text):
+				return handoffDecline, ""
+			}
 		}
 	}
 	return handoffNone, ""
@@ -692,7 +717,7 @@ func (a *Agent) requestIntent(ctx context.Context, t *turn, text string) (bool, 
 	if !mentionsRequest && number == "" {
 		return false, nil
 	}
-	if reWithdraw.MatchString(low) && t.draft == nil {
+	if reWithdraw.MatchString(low) && (t.draft == nil || number != "") {
 		return true, a.offerWithdraw(ctx, t, number)
 	}
 	if number != "" && t.draft == nil {
@@ -726,9 +751,16 @@ func (a *Agent) offerWithdraw(ctx context.Context, t *turn, number string) error
 		return a.say(ctx, t, "text", "На согласовании несколько заявок:\n"+strings.Join(lines, "\n")+"\nНапиши, какую отозвать, например: «отзови заявку №"+fmt.Sprint(waiting[0].Number)+"».", "think", nil)
 	}
 	q := waiting[0]
+	where, task := "в "+integrations.JiraName, ""
+	if q.Type == "leave" {
+		where = "у руководителя"
+	}
+	if q.TaskID != nil {
+		task = " задача на «Моем пути» снова будет «в работе»,"
+	}
 	return a.say(ctx, t, "text", fmt.Sprintf(
-		"Отозвать заявку №%d «%s»? Она закроется и в %s, задача на «Моем пути» снова будет «в работе», заявку можно оформить заново. Напиши «да» или «нет».",
-		q.Number, RequestTitle(q), integrations.JiraName), "think", nil)
+		"Отозвать заявку №%d «%s»? Она закроется %s,%s заявку можно оформить заново. Напиши «да» или «нет».",
+		q.Number, RequestTitle(q), where, task), "think", nil)
 }
 
 // withdraw – отозвать заявку после «да».
@@ -873,7 +905,7 @@ func handoffQuestion(t *turn, fromModel string) string {
 			if q := reQuoted.FindStringSubmatch(m.Content); q != nil {
 				return strings.TrimSpace(q[1])
 			}
-			return strings.TrimSpace(m.Content)
+			return strings.TrimSpace(reReword.ReplaceAllString(m.Content, ""))
 		}
 	}
 	return t.question
@@ -1149,6 +1181,12 @@ func (a *Agent) prepareLeave(ctx context.Context, t *turn, dateText, kind string
 	if !ok {
 		day = AddWorkdays(time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, moscow), 2)
 	}
+	if day.Before(time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())) {
+		return a.say(ctx, t, "text", "Эта дата уже прошла: отгул оформляют заранее. Назови будущий рабочий день.", "think", nil)
+	}
+	if day.After(today.AddDate(1, 0, 0)) {
+		return a.say(ctx, t, "text", "Отгул можно оформить не дальше чем на год вперед. Назови дату поближе.", "think", nil)
+	}
 	if IsWeekend(day) {
 		return a.say(ctx, t, "text", fmt.Sprintf("%s – выходной, отгул не нужен. Назови рабочий день.", capitalize(dayMonth(day))), "think", nil)
 	}
@@ -1259,7 +1297,7 @@ func (a *Agent) noAnswer(ctx context.Context, t *turn) error {
 	}
 	text := "Точного ответа в справочнике нет. Напиши «передай наставнику», и я передам вопрос."
 	if t.circle != nil && t.circle.Mentor != nil {
-		text = fmt.Sprintf("Точного ответа в справочнике нет. Могу передать вопрос наставнику (%s) – напиши «передай наставнику».", t.circle.Mentor.Name)
+		text = fmt.Sprintf("Точного ответа в справочнике нет. Передать вопрос наставнику (%s)? Напиши «да» или «нет».", t.circle.Mentor.Name)
 	}
 	return a.say(ctx, t, "text", a.phrase(ctx, t, text), "mentor", nil)
 }

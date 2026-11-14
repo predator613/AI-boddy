@@ -49,6 +49,9 @@ func (a *Agent) prepareService(ctx context.Context, t *turn, itemText, comment s
 		return mapNotFound(err)
 	}
 	intro := fmt.Sprintf("%s оформляется заявкой, ее выполнит %s, обычно до %d ч.", item.Title, item.DepartmentTitle, item.SLAHours)
+	if item.Code == chatsItem {
+		intro = "Добавлю тебя в чаты и каналы команды сразу после подтверждения."
+	}
 	if t.replaced {
 		intro = "Обновил карточку, старую убрал. " + intro
 	}
@@ -127,6 +130,9 @@ var (
 
 // cleanText убирает markdown из ответа модели: фронт показывает текст как есть.
 func cleanText(s string) string {
+	// служебная пометка из истории, которую модель иногда повторяет
+	s = strings.ReplaceAll(s, "[карточка подтверждения] ", "")
+	s = strings.ReplaceAll(s, "[карточка подтверждения]", "")
 	s = reMDBold.ReplaceAllString(s, "$1$2")
 	s = reMDHead.ReplaceAllString(s, "")
 	s = reMDBullet.ReplaceAllString(s, "– ")
