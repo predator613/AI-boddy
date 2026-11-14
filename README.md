@@ -92,7 +92,7 @@ curl -G http://localhost:8080/api/kb/search --data-urlencode "q=как взят�
 # 6. главный сценарий: доступ к GitLab через AI-buddy (actionId – из карточки confirm)
 curl -X POST http://localhost:8080/api/chat/messages -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d "{\"text\":\"Запроси доступ к GitLab\"}"
 curl -X POST http://localhost:8080/api/chat/actions/<actionId>/confirm -H "Authorization: Bearer <token>"
-curl http://localhost:8080/api/requests -H "Authorization: Bearer <token>"   # через 45 с статус done
+curl http://localhost:8080/api/requests -H "Authorization: Bearer <token>"   # done после согласования Артемием (или сам через 6 × MOCK_DECISION_DELAY)
 
 # 7. заявка в отдел: ноутбук уходит в отдел оборудования, наставник получает уведомление
 curl -X POST http://localhost:8080/api/chat/messages -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d "{\"text\":\"мне не выдали ноутбук, нужен\"}"
@@ -115,15 +115,24 @@ docker compose --profile test run --rm backend-tests
 - `backend/coverage/coverage.out` – профиль покрытия,
 - `backend/coverage/coverage.html` – отчет для браузера.
 
-Покрытие считается по всему прикладному коду backend, кроме имитации корпоративных систем (`internal/mockservices`, `cmd/`). Текущее значение – около 88%.
+Покрытие считается по всему прикладному коду backend, кроме имитации корпоративных систем (`internal/mockservices`, `cmd/`). Текущее значение – около 86%.
 
 Общий отчет по фронту и бэку одним числом (покрытые строки вместе, а не среднее двух процентов):
 
 ```bash
 docker compose --profile test run --rm backend-tests
 docker compose --profile test run --rm frontend-tests
-python scripts/coverage_summary.py      # итог около 90%, отчет в coverage/summary.md
+python scripts/coverage_summary.py      # итог около 89%, отчет в coverage/summary.md
 ```
+
+Сквозная проверка сценариев и прав через API на запущенном проекте (нужен Node 18+, лучше на чистой базе):
+
+```bash
+node scripts/qa/scenarios.mjs   # пять сценариев из README и спецификации
+node scripts/qa/security.mjs    # вход, чужие данные, инъекции, CORS
+```
+
+Результаты ручной проверки и найденные исправления – `docs/qa-report.md`.
 
 Локально без Docker (нужен Go и запущенный postgres из compose): `cd backend && go test -p 1 -cover -coverpkg=./... ./...` с переменной `TEST_DATABASE_URL=postgres://buddy:buddy@localhost:5432/ai_buddy_test?sslmode=disable`. Без этой переменной интеграционные тесты пропускаются.
 
@@ -139,6 +148,15 @@ python scripts/coverage_summary.py      # итог около 90%, отчет в
 | pgx | v5.7.5 |
 | golang.org/x/crypto (bcrypt) | v0.40.0 |
 | testify | v1.10.0 |
+| Node.js (сборка фронта) | 24 (образ node:24-alpine), раздача – nginx 1.27 |
+| React | 19.3 |
+| TypeScript | 7.0 |
+| Vite | 8.3 |
+| TanStack Router / Query | 1.170 / 5.107 |
+| Zustand | 5.1 |
+| Zod | 4.6 |
+| Mantine | 9.8 |
+| Vitest / MSW | 5.1 / 3.0 |
 
 ## Переменные окружения backend
 
@@ -157,6 +175,7 @@ python scripts/coverage_summary.py      # итог около 90%, отчет в
 | MOCK_SERVICES_URL | – (в compose – http://mock-services:8090) | система заявок; пусто – имитация внутри backend |
 | MOCK_DECISION_DELAY | 45s | через сколько имитация «согласует» заявку (контейнер mock-services) |
 | REQUEST_SYNC_INTERVAL | 5s | как часто забирать решения по заявкам |
+| MOCK_SERVICES_PUBLIC_URL | – (в compose – http://localhost:8090) | адрес имитации для ссылок «открыть заявку в Jira» |
 
 ## API (этап 1 – авторизация)
 
@@ -223,9 +242,28 @@ python scripts/coverage_summary.py      # итог около 90%, отчет в
 
 Помощник отвечает из справочника со ссылкой на статью, готовит заявки на доступ, отгул и в отделы компании (оборудование, ИТ-поддержка, HR, бухгалтерия; создаются только после подтверждения), не оформляет доступ, запрещенный роли, показывает статусы и передает вопрос наставнику. Наставник переписку стажера с помощником не видит, только переданные ему вопросы.
 
+## API (этап 5 – наставник, руководитель, поддержка)
+
+Что готово на backend и контракты: `docs/api-backend-status.md`, спецификации: `specs/004-mentor-handoff`, `specs/005-service-requests`.
+
+| Метод | Путь | Кто | Что делает |
+|---|---|---|---|
+| POST | /api/requests/{id}/withdraw | стажер | отозвать свою заявку на согласовании |
+| GET, POST | /api/approvals, /api/approvals/{id} | руководитель, владелец ресурса | согласования |
+| GET, POST | /api/mentor/feed, /api/mentor/feed/read | наставник | лента событий |
+| GET, POST | /api/mentor/interns/{id}/checklist[/{itemId}] | наставник, руководитель | чек-лист наставника |
+| GET | /api/mentor/metrics, /api/mentor/stats | наставник, руководитель | польза AI-buddy за неделю |
+| GET, POST | /api/mentor/threads[/{internId}[/messages]] | наставник | переписка со стажерами, ответ в справочник |
+| GET, POST | /api/me/mentor-thread[/messages] | стажер | переписка с наставником |
+| GET, POST, DELETE | /api/materials[/{id}] | наставник | материалы и справочник команды |
+| GET, POST, PATCH, DELETE | /api/mentor/meetings[/{id}] | наставник | расписание встреч |
+| GET, PATCH | /api/mentor/automations[/{id}] | наставник | напоминания и сигналы |
+| GET, PUT | /api/me/notes[/{eventId}] | стажер | конспекты встреч |
+| GET, POST | /api/support/tickets | все | обращения в поддержку |
+
 ## База данных
 
-Миграции 005–014 приводят схему к 3НФ и заполняют демо-данные: справочники (роли, сервисы, уровни прав read/edit/admin, проекты с владельцами), справочник знаний с полнотекстовым поиском, цели и OKR, заявки, чат, уведомления, события для метрик, feature flags. Всего 59 таблиц. В статьях справочника нет имен: метки `{{mentor}}`, `{{lead}}`, `{{team}}` заменяются на наставника, руководителя и команду того, кто читает. Даты в демо-данных считаются от дня применения миграций. Чтобы пересоздать демо-данные на сегодня: `docker compose down -v` и `docker compose up --build`.
+Миграции 005–025 приводят схему к 3НФ и заполняют демо-данные: справочники (роли, сервисы, уровни прав read/edit/admin, проекты с владельцами), справочник знаний с полнотекстовым поиском, цели и OKR, заявки, чат, уведомления, события для метрик, feature flags. Всего 68 таблиц. В статьях справочника нет имен: метки `{{mentor}}`, `{{lead}}`, `{{team}}` заменяются на наставника, руководителя и команду того, кто читает. Даты в демо-данных считаются от дня применения миграций. Чтобы пересоздать демо-данные на сегодня: `docker compose down -v` и `docker compose up --build`.
 
 ## Структура backend
 
@@ -236,12 +274,12 @@ backend/
 ├── internal/config           чтение переменных окружения
 ├── internal/database         подключение к БД и миграции
 ├── cmd/mockservices          имитация системы заявок (отдельный контейнер)
-├── internal/handlers         HTTP-обработчики
+├── internal/handlers         HTTP-обработчики (вход: не больше 10 неверных паролей за 5 минут)
 ├── internal/httpx            единый формат JSON-ответов и ошибок
 ├── internal/integrations     адаптер к системе заявок (заменяется на настоящую)
 ├── internal/llm              модель: mock и OpenAI-совместимый API
 ├── internal/mockservices     имитация системы заявок (не входит в покрытие)
-├── internal/middleware       проверка JWT
+├── internal/middleware       проверка JWT, заголовки безопасности
 ├── internal/models           структуры ответов API
 ├── internal/repository       SQL-запросы
 ├── internal/services         бизнес-логика и права доступа
@@ -254,3 +292,5 @@ backend/
 - `port is already allocated` – порт занят. Поменяйте `POSTGRES_PORT` / `BACKEND_PORT` в `.env`.
 - Тесты пишут `database "ai_buddy_test" does not exist` – база создалась до появления init-скрипта. Выполните `docker compose down -v` и запустите снова.
 - Backend в статусе `unhealthy` – смотрите логи: `docker compose logs backend`.
+- При входе «Слишком много неудачных попыток» – 10 неверных паролей подряд для этого логина. Подождите 5 минут или войдите под другим пользователем.
+- Заявка навсегда «на согласовании» – контейнер `mock-services` перезапускали посреди сценария: имитация хранит заявки в памяти и забывает их. Начните с чистой базы: `docker compose down -v`, затем `docker compose up --build -d`.

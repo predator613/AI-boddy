@@ -21,7 +21,7 @@
 ```json
 {
   "internId": "aaaaaaaa-0000-4000-8000-000000000001",
-  "agreed": { "by": { "id": "aaaa…0003", "name": "Олег" }, "at": "2026-11-04T10:00:00+03:00" },
+  "agreed": { "by": { "id": "aaaa…0003", "name": "Артемий" }, "at": "2026-11-04T10:00:00+03:00" },
   "fromOkr": true,
   "goals": [{
     "id": "f300…0002", "position": 2,
@@ -29,9 +29,9 @@
     "criterion": "провести демо команде на 8 неделе",
     "dueWeek": 8, "progressPct": 10,
     "okr": { "id": "f200…0001", "period": "Q4 2026", "title": "Ускорить выпуск изменений в сервисе авторизации" },
-    "lastUpdate": { "author": { "id": "aaaa…0001", "name": "Анна" }, "progressPct": 10, "note": "Прочитала документацию сервиса", "at": "…" },
+    "lastUpdate": { "author": { "id": "aaaa…0001", "name": "Мария" }, "progressPct": 10, "note": "Прочитала документацию сервиса", "at": "…" },
     "updatedAt": "…",
-    "createdBy": { "id": "aaaa…0003", "name": "Олег" }
+    "createdBy": { "id": "aaaa…0003", "name": "Артемий" }
   }],
   "okrs": [{ "id": "f200…0001", "period": "Q4 2026", "title": "…" }],
   "canEdit": false,

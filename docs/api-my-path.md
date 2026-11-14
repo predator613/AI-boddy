@@ -14,7 +14,7 @@
 
 ```json
 {
-  "intern": { "id": "aaaa…0001", "name": "Анна", "teamName": "Backend", "mentor": { "id": "aaaa…0002", "name": "Игорь" } },
+  "intern": { "id": "aaaa…0001", "name": "Мария", "teamName": "Backend", "mentor": { "id": "aaaa…0002", "name": "Игорь" } },
   "week": { "current": 2, "total": 24, "day": 10, "startDate": "2026-11-01",
             "milestones": [{ "week": 1, "title": "Старт" }, { "week": 4, "title": "Первые задачи" }, { "week": 12, "title": "Отзыв" }, { "week": 24, "title": "Итоги" }] },
   "progress": { "done": 6, "inProgress": 2, "todo": 9, "total": 17, "percent": 35 },
@@ -34,7 +34,7 @@
   "nextStep": { "taskId": "b700…0204", "stageId": "b500…0002", "stageCode": "02", "title": "Получить доступ к GitLab",
                 "status": "in_progress", "dueDate": "2026-11-10", "dueInDays": 0, "action": { "kind": "access_request", "payload": { … } } },
   "nextMeeting": { "id": "…", "title": "Встреча 1:1", "startsAt": "2026-11-12T15:00:00+03:00", "hostId": "aaaa…0002", "hostName": "Игорь" },
-  "buddy": { "text": "Анна, ты на этапе «Доступы». Осталось 3 из 5. Следующий шаг – «Получить доступ к GitLab». Могу помочь сделать его прямо сейчас.",
+  "buddy": { "text": "Мария, ты на этапе «Доступы». Осталось 3 из 5. Следующий шаг – «Получить доступ к GitLab». Могу помочь сделать его прямо сейчас.",
              "suggestions": ["Запросить GitLab", "Сколько ждать согласования?", "Кто выдает доступы?"] }
 }
 ```
@@ -43,7 +43,7 @@
 
 | Элемент макета | Поле |
 |---|---|
-| «Привет, Анна!», «наставник Игорь», «Стажер · Backend» | `intern` |
+| «Привет, Мария!», «наставник Игорь», «Стажер · Backend» | `intern` |
 | «Неделя 2 из 24», шкала из 24 недель, подписи вех | `week` |
 | Кольцо 35 %, плашки 6 / 2 / 9 | `progress`; деления кольца – `ringSegments(stages)` |
 | Карточки этапов 01–04 | `stages[]`: `code`, `title`, `status`, `doneCount/totalCount`, `color`; оформление – `stageCard()` |
@@ -65,7 +65,7 @@
 - `GET /api/interns` → `[{ id, login, name, teamName, mentor, week, progress, currentStageCode, currentStage }]`.
 - Цели стажера в его карточке: `GET /api/interns/{internId}/goals`, контракт – `docs/api-goals-kb.md`.
 - `GET /api/interns/{internId}/path` → тот же формат, что `/api/path`.
-- `PUT /api/interns/{internId}/tasks/{taskId}` с `{ "status": "waiting", "note": "Заявка у Олега" }` → обновленный путь стажера. Пустая `note` возвращает текст из шаблона.
+- `PUT /api/interns/{internId}/tasks/{taskId}` с `{ "status": "waiting", "note": "Заявка у Артемия" }` → обновленный путь стажера. Пустая `note` возвращает текст из шаблона.
 - `POST /api/interns/{internId}/meetings` с `{ "title": "Разбор недели", "startsAt": "2026-11-13T11:00:00+03:00" }` → встреча (201). Без `title` будет «Встреча 1:1».
 
 ## 3. Консоль наставника: универсальные шаблоны

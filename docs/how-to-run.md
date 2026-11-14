@@ -37,7 +37,7 @@
 
 Из папки `frontend`:
 
-- `npm run test:run` – все тесты один раз. В конце должно быть `Tests  140 passed`.
+- `npm run test:run` – все тесты один раз. В конце должно быть `Tests  158 passed`.
 - `npm run coverage` – тесты с отчетом о покрытии (папка `coverage`).
 - `npx oxlint` – линтер, `npx tsc -b` – проверка типов.
 

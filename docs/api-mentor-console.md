@@ -22,7 +22,7 @@
 Сообщение треда (`ThreadMessage`):
 
 ```json
-{ "id": "…", "kind": "text|handoff|update", "author": "intern|mentor|buddy", "authorName": "Анна",
+{ "id": "…", "kind": "text|handoff|update", "author": "intern|mentor|buddy", "authorName": "Мария",
   "text": "…", "at": "2026-11-10T14:02:00+03:00",
   "update": null }
 ```
