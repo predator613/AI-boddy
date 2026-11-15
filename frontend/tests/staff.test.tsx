@@ -80,10 +80,10 @@ describe('главная наставника', () => {
         T,
       ),
     ).toBeInTheDocument()
-    // Павел: цели не согласованы
-    const pavel = screen.getByRole('button', { name: /^Павел:/ })
-    await userEvent.click(pavel)
-    expect(await screen.findByRole('region', { name: 'Павел: подробности' }, T)).toBeInTheDocument()
+    // Дмитрий: цели не согласованы
+    const dima = screen.getByRole('button', { name: /^Дмитрий:/ })
+    await userEvent.click(dima)
+    expect(await screen.findByRole('region', { name: 'Дмитрий: подробности' }, T)).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Мария: подробности' })).not.toBeInTheDocument()
     expect(await screen.findByText('Цели еще не согласованы', {}, T)).toBeInTheDocument()
   })
@@ -127,8 +127,8 @@ describe('руководитель: цели стажеров', () => {
   it('правит черновик Павла и согласует цели', async () => {
     loginAs('lead_artemiy')
     renderApp('/')
-    await userEvent.click(await screen.findByRole('button', { name: /Павел/ }, T))
-    const panel = await screen.findByRole('region', { name: 'Цели: Павел' }, T)
+    await userEvent.click(await screen.findByRole('button', { name: /Дмитрий/ }, T))
+    const panel = await screen.findByRole('region', { name: 'Цели: Дмитрий' }, T)
     expect(within(panel).getByText('еще не согласованы с руководителем')).toBeInTheDocument()
 
     // новая цель: без шагов не сохраняется

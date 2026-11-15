@@ -75,7 +75,7 @@ const initial = () => [
 ]
 
 // У Павла цели – черновик со встречи с Артемием, еще не согласованы.
-const pavelDraft = () => [
+const dimaDraft = () => [
   goal(4, 'Разобраться в процессах команды', 'провести стендап сам на 4 неделе', 4, 0, null, [
     step('s-41', 'Памятка стажера', 'task', '01'),
     step('s-42', 'Провести стендап', 'mentor', null),
@@ -98,7 +98,7 @@ const initialStore = (): Record<string, Store> => ({
     goals: initial(),
     agreed: { by: OLEG, at: new Date(Date.now() - 6 * 86_400_000).toISOString() },
   },
-  'u-pavel': { goals: pavelDraft(), agreed: null },
+  'u-dima': { goals: dimaDraft(), agreed: null },
 })
 let store = initialStore()
 let seq = 100

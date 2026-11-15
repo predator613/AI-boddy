@@ -160,7 +160,7 @@ describe('Поддержка', () => {
   })
 
   it('стажер без наставника видит, что наставник пока не назначен', async () => {
-    loginAs('intern_pavel')
+    loginAs('intern_dima')
     renderApp('/support')
     expect(await screen.findByText('пока не назначен', {}, T)).toBeInTheDocument()
     expect(screen.queryByText('Игорь')).not.toBeInTheDocument()

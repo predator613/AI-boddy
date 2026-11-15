@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"ai-buddy/backend/internal/database"
+	"ai-buddy/backend/internal/testfix"
 	"ai-buddy/backend/migrations"
 )
 
@@ -25,6 +26,7 @@ func newRepo(t *testing.T) *Users {
 	t.Cleanup(pool.Close)
 	_, err = database.Migrate(ctx, pool, migrations.FS)
 	require.NoError(t, err)
+	require.NoError(t, testfix.OtherTeam(ctx, pool))
 	return NewUsers(pool)
 }
 

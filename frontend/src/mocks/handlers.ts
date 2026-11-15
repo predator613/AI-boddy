@@ -12,9 +12,9 @@ import {
   type MockGoalInput,
 } from './goalsData'
 import {
-  PAVEL_ID,
+  DIMA_ID,
   buildMockPath,
-  buildMockPavelPath,
+  buildMockDimaPath,
   mockInterns,
   setMockTaskStatus,
 } from './pathData'
@@ -100,7 +100,7 @@ export const pathHandlers = [
   http.get(`${API_URL}/api/interns/:internId/path`, ({ request, params }) => {
     const user = userFrom(request)
     if (!user || user.role === 'intern') return apiError(403, 'forbidden', 'forbidden')
-    if (params.internId === PAVEL_ID) return HttpResponse.json(buildMockPavelPath())
+    if (params.internId === DIMA_ID) return HttpResponse.json(buildMockDimaPath())
     if (params.internId !== 'u-anna') return apiError(404, 'not_found', 'not found')
     return HttpResponse.json(buildMockPath())
   }),
@@ -114,7 +114,7 @@ export const pathHandlers = [
     const internId = String(params.internId)
     if (!body?.status || !setMockTaskStatus(String(params.taskId), body.status, internId))
       return apiError(404, 'not_found', 'not found')
-    return HttpResponse.json(internId === PAVEL_ID ? buildMockPavelPath() : buildMockPath())
+    return HttpResponse.json(internId === DIMA_ID ? buildMockDimaPath() : buildMockPath())
   }),
 ]
 

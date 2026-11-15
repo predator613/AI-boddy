@@ -648,24 +648,24 @@ function seed(): StageSeed[] {
 
 let stages = seed()
 
-/** Второй стажер – Павел, первая неделя: готова только встреча с командой. */
-function seedPavel(): StageSeed[] {
+/** Второй стажер – Дмитрий, первая неделя: готова только встреча с командой. */
+function seedDima(): StageSeed[] {
   return seed().map((st) => ({
     ...st,
     tasks: st.tasks.map((t) => ({ ...t, status: t.id === 't-101' ? 'done' : 'todo' })),
   }))
 }
-let pavel = seedPavel()
+let dima = seedDima()
 
-export const PAVEL_ID = 'u-pavel'
+export const DIMA_ID = 'u-dima'
 
 export function resetPathMock() {
   stages = seed()
-  pavel = seedPavel()
+  dima = seedDima()
 }
 
 export function setMockTaskStatus(taskId: string, status: Status, internId = 'u-anna'): boolean {
-  for (const s of internId === PAVEL_ID ? pavel : stages) {
+  for (const s of internId === DIMA_ID ? dima : stages) {
     const t = s.tasks.find((x) => x.id === taskId)
     if (t) {
       t.status = status
@@ -812,12 +812,12 @@ export const mockInterns = () => {
       currentStage: cur?.title ?? '',
     },
     (() => {
-      const pp = buildMockPavelPath()
+      const pp = buildMockDimaPath()
       const c = pp.stages.find((x) => x.status === 'current')
       return {
-        id: PAVEL_ID,
-        login: 'intern_pavel',
-        name: 'Павел',
+        id: DIMA_ID,
+        login: 'intern_dima',
+        name: 'Дмитрий',
         teamName: 'Backend',
         mentor: { id: 'u-igor', name: 'Игорь' },
         week: 1,
@@ -829,5 +829,5 @@ export const mockInterns = () => {
   ]
 }
 
-export const buildMockPavelPath = () =>
-  buildMockPath({ name: 'Павел', teamName: 'Backend' }, '2026-11-10', pavel)
+export const buildMockDimaPath = () =>
+  buildMockPath({ name: 'Дмитрий', teamName: 'Backend' }, '2026-11-10', dima)

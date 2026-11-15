@@ -12,7 +12,7 @@ describe('TestUserPicker', () => {
   it('показывает карточки тестовых пользователей с ролями', async () => {
     renderWithProviders(<TestUserPicker />)
     expect(await screen.findByText('Мария')).toBeInTheDocument()
-    expect(screen.getByText('Павел')).toBeInTheDocument()
+    expect(screen.getByText('Дмитрий')).toBeInTheDocument()
     expect(screen.getByText('Руководитель')).toBeInTheDocument()
   })
 

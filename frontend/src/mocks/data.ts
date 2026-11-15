@@ -33,11 +33,11 @@ export const mockUsers: User[] = [
   },
   {
     id: '44444444-4444-4444-8444-444444444444',
-    login: 'intern_pavel',
-    name: 'Павел',
+    login: 'intern_dima',
+    name: 'Дмитрий',
     role: 'intern',
-    teamId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-    teamName: 'Frontend',
+    teamId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    teamName: 'Backend',
     mentorId: null,
   },
 ]

@@ -64,7 +64,7 @@ describe('Цели стажировки', () => {
   })
 
   it('у стажера без целей – подсказка про встречу с руководителем', async () => {
-    loginAs('intern_pavel')
+    loginAs('intern_dima')
     renderApp('/')
     expect(
       await screen.findByText(/Цели появятся после встречи с руководителем/, {}, T),
@@ -82,7 +82,7 @@ describe('Цели стажировки', () => {
 
   it('подписи и шаг прогресса', () => {
     expect(withName('Артемий')).toBe('Артемием')
-    expect(withName('Нина')).toBe('Ниной')
+    expect(withName('Лиза')).toBe('Лизой')
     expect(withName('Игорь')).toBe('Игорем')
     expect(withName('Илья')).toBe('Ильей')
     expect(withName('Bob')).toBe('Bob')

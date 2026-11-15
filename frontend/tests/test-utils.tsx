@@ -43,7 +43,7 @@ export function renderApp(path: string) {
 import { mockToken, mockUsers } from '../src/mocks/data'
 import { useAuthStore } from '../src/store/authStore'
 
-/** Войти тестовым пользователем без формы: intern_maria, mentor_igor, lead_artemiy, intern_pavel. */
+/** Войти тестовым пользователем без формы: intern_maria, mentor_igor, lead_artemiy, intern_dima. */
 export function loginAs(login: string) {
   const user = mockUsers.find((u) => u.login === login)!
   useAuthStore.setState({ token: mockToken(login), user })

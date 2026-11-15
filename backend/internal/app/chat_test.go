@@ -18,6 +18,7 @@ import (
 	"ai-buddy/backend/internal/database"
 	"ai-buddy/backend/internal/mockservices"
 	"ai-buddy/backend/internal/models"
+	"ai-buddy/backend/internal/testfix"
 	"ai-buddy/backend/migrations"
 )
 
@@ -51,6 +52,7 @@ func newChatEnv(t *testing.T, llmURL string) *chatEnv {
 	t.Cleanup(pool.Close)
 	_, err = database.Migrate(ctx, pool, migrations.FS)
 	require.NoError(t, err)
+	require.NoError(t, testfix.OtherTeam(ctx, pool))
 
 	// Снимок прогресса Марии и метка времени: после теста все возвращаем как было.
 	start := time.Now()

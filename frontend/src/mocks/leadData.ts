@@ -35,8 +35,8 @@ const seedFeed = (): TFeedItem[] => [
   },
   {
     id: 'f3',
-    actor: { name: 'Павел', kind: 'intern' },
-    text: 'Павел прошел встречу-знакомство с командой',
+    actor: { name: 'Дмитрий', kind: 'intern' },
+    text: 'Дмитрий прошел встречу-знакомство с командой',
     at: ago(60 * 20),
     read: false,
   },
@@ -168,7 +168,7 @@ const TEMPLATE: Omit<TChecklistItem, 'done'>[] = [
 
 const seedChecklist = (): Record<string, Set<string>> => ({
   'u-anna': new Set(['c-chats', 'c-access', 'c-11', 'c-goals']),
-  'u-pavel': new Set(['c-chats']),
+  'u-dima': new Set(['c-chats']),
 })
 let checklist = seedChecklist()
 

@@ -14,13 +14,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 const path = async (u) => (await call(u, 'GET', '/path')).j
 const task = async (u, re) => (await path(u)).stages.flatMap((s) => s.tasks).find((t) => re.test(t.title))
 
-for (const u of ['intern_maria', 'intern_liza', 'intern_dima', 'intern_pavel', 'mentor_igor', 'lead_artemiy', 'lead_nina']) await login(u)
+for (const u of ['intern_maria', 'intern_liza', 'intern_dima', 'mentor_igor', 'lead_artemiy']) await login(u)
 
 let r
 
 const st = async (u, m, p, b) => (await call(u, m, p, b)).s
 const id = async (u) => (await call(u, 'GET', '/auth/me')).j.id
-const [maria, pavel, liza] = [await id('intern_maria'), await id('intern_pavel'), await id('intern_liza')]
+const [maria, dima, liza] = [await id('intern_maria'), await id('intern_dima'), await id('intern_liza')]
 S('auth')
 out('no token', await st(null, 'GET', '/path'), 'bad token', (await fetch(A + '/path', { headers: { Authorization: 'Bearer x.y.z' } })).status)
 const [h, pl, sg] = T.intern_maria.split('.'); const pj = JSON.parse(Buffer.from(pl, 'base64url')); pj.role = 'lead'; pj.sub = pj.sub
@@ -31,20 +31,20 @@ out('alg none', (await fetch(A + '/path', { headers: { Authorization: 'Bearer ' 
 out('wrong pwd', await st(null, 'POST', '/auth/login', { login: 'intern_maria', password: 'x' }), 'sql login', await st(null, 'POST', '/auth/login', { login: "' OR 1=1 --", password: 'x' }))
 S('IDOR')
 const mreq = (await call('intern_maria', 'GET', '/requests')).j[0]
-out('pavel cancel maria req', await st('intern_pavel', 'POST', `/requests/${mreq.id}/cancel`), await st('intern_pavel', 'DELETE', `/requests/${mreq.id}`))
+out('dima cancel maria req', await st('intern_dima', 'POST', `/requests/${mreq.id}/cancel`), await st('intern_dima', 'DELETE', `/requests/${mreq.id}`))
 let ms = await say('intern_maria', 'хочу отгул 27 ноября'); const c = card(ms)
-out('pavel confirm maria draft', await st('intern_pavel', 'POST', `/chat/actions/${c.actionId}/confirm`), 'cancel', await st('intern_pavel', 'POST', `/chat/actions/${c.actionId}/cancel`))
-out('nina approve maria', await st('lead_nina', 'POST', `/approvals/${c.actionId}`, { decision: 'approve' }))
-out('pavel path of maria', await st('intern_pavel', 'GET', `/interns/${maria}/path`), 'pavel goals maria', await st('intern_pavel', 'GET', `/interns/${maria}/goals`))
-out('nina path maria', await st('lead_nina', 'GET', `/interns/${maria}/path`), 'nina checklist maria', await st('lead_nina', 'GET', `/mentor/interns/${maria}/checklist`))
+out('dima confirm maria draft', await st('intern_dima', 'POST', `/chat/actions/${c.actionId}/confirm`), 'cancel', await st('intern_dima', 'POST', `/chat/actions/${c.actionId}/cancel`))
+out('igor approve maria', await st('mentor_igor', 'POST', `/approvals/${c.actionId}`, { decision: 'approve' }))
+out('dima path of maria', await st('intern_dima', 'GET', `/interns/${maria}/path`), 'dima goals maria', await st('intern_dima', 'GET', `/interns/${maria}/goals`))
+out('igor path maria', await st('mentor_igor', 'GET', `/interns/${maria}/path`), 'igor checklist maria', await st('mentor_igor', 'GET', `/mentor/interns/${maria}/checklist`))
 const ev = (await call('intern_maria', 'GET', `/me/calendar?from=${new Date(Date.now() - 864e5).toISOString()}&to=${new Date(Date.now() + 14 * 864e5).toISOString()}`)).j.events
 const own = ev.find((e) => e.status === 'own')
-out('pavel note on maria event', await st('intern_pavel', 'PUT', `/me/notes/${ev[0].id}`, { text: 'x' }), 'pavel delete maria entry', own ? await st('intern_pavel', 'DELETE', `/me/calendar/entries/${own.id}`) : 'n/a')
+out('dima note on maria event', await st('intern_dima', 'PUT', `/me/notes/${ev[0].id}`, { text: 'x' }), 'dima delete maria entry', own ? await st('intern_dima', 'DELETE', `/me/calendar/entries/${own.id}`) : 'n/a')
 const kbM = (await call('intern_maria', 'GET', '/kb')).j; const bArt = kbM.articles.find((a) => /Backend/.test(a.title))
-out('pavel read backend article', await st('intern_pavel', 'GET', `/kb/articles/${bArt.id}`))
+out('dima read backend article', await st('intern_dima', 'GET', `/kb/articles/${bArt.id}`))
 out('intern console', await st('intern_maria', 'GET', '/console/templates'), await st('intern_maria', 'POST', '/console/stages', { title: 'x' }))
 out('intern materials post/delete', await st('intern_maria', 'DELETE', `/materials/00000000-0000-4000-8000-000000000000`))
-out('dialogs of others', await st('intern_pavel', 'GET', `/chat/dialogs/${(await call('intern_maria', 'GET', '/chat/dialogs')).j[0]?.id}/messages`))
+out('dialogs of others', await st('intern_dima', 'GET', `/chat/dialogs/${(await call('intern_maria', 'GET', '/chat/dialogs')).j[0]?.id}/messages`))
 S('injection/XSS')
 out('kb search sql', (await call('intern_maria', 'GET', '/kb/search?q=' + encodeURIComponent("'; DROP TABLE users; --"))).s, 'users ok', await st('intern_maria', 'GET', '/auth/me'))
 const x = '<img src=x onerror=alert(1)>'

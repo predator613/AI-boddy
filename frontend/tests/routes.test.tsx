@@ -34,10 +34,10 @@ describe('маршруты', () => {
   it('вход через форму ведет на главную', async () => {
     const router = renderApp('/login')
     const user = userEvent.setup()
-    await user.type(await screen.findByLabelText('Логин'), 'intern_pavel')
+    await user.type(await screen.findByLabelText('Логин'), 'intern_dima')
     await user.type(screen.getByLabelText('Пароль'), 'demo123')
     await user.click(screen.getByRole('button', { name: 'Войти' }))
-    expect(await greeting('Павел')).toBeInTheDocument()
+    expect(await greeting('Дмитрий')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/')
   })
 

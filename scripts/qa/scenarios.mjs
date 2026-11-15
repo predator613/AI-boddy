@@ -14,7 +14,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 const path = async (u) => (await call(u, 'GET', '/path')).j
 const task = async (u, re) => (await path(u)).stages.flatMap((s) => s.tasks).find((t) => re.test(t.title))
 
-for (const u of ['intern_maria', 'intern_liza', 'intern_dima', 'intern_pavel', 'mentor_igor', 'lead_artemiy', 'lead_nina']) await login(u)
+for (const u of ['intern_maria', 'intern_liza', 'intern_dima', 'mentor_igor', 'lead_artemiy']) await login(u)
 
 S('README 1 / spec 003: доступ к GitLab')
 let p = await path('intern_maria'); out('progress', JSON.stringify(p.progress))
@@ -38,9 +38,8 @@ out('mentor chat', (await call('mentor_igor', 'POST', '/chat/messages', { text: 
 S('README 2 / spec 001: вопрос о процессах + поиск')
 out(sh(await say('intern_maria', 'как устроено код-ревью?')))
 for (const q of ['как взять отгул', 'как получить доступ к тестовому стенду']) { const k = (await call('intern_maria', 'GET', '/kb/search?q=' + encodeURIComponent(q))).j; out(q, '->', k.results.slice(0, 3).map((x) => x.title).join(' | ')) }
-const kbM = (await call('intern_maria', 'GET', '/kb')).j, kbP = (await call('intern_pavel', 'GET', '/kb')).j
+const kbM = (await call('intern_maria', 'GET', '/kb')).j
 out('maria sees Backend', kbM.articles.some((a) => /Кто за что отвечает в команде Backend/.test(a.title)), 'sees Frontend', kbM.articles.some((a) => /Команда Frontend/.test(a.title)))
-out('pavel sees Backend', kbP.articles.some((a) => /команде Backend/.test(a.title)))
 
 S('README 2 / spec 004: передача наставнику')
 out(sh(ms = await say('intern_maria', 'можно ли работать месяц из другого города?')))
@@ -52,7 +51,7 @@ const me = (await call('intern_maria', 'GET', '/auth/me')).j; const mid = me.id 
 let th = (await call('mentor_igor', 'GET', '/mentor/threads/' + mid)).j; out('thread tail', th.messages.slice(-3).map((m) => m.kind + '/' + m.author + ':' + m.text.slice(0, 80)).join(' | '))
 r = await call('mentor_igor', 'POST', `/mentor/threads/${mid}/messages`, { text: 'Месяц удаленно можно, согласуй с Артемием за две недели.', addToKb: true }); out('reply', r.s)
 out('maria chat', sh((await call('intern_maria', 'GET', '/chat/messages')).j.messages.slice(-1)))
-out('lead thread', (await call('lead_artemiy', 'GET', '/mentor/threads/' + mid)).s, 'nina pavel thread', (await call('mentor_igor', 'GET', '/mentor/threads/' + (await call('intern_pavel', 'GET', '/auth/me')).j.id)).s)
+out('lead thread', (await call('lead_artemiy', 'GET', '/mentor/threads/' + mid)).s)
 out(sh(await say('intern_maria', 'можно ли работать месяц удаленно из другого города?')))
 out(sh(await say('intern_maria', 'как попасть на внутренний хакатон?')))
 out(sh(await say('intern_maria', 'нет')))
@@ -70,7 +69,7 @@ let gl = (await call('intern_maria', 'GET', '/goals')).j; out('maria goals', gl.
 const liza = (await call('intern_liza', 'GET', '/auth/me')).j, dima = (await call('intern_dima', 'GET', '/auth/me')).j
 out('dima goals', (await call('mentor_igor', 'GET', `/interns/${dima.id}/goals`)).j.goals?.map((x) => x.progressPct).join('/'))
 gl = (await call('lead_artemiy', 'GET', `/interns/${liza.id}/goals`)).j; out('liza goals', gl.goals.length, 'agreed', !!gl.agreed, 'canAgree', gl.canAgree)
-out('igor agree', (await call('mentor_igor', 'POST', `/interns/${liza.id}/goals/agree`)).s, 'nina liza', (await call('lead_nina', 'GET', `/interns/${liza.id}/goals`)).s)
+out('igor agree', (await call('mentor_igor', 'POST', `/interns/${liza.id}/goals/agree`)).s)
 r = await call('lead_artemiy', 'POST', `/interns/${liza.id}/goals`, { title: 'Закрыть первую задачу', criterion: 'merge в main', steps: [{ title: 'Получить доступ к GitLab', source: 'task' }, { title: 'Демо команде', source: 'lead' }] }); out('create goal', r.s)
 r = await call('lead_artemiy', 'POST', `/interns/${liza.id}/goals/agree`); out('agree', r.s, 'again', (await call('lead_artemiy', 'POST', `/interns/${liza.id}/goals/agree`)).s)
 out('maria edit own goal', (await call('intern_maria', 'PATCH', '/goals/' + (await call('intern_maria', 'GET', '/goals')).j.goals[0].id, { title: 'x' })).s)
