@@ -105,7 +105,7 @@ LLM_MODEL=<имя модели>
 LLM_PROJECT=<ID каталога, только для Yandex AI Studio>
 ```
 
-и `docker compose up -d backend`. Модель должна поддерживать function calling (tools). Сравнение провайдеров и пошаговое получение ключа: `docs/llm-setup.md` (рекомендуется Yandex AI Studio). GPU не нужен: модель вызывается по API. Если модель не ответила за `LLM_TIMEOUT` (20 с), ответ собирается офлайн.
+и `docker compose up -d backend` (пересобирать не нужно). Проверка: в `docker compose logs backend` строка `assistant ready` с `"llm":"openai_compat"`. Примеры адресов и имен моделей для Yandex AI Studio, Cloud.ru, OpenAI, vLLM и Ollama – в начале `docs/llm-setup.md`. Модель должна поддерживать function calling (tools). Сравнение провайдеров и пошаговое получение ключа: `docs/llm-setup.md` (рекомендуется Yandex AI Studio). GPU не нужен: модель вызывается по API. Если модель не ответила за `LLM_TIMEOUT` (20 с), ответ собирается офлайн.
 
 ## Тесты и покрытие
 

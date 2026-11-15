@@ -29,9 +29,11 @@
 
 Пароль у всех `demo123`. На экране входа их можно выбрать кнопкой.
 
-- `intern_maria` – стажер
-- `mentor_igor` – наставник
-- `lead_artemiy` – руководитель
+- `intern_maria` – стажер, неделя 2 (главные сценарии)
+- `intern_dima` – стажер, неделя 6
+- `intern_liza` – стажер, первая неделя
+- `mentor_igor` – наставник всех троих
+- `lead_artemiy` – руководитель команды Backend
 
 ## Тесты и проверки фронта
 
@@ -45,4 +47,10 @@
 
 ## Живая модель вместо заготовок
 
-Без ключа AI-buddy отвечает заготовками (`LLM_PROVIDER=mock`). Как подключить модель – в `docs/llm-setup.md`.
+Без ключа AI-buddy отвечает заготовками (`LLM_PROVIDER=mock`). Подключить любую OpenAI-совместимую модель:
+
+1. `copy .env.example .env` (Linux/macOS: `cp`).
+2. В `.env`: `LLM_PROVIDER=openai_compat`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` (для Яндекса еще `LLM_PROJECT`).
+3. `docker compose up -d backend`.
+
+Подробно, с примерами для Яндекса, Cloud.ru, OpenAI и локальных моделей – `docs/llm-setup.md`.

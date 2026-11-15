@@ -2,6 +2,58 @@
 
 Без ключа AI-buddy работает в офлайн-режиме (`LLM_PROVIDER=mock`): намерение определяется по ключевым словам, ответ берется из найденного фрагмента справочника. Весь сценарий с правами, подтверждением и заявками при этом работает. Модель нужна, чтобы помощник понимал свободные формулировки и отвечал своими словами по найденным статьям.
 
+## Коротко: подключение любой OpenAI-совместимой модели
+
+1. В корне проекта: `cp .env.example .env` (в Windows: `copy .env.example .env`).
+2. В `.env` заполните четыре строки (пятая – только для Яндекса):
+
+```
+LLM_PROVIDER=openai_compat
+LLM_BASE_URL=<адрес API, обычно оканчивается на /v1>
+LLM_API_KEY=<ключ>
+LLM_MODEL=<имя модели у провайдера>
+LLM_PROJECT=<ID каталога, только Yandex AI Studio; иначе пусто>
+```
+
+3. Пересоздайте backend: `docker compose up -d backend` (пересобирать образ не нужно, переменные читаются при старте).
+4. Проверьте лог: `docker compose logs backend | findstr "assistant ready"` (Linux/macOS: `grep`). Должно быть `"llm":"openai_compat"`.
+5. Откройте http://localhost:3000, войдите как `intern_maria` и спросите в чате «кто посмотрит мой код перед релизом?». Ответ придет своими словами со ссылкой на статью справочника.
+
+Как backend использует переменные:
+
+| Переменная | Куда уходит |
+|---|---|
+| LLM_BASE_URL | запрос `POST {LLM_BASE_URL}/chat/completions`; слэш в конце не мешает |
+| LLM_API_KEY | заголовок `Authorization: Bearer <ключ>`; для локальной модели без ключа можно оставить пустым |
+| LLM_MODEL | поле `model` в запросе |
+| LLM_PROJECT | заголовок `OpenAI-Project`, отправляется только если заполнен (Yandex AI Studio – ID каталога; у OpenAI – ID проекта, необязательно) |
+| LLM_TIMEOUT | сколько ждать ответ; не ответила – помощник отвечает офлайн, сценарий не прерывается |
+
+Примеры для разных провайдеров:
+
+| Провайдер | LLM_BASE_URL | LLM_MODEL |
+|---|---|---|
+| Yandex AI Studio | https://llm.api.cloud.yandex.net/v1 | gpt://<ID_каталога>/yandexgpt/latest |
+| Cloud.ru Foundation Models | https://foundation-models.api.cloud.ru/v1 | имя из карточки модели |
+| OpenAI | https://api.openai.com/v1 | например, gpt-4o-mini |
+| vLLM на своем сервере | http://<адрес>:8000/v1 | имя, с которым запущен `vllm serve` |
+| Ollama или LM Studio на этом же компьютере | http://host.docker.internal:11434/v1 (LM Studio – порт 1234) | имя модели в Ollama / LM Studio |
+
+`host.docker.internal` нужен потому, что backend работает в контейнере: `localhost` внутри контейнера – это сам контейнер, а не ваш компьютер.
+
+Проверка модели без AI-buddy (Linux, macOS, Git Bash):
+
+```bash
+curl -s "$LLM_BASE_URL/chat/completions" \
+  -H "Authorization: Bearer $LLM_API_KEY" -H "OpenAI-Project: $LLM_PROJECT" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"'"$LLM_MODEL"'","messages":[{"role":"user","content":"Привет"}]}'
+```
+
+Если в ответе есть `choices[0].message.content` – модель доступна. Для Windows PowerShell пример ниже, в варианте 1.
+
+Сколько обращений к модели: обычный вопрос – один-два вызова (выбор инструмента и ответ по найденной статье). Если вопрос похож на уже отвеченный наставником, но другими словами, добавляется короткий вызов сверки по смыслу. Заявки, отгулы, «да/нет» и отмена разбираются без модели, поэтому сценарии с заявками работают одинаково с любым провайдером.
+
 ## Что требуется от модели
 
 Backend обращается к модели по OpenAI-совместимому API (`POST {LLM_BASE_URL}/chat/completions`) и передает список инструментов (function calling). Модель выбирает инструмент: поиск по справочнику, заявку на доступ, отгул, статус заявок или передачу вопроса наставнику. Права и создание заявки проверяет backend, а не модель. Поэтому подходит любая модель, которая:
