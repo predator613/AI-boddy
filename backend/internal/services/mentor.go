@@ -18,6 +18,7 @@ import (
 
 // MentorStore – данные кабинета наставника.
 type MentorStore interface {
+	Busy(ctx context.Context, internID string, start, end time.Time, exclude string) (string, bool, error)
 	Conversation(ctx context.Context, internID, mentorID string) (string, error)
 	ThreadMessages(ctx context.Context, conv string) ([]models.ThreadMessage, error)
 	Post(ctx context.Context, conv, authorKind, authorID, text string) error
@@ -596,6 +597,9 @@ func (s *Mentor) CreateMeeting(ctx context.Context, viewerID string, in MeetingI
 			kind = "review"
 		}
 	}
+	if err := s.checkBusy(ctx, interns, in.StartsAt, in.DurationMin, ""); err != nil {
+		return nil, err
+	}
 	row, err := s.store.CreateMeeting(ctx, m.ID, title, kind, in.StartsAt, in.DurationMin, interns)
 	if err != nil {
 		return nil, mapInvalid(err)
@@ -615,6 +619,11 @@ func (s *Mentor) MoveMeeting(ctx context.Context, viewerID, id string, startsAt 
 	}
 	if startsAt == nil || startsAt.Before(s.now().Add(-time.Hour)) {
 		return nil, invalid("Встречу можно перенести только на будущее время")
+	}
+	if cur, err := s.store.Meeting(ctx, m.ID, id); err == nil {
+		if err := s.checkBusy(ctx, cur.Participants, *startsAt, cur.DurationMin, id); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.store.MoveMeeting(ctx, m.ID, id, *startsAt); err != nil {
 		return nil, mapNotFound(err)
@@ -727,4 +736,28 @@ func answerBody(question, answer string) string {
 		return answer
 	}
 	return answer + "\nВопрос стажера: " + strings.TrimSpace(question)
+}
+
+// checkBusy – стажер в это время уже на другой встрече или в своей записи (пара, фокус-время).
+// Название личной записи наставнику не показываем.
+func (s *Mentor) checkBusy(ctx context.Context, interns []string, start time.Time, minutes int, exclude string) error {
+	end := start.Add(time.Duration(minutes) * time.Minute)
+	for _, id := range interns {
+		title, busy, err := s.store.Busy(ctx, id, start, end, exclude)
+		if err != nil || !busy {
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		name := "У стажера"
+		if u, err := s.users.GetByID(ctx, id); err == nil {
+			name = "У " + genitive(u.Name)
+		}
+		if title == "" {
+			return conflict(name + " в это время личная запись в календаре. Выбери другое время.")
+		}
+		return conflict(fmt.Sprintf("%s в это время «%s». Выбери другое время.", name, title))
+	}
+	return nil
 }

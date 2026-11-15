@@ -203,6 +203,11 @@ func TestMentorMeetingsAndStats(t *testing.T) {
 		map[string]any{"internId": annaID, "title": "Разбор MR", "startsAt": start, "durationMin": 30, "notify": true}, &m))
 	assert.Equal(t, "review", m.Kind)
 	assert.Equal(t, "Мария", m.WithName)
+	// Вторая встреча на то же время у Марии – конфликт с понятным текстом.
+	var errBody map[string]map[string]string
+	assert.Equal(t, http.StatusConflict, e.call("mentor_igor", http.MethodPost, "/api/mentor/meetings",
+		map[string]any{"internId": annaID, "title": "1:1", "startsAt": start.Add(15 * time.Minute), "durationMin": 30}, &errBody))
+	assert.Contains(t, errBody["error"]["message"], "У Марии в это время «Разбор MR»")
 	var all models.MentorMeeting
 	require.Equal(t, http.StatusCreated, e.call("mentor_igor", http.MethodPost, "/api/mentor/meetings",
 		map[string]any{"internId": "all", "title": "Синк стажеров", "startsAt": start.Add(2 * time.Hour), "durationMin": 60, "notify": false}, &all))

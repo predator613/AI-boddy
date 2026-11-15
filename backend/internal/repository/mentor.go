@@ -567,3 +567,23 @@ func (r *Mentor) Activity(ctx context.Context, hostID string, internIDs []string
 		hostID, internIDs, since).Scan(&a.Questions, &a.HandedOff, &a.MentorMinutes, &a.AccessHours, &a.OnTimePercent)
 	return &a, err
 }
+
+// Busy – чем занят стажер в [start, end): название встречи или "" для личной записи; ok=false – свободен.
+// exclude – id встречи, которую переносят (сама с собой не пересекается).
+func (r *Mentor) Busy(ctx context.Context, internID string, start, end time.Time, exclude string) (string, bool, error) {
+	var title string
+	err := r.db.QueryRow(ctx, `
+		SELECT title FROM (
+			SELECT m.title, m.starts_at FROM meetings m
+			JOIN meeting_participants mp ON mp.meeting_id = m.id AND mp.user_id::text = $1
+			WHERE m.status = 'scheduled' AND m.id::text <> $4
+			  AND m.starts_at < $3 AND m.starts_at + make_interval(mins => m.duration_min) > $2
+			UNION ALL
+			SELECT '', e.starts_at FROM calendar_entries e
+			WHERE e.intern_id::text = $1 AND e.starts_at < $3 AND e.starts_at + make_interval(mins => e.duration_min) > $2
+		) x ORDER BY starts_at LIMIT 1`, internID, start, end, exclude).Scan(&title)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	return title, err == nil, err
+}

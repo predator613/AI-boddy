@@ -139,6 +139,10 @@ func (a *Agent) Send(ctx context.Context, viewerID string, in SendInput) (*model
 		return nil, err
 	}
 
+	// «да» сразу после карточки – то же, что кнопка «Подтвердить».
+	if in.Action == nil && t.draft != nil && reConfirmWord.MatchString(strings.ToLower(text)) && lastIsCard(t) {
+		return a.Confirm(ctx, viewerID, t.draft.ID)
+	}
 	if in.Action != nil {
 		err = a.runAction(ctx, t, *in.Action, in.TaskID)
 	} else {
@@ -546,7 +550,7 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 			switch {
 			case reClaimHandoff.MatchString(resp.Content):
 				return a.offerHandoff(ctx, t, "")
-			case reClaimLook.MatchString(resp.Content) || reHowTo.MatchString(low):
+			case reClaimLook.MatchString(resp.Content) || reHowTo.MatchString(low) || reMentorQ.MatchString(low):
 				// «сейчас посмотрю» – ищем в справочнике сами
 				args, _ := json.Marshal(map[string]string{"query": text})
 				return a.searchAnswer(ctx, t, msgs, llm.ToolCall{ID: "look", Name: "search_kb", Arguments: args}, text)
@@ -558,7 +562,7 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 }
 
 // reClaim – модель пишет, что сделала или сделает действие (передать, создать, оформить).
-var reClaim = regexp.MustCompile(`(?i)подготавлива|оформля|отправля|нажа\S* «да»|ответь «да»|напиши «да»|передал|передам|передаю|подготовлю|подготовил|созда(м|л|ю)|оформлю|оформил|отправлю|отправил|заявка готова|все готово|посмотрю|проверю|проверим|поищу|вернусь`)
+var reClaim = regexp.MustCompile(`(?i)подготовим|оформим|подтверди|подготавлива|оформля|отправля|нажа\S* «да»|ответь «да»|напиши «да»|передал|передам|передаю|подготовлю|подготовил|созда(м|л|ю)|оформлю|оформил|отправлю|отправил|заявка готова|все готово|посмотрю|проверю|проверим|поищу|вернусь`)
 
 // reClaimLook – обещание поискать или проверить: вместо него агент сам ищет в справочнике.
 var reClaimLook = regexp.MustCompile(`(?i)посмотрю|проверю|проверим|поищу|вернусь`)
@@ -881,7 +885,7 @@ var reNotQuestion = regexp.MustCompile(`(?i)справочник|передат�
 var reServiceAsk = regexp.MustCompile(`оборудован|техник|железо|ит-поддержк|it-поддержк|айти|hr-поддержк|кадр|бухгалтер`)
 
 // reNeed – просьба что-то получить, а не вопрос «как устроено».
-var reNeed = regexp.MustCompile(`нужн|заказ|оформ|заявк|получить|выда|сломал|не работает`)
+var reNeed = regexp.MustCompile(`нужн|нужен|хочу|дайте|выдайте|заказ|оформ|заявк|получить|выда|сломал|не работает`)
 
 // departmentHelp – предмет не назван: перечисляем, что можно заказать в нужном отделе.
 func (a *Agent) departmentHelp(ctx context.Context, t *turn, low string) (bool, error) {
@@ -1022,7 +1026,8 @@ func (a *Agent) searchAnswer(ctx context.Context, t *turn, msgs []llm.Message, c
 	resp := a.ask(ctx, t, llm.Request{Messages: msgs})
 	text := cleanText(resp.Content)
 	if len(found) == 0 {
-		if text == "" {
+		// пусто или модель снова «оформляет» – честно говорим, что ответа нет, и предлагаем наставника
+		if text == "" || reClaim.MatchString(text) {
 			return a.noAnswer(ctx, t)
 		}
 		return a.say(ctx, t, "text", text, "think", nil)
@@ -1747,4 +1752,17 @@ func (a *Agent) sayMentorAnswer(ctx context.Context, t *turn, art *models.KBArti
 	q := strings.TrimPrefix(art.Title, "Ответ наставника: ")
 	text := fmt.Sprintf("%s уже отвечал на такой вопрос («%s»):\n%s", who, q, strings.TrimSpace(body))
 	return a.say(ctx, t, "text", text, "calm", &sayOpts{article: &art.ID})
+}
+
+// reConfirmWord – короткое согласие на карточку.
+var reConfirmWord = regexp.MustCompile(`^(да|ок|окей|ага|угу|конечно|подтверждаю|подтверди|отправляй|отправь|создавай|верно|все верно|давай)[.!)\s]*$`)
+
+// lastIsCard – последнее сообщение помощника – карточка подтверждения (а не, например, предложение передать вопрос).
+func lastIsCard(t *turn) bool {
+	for i := len(t.history) - 1; i >= 0; i-- {
+		if t.history[i].Role == "assistant" {
+			return strings.HasPrefix(t.history[i].Content, "[карточка подтверждения]")
+		}
+	}
+	return false
 }

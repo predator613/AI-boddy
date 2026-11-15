@@ -65,9 +65,11 @@ export function MaterialsPage() {
 
   // Справочник и загруженные материалы – один список: так наставник видит то же, что стажер.
   const sectionTitle = (id: string) => kb.data?.sections.find((x) => x.id === id)?.title ?? ''
+  const mine = new Set((materials.data ?? []).map((m) => m.id))
   const rows: Row[] = [
     ...(materials.data ?? []).map((m) => ({ ...m, kb: false as const })),
-    ...(kb.data?.articles ?? []).map((a) => ({
+    // свои материалы уже есть выше (с кнопкой удаления), в справочнике их не повторяем
+    ...(kb.data?.articles ?? []).filter((a) => !mine.has(a.id)).map((a) => ({
       id: a.id,
       title: a.title,
       kind: 'article' as const,

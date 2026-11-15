@@ -1089,3 +1089,41 @@ func TestMentorAnswerBySense(t *testing.T) {
 	other := e.say("intern_maria", map[string]any{"text": "можно ли брать собаку в офис?"})
 	assert.NotContains(t, other[0].Text, "уже отвечал")
 }
+
+// Модель на вопрос дважды «оформляет» текстом без инструмента: вопрос идет в справочник, затем наставнику.
+func TestQuestionNotTreatedAsRequest(t *testing.T) {
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		content := "Подготавливаю заявку на удаленную работу, нажми «да»."
+		if strings.Contains(string(raw), "сравниваешь вопросы") {
+			content = "0"
+		}
+		out, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": content}}}})
+		_, _ = w.Write(out)
+	}))
+	defer fake.Close()
+	e := newChatEnv(t, fake.URL)
+	msgs := e.say("intern_maria", map[string]any{"text": "Могу ли я работать из другого города?"})
+	assert.NotContains(t, msgs[0].Text, "Карточку заявки")
+	assert.Contains(t, msgs[len(msgs)-1].Text, "в таком виде")
+}
+
+// «да» после карточки подтверждает ее; «нужен ноутбук» дает карточку и с моделью, которая только обещает.
+func TestYesConfirmsCardAndNeedLaptop(t *testing.T) {
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		out, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": "Давай подготовим заявку, подтверди."}}}})
+		_, _ = w.Write(out)
+	}))
+	defer fake.Close()
+	e := newChatEnv(t, fake.URL)
+	card := confirmOf(t, e.say("intern_maria", map[string]any{"text": "Мне нужен ноутбук помощнее"}))
+	require.Equal(t, http.StatusOK, e.call("intern_maria", http.MethodPost, "/api/chat/actions/"+card.ActionID+"/cancel", nil, nil))
+
+	confirmOf(t, e.say("intern_maria", map[string]any{"text": "нужна гарнитура"}))
+	done := e.say("intern_maria", map[string]any{"text": "да"})
+	require.NotEmpty(t, done)
+	assert.Equal(t, "result", done[len(done)-1].Kind)
+	assert.Contains(t, done[len(done)-1].Text, "Заявка №")
+}

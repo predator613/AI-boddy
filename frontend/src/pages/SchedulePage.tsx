@@ -63,6 +63,7 @@ export function SchedulePage() {
       {
         onSuccess: () =>
           toast(`${m.withName}: встреча перенесена на ${hm(next)}, уведомление отправлено`),
+        onError: (e) => toast(errorText(e)),
       },
     )
   }
