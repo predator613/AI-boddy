@@ -272,7 +272,7 @@ func TestAssistantAnswersAndLimits(t *testing.T) {
 	// Ответа нет – помощник не выдумывает, а предлагает передать вопрос.
 	msgs = e.say("intern_maria", map[string]any{"text": "сколько стоит квантовый компьютер"})
 	assert.Nil(t, msgs[0].Source)
-	assert.Contains(t, msgs[0].Text, "Передать вопрос наставнику")
+	assert.Contains(t, msgs[0].Text, "Передать Игорю вопрос в таком виде")
 	// «нет» на предложение – вопрос не уходит.
 	msgs = e.say("intern_maria", map[string]any{"text": "нет"})
 	assert.Contains(t, msgs[0].Text, "Хорошо, не передаю")
@@ -943,7 +943,8 @@ func TestModelClaimsActionWithoutTool(t *testing.T) {
 	// 3б. Модель сразу хочет передать вопрос, на который уже есть ответ наставника в справочнике:
 	// помощник отвечает из справочника, наставника не тревожит.
 	msgs = e.say("intern_maria", map[string]any{"text": "какая роль нужна в GitLab стажеру?"})
-	assert.Equal(t, "Стажеру хватает роли Developer в группе backend.", msgs[0].Text)
+	assert.Contains(t, msgs[0].Text, "уже отвечал")
+	assert.Contains(t, msgs[0].Text, "роли Developer")
 	require.NotNil(t, msgs[0].Source)
 	assert.NotContains(t, msgs[0].Text, "в таком виде")
 
@@ -1046,4 +1047,45 @@ func TestCancelDraftByText(t *testing.T) {
 	confirmOf(t, e.say("intern_maria", map[string]any{"text": "нужна гарнитура"}))
 	leave := e.say("intern_maria", map[string]any{"text": "хочу отгул вчера"})
 	assert.Contains(t, leave[0].Text, "уже прошла")
+}
+
+// Ответ наставника находится и по другой формулировке: модель сверяет вопрос по смыслу с уже отвеченными.
+func TestMentorAnswerBySense(t *testing.T) {
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body := string(raw)
+		w.Header().Set("Content-Type", "application/json")
+		answer := func(content string) {
+			out, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": content}}}})
+			_, _ = w.Write(out)
+		}
+		switch {
+		case strings.Contains(body, "Сформулируй вопрос"):
+			answer("Можно ли мне месяц поработать удаленно из Казани?")
+		case strings.Contains(body, "сравниваешь вопросы") && strings.Contains(body, "другого города"):
+			answer("1")
+		case strings.Contains(body, "сравниваешь вопросы"):
+			answer("0")
+		default:
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"handoff_to_mentor","arguments":"{}"}}]}}]}`))
+		}
+	}))
+	defer fake.Close()
+	e := newChatEnv(t, fake.URL)
+
+	e.say("intern_maria", map[string]any{"text": "передай наставнику: можно ли месяц поработать удаленно из Казани?"})
+	sent := e.say("intern_maria", map[string]any{"text": "да"})
+	require.Contains(t, sent[0].Text, "Передал")
+	require.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodPost, "/api/mentor/threads/"+annaID+"/messages",
+		map[string]any{"text": "Месяц можно, предупреди Артемия за две недели.", "addToKb": true}, nil))
+
+	var mats []models.Material
+	require.Equal(t, http.StatusOK, e.call("mentor_igor", http.MethodGet, "/api/materials", nil, &mats))
+	t.Cleanup(func() { e.call("mentor_igor", http.MethodDelete, "/api/materials/"+mats[0].ID, nil, nil) })
+
+	got := e.say("intern_maria", map[string]any{"text": "Могу ли я работать из другого города?"})
+	assert.Contains(t, got[0].Text, "Игорь уже отвечал")
+	assert.Contains(t, got[0].Text, "предупреди Артемия за две недели")
+	other := e.say("intern_maria", map[string]any{"text": "можно ли брать собаку в офис?"})
+	assert.NotContains(t, other[0].Text, "уже отвечал")
 }

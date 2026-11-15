@@ -41,16 +41,20 @@ func kbVisible(v string) string {
 // Sections – все разделы с числом видимых статей.
 func (r *KB) Sections(ctx context.Context, teamID, viewerID string) ([]models.KBSection, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT s.code, s.title, s.hand, s.color,
-		       (SELECT count(*) FROM kb_articles a WHERE a.section_id = s.id AND `+kbVisible("$2")+`)::int
-		FROM kb_sections s
-		ORDER BY s.position, s.code`, teamID, viewerID)
+		SELECT * FROM (
+			SELECT s.code, s.title, s.hand, s.color,
+			       (SELECT count(*) FROM kb_articles a WHERE a.section_id = s.id AND `+kbVisible("$2")+`)::int AS n,
+			       s.position
+			FROM kb_sections s
+		) x WHERE n > 0 -- пустой раздел (например, удалили единственный ответ наставника) не показываем
+		ORDER BY position, code`, teamID, viewerID)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (models.KBSection, error) {
 		var s models.KBSection
-		err := row.Scan(&s.ID, &s.Title, &s.Hand, &s.Color, &s.Count)
+		var pos int
+		err := row.Scan(&s.ID, &s.Title, &s.Hand, &s.Color, &s.Count, &pos)
 		return s, err
 	})
 }
@@ -168,4 +172,20 @@ func (r *KB) ArticleRef(ctx context.Context, id string) (string, error) {
 		return "", ErrNotFound
 	}
 	return ref, err
+}
+
+// MentorAnswers – последние ответы наставников, которые видит пользователь: id и вопрос стажера (заголовок).
+func (r *KB) MentorAnswers(ctx context.Context, teamID, viewerID string, limit int) ([]models.KBArticle, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT a.id::text, a.title FROM kb_articles a
+		WHERE a.source = 'mentor_answer' AND a.use_in_ai AND `+kbVisible("$2")+`
+		ORDER BY a.updated_at DESC LIMIT $3`, teamID, viewerID, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (models.KBArticle, error) {
+		var a models.KBArticle
+		err := row.Scan(&a.ID, &a.Title)
+		return a, err
+	})
 }

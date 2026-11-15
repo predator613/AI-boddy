@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ type KBSearcher interface {
 	Search(ctx context.Context, teamID, viewerID, query string, limit int, onlyAI bool) ([]models.KBSearchMatch, error)
 	ArticleRef(ctx context.Context, articleID string) (string, error)
 	Article(ctx context.Context, teamID, viewerID, id string) (*models.KBArticleDetail, error)
+	MentorAnswers(ctx context.Context, teamID, viewerID string, limit int) ([]models.KBArticle, error)
 }
 
 // minCoverage – минимальная доля слов вопроса в статье, чтобы отвечать по ней.
@@ -525,6 +527,10 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 			return a.prepareService(ctx, t, text, "")
 		}
 	}
+	// Наставник уже отвечал на такой вопрос – отвечаем его словами, а не передаем вопрос снова.
+	if art := a.mentorAnswer(ctx, t, text); art != nil {
+		return a.sayMentorAnswer(ctx, t, art)
+	}
 	msgs := append([]llm.Message{{Role: "system", Content: a.systemPrompt(t)}}, t.history...)
 	msgs = append(msgs, llm.Message{Role: "user", Content: text})
 	resp := a.ask(ctx, t, llm.Request{Messages: msgs, Tools: agentTools})
@@ -815,6 +821,11 @@ func (a *Agent) kbCovers(ctx context.Context, t *turn, q string) bool {
 // offerHandoff – показать стажеру, в каком виде вопрос уйдет наставнику, и дождаться «да».
 // Вопрос в «кавычках» (правка стажера) берется как есть, иначе модель приводит его к рабочему виду.
 func (a *Agent) offerHandoff(ctx context.Context, t *turn, fromModel string) error {
+	return a.offerHandoffWith(ctx, t, fromModel, "")
+}
+
+// offerHandoffWith – то же с вводной фразой («Точного ответа в справочнике нет.»).
+func (a *Agent) offerHandoffWith(ctx context.Context, t *turn, fromModel, lead string) error {
 	name := "наставнику"
 	if t.circle != nil && t.circle.Mentor != nil {
 		name = nameDative(t.circle.Mentor.Name)
@@ -829,7 +840,7 @@ func (a *Agent) offerHandoff(ctx context.Context, t *turn, fromModel string) err
 	} else {
 		q = a.formalQuestion(ctx, t, handoffQuestion(t, fromModel))
 	}
-	return a.say(ctx, t, "text", fmt.Sprintf(
+	return a.say(ctx, t, "text", lead+fmt.Sprintf(
 		"Передать %s вопрос %s?\n«%s»\nНапиши «да», «нет» или поправь формулировку: «лучше так: …».",
 		name, offerMarker, clip(q, 400)), "mentor", nil)
 }
@@ -1308,7 +1319,8 @@ func (a *Agent) noAnswer(ctx context.Context, t *turn) error {
 	}
 	text := "Точного ответа в справочнике нет. Напиши «передай наставнику», и я передам вопрос."
 	if t.circle != nil && t.circle.Mentor != nil {
-		text = fmt.Sprintf("Точного ответа в справочнике нет. Передать вопрос наставнику (%s)? Напиши «да» или «нет».", t.circle.Mentor.Name)
+		// сразу показываем формулировку: стажер отвечает «да» один раз
+		return a.offerHandoffWith(ctx, t, "", "Точного ответа в справочнике нет. ")
 	}
 	return a.say(ctx, t, "text", a.phrase(ctx, t, text), "mentor", nil)
 }
@@ -1663,4 +1675,76 @@ func nameDative(name string) string {
 		return name + "у"
 	}
 	return name
+}
+
+// reFirstNum – первое число в ответе модели («1», «1.», «Ответ: 1»).
+var reFirstNum = regexp.MustCompile(`\d+`)
+
+// reMentorQ – сообщение похоже на вопрос, а не на команду или реплику.
+var reMentorQ = regexp.MustCompile(`(?i)\?|^(как|где|что|кто|когда|сколько|можно|могу|нужно|надо|есть ли|а если|а можно)\s`)
+
+// mentorAnswer – ответ наставника из справочника на этот же вопрос. Сначала по словам (поиск),
+// если слова не совпали – модель сверяет вопрос по смыслу с уже отвеченными («из Казани» и «из другого города»).
+func (a *Agent) mentorAnswer(ctx context.Context, t *turn, q string) *models.KBArticleDetail {
+	if !reMentorQ.MatchString(strings.TrimSpace(q)) || isCommand(q) {
+		return nil
+	}
+	found, err := a.kb.Search(ctx, t.viewer.TeamID, t.viewer.ID, q, 5, true)
+	if err != nil {
+		return nil
+	}
+	for i, f := range found {
+		if f.Coverage < minCoverage {
+			continue
+		}
+		art, err := a.kb.Article(ctx, t.viewer.TeamID, t.viewer.ID, f.ArticleID)
+		if err == nil && art.Source == "mentor_answer" {
+			return art
+		}
+		if i == 0 {
+			return nil // лучшая находка – обычная статья: отвечает основной поиск
+		}
+	}
+	for _, f := range found {
+		if f.Coverage >= minCoverage {
+			return nil
+		}
+	}
+	if a.isMock() {
+		return nil
+	}
+	list, err := a.kb.MentorAnswers(ctx, t.viewer.TeamID, t.viewer.ID, 20)
+	if err != nil || len(list) == 0 {
+		return nil
+	}
+	var b strings.Builder
+	for i, m := range list {
+		fmt.Fprintf(&b, "%d) %s\n", i+1, strings.TrimPrefix(m.Title, "Ответ наставника: "))
+	}
+	resp := a.ask(ctx, t, llm.Request{Messages: []llm.Message{
+		{Role: "system", Content: "Ты сравниваешь вопросы стажеров. Ответь одним числом: номер вопроса из списка, который по смыслу тот же, " +
+			"что новый (ответ на него полностью отвечает и на новый вопрос), или 0, если такого нет. Только число."},
+		{Role: "user", Content: "Новый вопрос: " + q + "\nУже отвеченные вопросы:\n" + b.String()},
+	}})
+	n, err := strconv.Atoi(reFirstNum.FindString(resp.Content))
+	if err != nil || n < 1 || n > len(list) || len(resp.ToolCalls) > 0 {
+		return nil
+	}
+	art, err := a.kb.Article(ctx, t.viewer.TeamID, t.viewer.ID, list[n-1].ID)
+	if err != nil {
+		return nil
+	}
+	return art
+}
+
+// sayMentorAnswer – ответ наставника целиком, со ссылкой на статью справочника.
+func (a *Agent) sayMentorAnswer(ctx context.Context, t *turn, art *models.KBArticleDetail) error {
+	body, _, _ := strings.Cut(art.Body, "\nВопрос стажера:")
+	who := "Наставник"
+	if art.AuthorName != nil && *art.AuthorName != "" {
+		who = *art.AuthorName
+	}
+	q := strings.TrimPrefix(art.Title, "Ответ наставника: ")
+	text := fmt.Sprintf("%s уже отвечал на такой вопрос («%s»):\n%s", who, q, strings.TrimSpace(body))
+	return a.say(ctx, t, "text", text, "calm", &sayOpts{article: &art.ID})
 }

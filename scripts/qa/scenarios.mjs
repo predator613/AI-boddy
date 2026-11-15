@@ -45,14 +45,13 @@ S('README 2 / spec 004: передача наставнику')
 out(sh(ms = await say('intern_maria', 'можно ли работать месяц из другого города?')))
 out(sh(await say('intern_maria', 'лучше так: можно ли месяц поработать удаленно из Казани?')))
 out(sh(await say('intern_maria', 'да')))
-out(sh(await say('intern_maria', 'передай ему вопрос "почему заявка на согласовании"')))
 const before = (await call('mentor_igor', 'GET', '/mentor/threads/' + p.intern?.id)).s
 const me = (await call('intern_maria', 'GET', '/auth/me')).j; const mid = me.id ?? me.user?.id
 let th = (await call('mentor_igor', 'GET', '/mentor/threads/' + mid)).j; out('thread tail', th.messages.slice(-3).map((m) => m.kind + '/' + m.author + ':' + m.text.slice(0, 80)).join(' | '))
 r = await call('mentor_igor', 'POST', `/mentor/threads/${mid}/messages`, { text: 'Месяц удаленно можно, согласуй с Артемием за две недели.', addToKb: true }); out('reply', r.s)
 out('maria chat', sh((await call('intern_maria', 'GET', '/chat/messages')).j.messages.slice(-1)))
 out('lead thread', (await call('lead_artemiy', 'GET', '/mentor/threads/' + mid)).s)
-out(sh(await say('intern_maria', 'можно ли работать месяц удаленно из другого города?')))
+out(sh(await say('intern_maria', 'Могу ли я работать из другого города?')))
 out(sh(await say('intern_maria', 'как попасть на внутренний хакатон?')))
 out(sh(await say('intern_maria', 'нет')))
 
