@@ -480,6 +480,14 @@ func (a *Agent) runModel(ctx context.Context, t *turn, text string) error {
 		t.draft = nil
 		return a.say(ctx, t, "text", "Хорошо, заявку не создаю. Если передумаешь, просто напиши.", "calm", nil)
 	}
+	// «так 12 ноября уже прошло» при открытой карточке отгула – снимаем карточку и просим новую дату.
+	if q := t.draft; q != nil && q.Type == "leave" && rePastNote.MatchString(low) {
+		if err := a.reqs.Cancel(ctx, q.ID, t.viewer.ID); err != nil && !errors.Is(err, repository.ErrNotFound) {
+			return err
+		}
+		t.draft = nil
+		return a.say(ctx, t, "text", "Верно, эта карточка не нужна, я ее убрал. Назови будущий рабочий день, и я подготовлю новую.", "think", nil)
+	}
 	if t.draft != nil && reEdit.MatchString(low) {
 		if done, err := a.editDraft(ctx, t, text); done {
 			return err
@@ -608,6 +616,9 @@ var reHandoffAsk = regexp.MustCompile(`(?i)(передай|перешли|отп
 
 // reCommandLead – «передай наставнику:» в начале сообщения: наставнику уходит только вопрос.
 var reCommandLead = regexp.MustCompile(`(?i)^(пожалуйста,?\s*)?(передай|перешли|отправь|спроси)\s+(у\s+)?(наставник\S*|ментор\S*|ему|ей|игор\S*|руководител\S*)\s*(вопрос\S*)?\s*[:,–-]?\s*`)
+
+// rePastNote – стажер замечает, что дата в карточке уже прошла.
+var rePastNote = regexp.MustCompile(`(?i)(уже|ведь|так)\s+прош(ло|ла|ел)|дата\s+(уже\s+)?прошла|это\s+(в\s+)?прошл|прошедш`)
 
 // reAgree – короткое согласие на предложение помощника.
 var reAgree = regexp.MustCompile(`(?i)^(да|давай|ок|окей|ага|угу|конечно|хорошо|передай|го|можно|да,? передай|давай передай)[.!)\s]*$`)

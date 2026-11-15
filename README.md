@@ -17,21 +17,7 @@ docker compose ps          # backend, mock-services, postgres, redis должн�
 
 Все экраны работают с backend: «Мой путь», цели, справочник, чат с AI-buddy и заявки. Корпоративную систему заявок имитирует контейнер `mock-services` (http://localhost:8090/openapi.yaml).
 
-### AI-buddy без ключа и с моделью
-
-По умолчанию `LLM_PROVIDER=mock` – офлайн-режим без ключа и без сети: помощник определяет намерение по ключевым словам и отвечает фрагментом справочника. Весь сценарий (права, подтверждение, заявка, статус) работает так же, как с моделью.
-
-Подключить модель – любой OpenAI-совместимый API (Yandex AI Studio, Cloud.ru, Avito A-Vibe через Ollama; подробно – `docs/llm-setup.md`). В `.env`:
-
-```
-LLM_PROVIDER=openai_compat
-LLM_BASE_URL=<адрес API, оканчивается на /v1>
-LLM_API_KEY=<ключ>
-LLM_MODEL=<имя модели>
-LLM_PROJECT=<ID каталога, только для Yandex AI Studio>
-```
-
-и `docker compose up -d backend`. Модель должна поддерживать function calling (tools). Сравнение провайдеров и пошаговое получение ключа: `docs/llm-setup.md` (рекомендуется Yandex AI Studio). GPU не нужен: модель вызывается по API. Если модель не ответила за `LLM_TIMEOUT` (20 с), ответ собирается офлайн.
+Помощник работает и без ключа модели (офлайн-режим), все сценарии проходят. Как подключить языковую модель – раздел «Языковая модель» ниже.
 
 Остановить: `docker compose down`. Удалить и базу тоже (начать с чистого листа): `docker compose down -v`.
 
@@ -104,6 +90,22 @@ curl http://localhost:8080/api/me/contacts -H "Authorization: Bearer <token>"
 В интерфейсе – раздел «Заявленные сценарии и порядок проверки в интерфейсе» выше. Отказ согласующего можно показать вручную: `POST http://localhost:8090/v1/tickets/<ACCESS-номер>/decision` с `{"approve":false,"reason":"…"}`.
 
 Или в VS Code: файл `backend/api.http` (расширение REST Client).
+
+## Языковая модель
+
+По умолчанию `LLM_PROVIDER=mock` – офлайн-режим без ключа и без сети: помощник определяет намерение по ключевым словам и отвечает фрагментом справочника. Весь сценарий (права, подтверждение, заявка, статус) работает так же, как с моделью.
+
+Подключить модель – любой OpenAI-совместимый API (Yandex AI Studio, Cloud.ru, Avito A-Vibe через Ollama; подробно – `docs/llm-setup.md`). В `.env`:
+
+```
+LLM_PROVIDER=openai_compat
+LLM_BASE_URL=<адрес API, оканчивается на /v1>
+LLM_API_KEY=<ключ>
+LLM_MODEL=<имя модели>
+LLM_PROJECT=<ID каталога, только для Yandex AI Studio>
+```
+
+и `docker compose up -d backend`. Модель должна поддерживать function calling (tools). Сравнение провайдеров и пошаговое получение ключа: `docs/llm-setup.md` (рекомендуется Yandex AI Studio). GPU не нужен: модель вызывается по API. Если модель не ответила за `LLM_TIMEOUT` (20 с), ответ собирается офлайн.
 
 ## Тесты и покрытие
 

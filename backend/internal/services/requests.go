@@ -312,7 +312,11 @@ func RequestFields(q *models.Request) []models.Field {
 	}
 	if q.Type == "leave" {
 		if q.LeaveDate != nil {
-			add("Дата", dayMonth(*q.LeaveDate)+", "+weekday(*q.LeaveDate))
+			date := dayMonth(*q.LeaveDate)
+			if !q.CreatedAt.IsZero() && q.LeaveDate.Year() != q.CreatedAt.In(moscow).Year() {
+				date += fmt.Sprintf(" %d", q.LeaveDate.Year())
+			}
+			add("Дата", date+", "+weekday(*q.LeaveDate))
 		}
 		add("Тип", q.LeaveTypeTitle)
 		add("Комментарий", q.LeaveComment)

@@ -158,6 +158,24 @@ func TestParseLeaveDatePastAndYear(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestParseLeaveDateRecentPast(t *testing.T) {
+	today := time.Date(2026, 11, 15, 12, 0, 0, 0, moscow) // воскресенье
+	for text, want := range map[string]string{
+		"отгул 12 ноября": "2026-11-12", "13 ноября": "2026-11-13", "10.11": "2026-11-10",
+		"1 сентября": "2026-09-01", "10 августа": "2027-08-10", "20 ноября": "2026-11-20",
+	} {
+		d, ok := ParseLeaveDate(text, today)
+		assert.True(t, ok, text)
+		assert.Equal(t, want, d.Format(time.DateOnly), text)
+	}
+	for _, text := range []string{"так 12 ноября уже прошло", "дата прошла", "это в прошлом"} {
+		assert.True(t, rePastNote.MatchString(text), text)
+	}
+	for _, text := range []string{"прошел онбординг", "как прошла встреча?"} {
+		assert.False(t, rePastNote.MatchString(text), text)
+	}
+}
+
 func TestRewordNeedsColonAndLeaveAsk(t *testing.T) {
 	for text, want := range map[string]bool{
 		"лучше так: можно ли": true, "напиши: можно ли": true, "напиши так можно ли": true,

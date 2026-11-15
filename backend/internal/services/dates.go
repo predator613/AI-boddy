@@ -20,7 +20,8 @@ var (
 var reYearAfter = regexp.MustCompile(`^\S*\s+(20\d\d)\b`)
 
 // ParseLeaveDate ищет дату в тексте: «14 ноября», «14.11», «завтра», «послезавтра», «в пятницу».
-// Дата без года берется ближайшая будущая. ok = false – даты в тексте нет.
+// Дата без года – ближайшая будущая; если она прошла меньше трех месяцев назад – прошедшая
+// в этом году (чтобы сказать «дата уже прошла»). ok = false – даты в тексте нет.
 func ParseLeaveDate(text string, today time.Time) (time.Time, bool) {
 	t := strings.ToLower(text)
 	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
@@ -85,11 +86,16 @@ func future(today time.Time, month time.Month, day int) (time.Time, bool) {
 	if d.Day() != day {
 		return time.Time{}, false
 	}
-	if d.Before(today) {
+	// Дата недавно прошла (до трех месяцев назад) – это прошлое, а не следующий год:
+	// 15 ноября «отгул 12 ноября» – прошедшая дата, а не 12 ноября следующего года.
+	if d.Before(today) && today.Sub(d) > recentPast {
 		d = d.AddDate(1, 0, 0)
 	}
 	return d, true
 }
+
+// recentPast – насколько назад дата без года еще считается прошедшей в этом году.
+const recentPast = 92 * 24 * time.Hour
 
 // AddWorkdays – дата через n рабочих дней (праздники не учитываются).
 func AddWorkdays(from time.Time, n int) time.Time {
