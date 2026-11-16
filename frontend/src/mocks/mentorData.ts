@@ -630,7 +630,8 @@ export function resetCalendarMock() {
   cal = seedOwnCalendar()
 }
 
-const FIXED: CalEvent[] = [
+// Даты считаются при каждом запросе, а не при загрузке модуля: тесты подменяют текущую дату.
+const fixedEvents = (): CalEvent[] => [
   {
     id: 'ce-intro',
     title: 'Встреча-знакомство с командой',
@@ -693,7 +694,7 @@ function calendarEvents(): CalEvent[] {
         shared: false,
       }
     })
-  return [...FIXED, ...fromMentor, ...cal.own]
+  return [...fixedEvents(), ...fromMentor, ...cal.own]
 }
 
 export const calendarHandlers = [

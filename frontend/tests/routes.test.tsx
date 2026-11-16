@@ -57,8 +57,9 @@ describe('маршруты', () => {
     // на медленном компьютере страница может перерисоваться и закрыть меню – открываем, пока не появится пункт
     const logout = await waitFor(
       async () => {
-        if (!screen.queryByRole('menuitem', { name: 'Выйти' }))
-          await userEvent.click(screen.getByRole('button', { name: 'Меню профиля' }))
+        const menu = screen.getByRole('button', { name: 'Меню профиля' })
+        // повторный клик по открытому меню закрыл бы его, поэтому кликаем только по закрытому
+        if (menu.getAttribute('aria-expanded') !== 'true') await userEvent.click(menu)
         return screen.getByRole('menuitem', { name: 'Выйти' })
       },
       { timeout: 10000, interval: 300 },

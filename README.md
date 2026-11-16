@@ -34,8 +34,6 @@ docker compose ps          # backend, mock-services, postgres, redis должн�
 | intern_liza | Лиза | стажер, 1-я неделя, цели еще не согласованы | Backend |
 | mentor_igor | Игорь | наставник Марии, Дмитрия и Лизы | Backend |
 | lead_artemiy | Артемий | руководитель, согласует цели и GitLab backend/auth-service | Backend |
-| intern_pavel | Павел | стажер без наставника | Frontend |
-| lead_nina | Нина | руководитель | Frontend |
 
 Кирилл (DevOps, роль staff) – согласующий тестового стенда и логов, в приложение не входит.
 

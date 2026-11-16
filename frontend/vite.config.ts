@@ -5,6 +5,10 @@ import { tanstackRouter, tanstackRouterGenerator } from '@tanstack/router-plugin
 
 const isTest = Boolean(process.env.VITEST)
 
+// Тесты всегда идут по московскому времени, как демо-данные и календарь:
+// в Docker-контейнере часовой пояс UTC, и без этого «пн 11:00» превращалось в 14:00.
+if (isTest) process.env.TZ = 'Europe/Moscow'
+
 export default defineConfig({
   plugins: [
     // Плагин роутера собирает src/routeTree.gen.ts из файлов в src/routes и должен стоять ПЕРЕД react().
